@@ -427,11 +427,14 @@ export default function App() {
   async function loadMystore() {
     setLoading(true); setLog([]); setApproved({}); setNewPrices({});
     try {
-      const catParam = selectedCat ? `&filter[categories]=${selectedCat}` : "";
+      // Use category relationship URL if a category is selected
+      const baseUrl = selectedCat
+        ? `${cfg.mystoreUrl}/categories/${selectedCat}/products`
+        : `${cfg.mystoreUrl}/products`;
       let all = [], page = 1, totalPages = 1;
       while (page <= totalPages) {
         setStatus(`Henter side ${page} av ${totalPages} fra Mystore…`);
-        const r = await fetch(`${cfg.mystoreUrl}/products?page[number]=${page}&page[size]=50${catParam}`, {
+        const r = await fetch(`${baseUrl}?page[number]=${page}&page[size]=50`, {
           headers: { Authorization:`Bearer ${cfg.mystoreKey}`, Accept:"application/vnd.api+json" },
         });
         if (!r.ok) throw new Error(`Mystore svarte ${r.status}`);
