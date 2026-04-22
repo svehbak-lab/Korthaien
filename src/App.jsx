@@ -296,11 +296,12 @@ export default function App() {
           const batch = data.data || [];
           if (!batch.length) break;
           all = all.concat(batch);
-          if (data.links?.last) {
+          if (page === 1 && data.links?.last) {
             const m = data.links.last.match(/page\[number\]=(\d+)/);
-            if (m) totalPages = parseInt(m[1]);
+            if (m) totalPages = Math.min(parseInt(m[1]), 10); // max 10 pages = 500 categories
           }
           page++;
+          await new Promise(res => setTimeout(res, 300)); // respect rate limit
         }
         const normalized = all
           .map(c => ({ id:String(c.id), name:c.attributes?.name?.no || String(c.id) }))
