@@ -246,8 +246,21 @@ function Settings({ cfg, onSave, onClose }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN APP
 // ─────────────────────────────────────────────────────────────────────────────
+function loadCfg() {
+  try {
+    const saved = localStorage.getItem("kardex_cfg");
+    if (saved) return { mystoreUrl:"", mystoreKey:"", usdNok:10.6, rules:DEFAULT_RULES, ...JSON.parse(saved) };
+  } catch {}
+  return { mystoreUrl:"", mystoreKey:"", usdNok:10.6, rules:DEFAULT_RULES };
+}
+
 export default function App() {
-  const [cfg, setCfg]           = useState({ mystoreUrl:"", mystoreKey:"", usdNok:10.6, rules:DEFAULT_RULES });
+  const [cfg, setCfgRaw] = useState(loadCfg);
+
+  function setCfg(newCfg) {
+    setCfgRaw(newCfg);
+    try { localStorage.setItem("kardex_cfg", JSON.stringify(newCfg)); } catch {}
+  }
   const [showSettings, setShowSettings] = useState(false);
   const [categories, setCategories]     = useState([]);
   const [catsLoading, setCatsLoading]   = useState(false);
