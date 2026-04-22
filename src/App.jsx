@@ -357,9 +357,9 @@ export default function App() {
           });
           if (!r.ok) break;
           const data = await r.json();
-          const batch = data.data || [];
+          const batch = Array.isArray(data.data) ? data.data : [];
           if (!batch.length) break;
-          all = all.concat(batch);
+          all = [...all, ...batch];
           if (page === 1 && data.links?.last) {
             const m = data.links.last.match(/page\[number\]=(\d+)/);
             if (m) totalPages = Math.min(parseInt(m[1]), 10); // max 10 pages = 500 categories
@@ -395,10 +395,11 @@ export default function App() {
 
   // ── enrich with Scryfall ──────────────────────────────────────────────────
   async function enrichWithScryfall(rawCards) {
-    setProgress({ done:0, total:rawCards.length });
+    const safeCards = Array.isArray(rawCards) ? rawCards : [];
+    setProgress({ done:0, total:safeCards.length });
     const enriched = [];
-    for (let i = 0; i < rawCards.length; i++) {
-      const card = rawCards[i];
+    for (let i = 0; i < safeCards.length; i++) {
+      const card = safeCards[i];
       const sf = await scryfallLookup(card);
       await new Promise(r => setTimeout(r, 120));
       const usd    = sf ? parseFloat(sf.prices?.usd || sf.prices?.usd_foil || 0) : 0;
@@ -407,7 +408,7 @@ export default function App() {
       const sugNok = usd > 0 ? applyRule(cfg.rules, rarity, usd) : null;
       const diffPct = sugNok && card.price_nok ? ((card.price_nok - sugNok) / sugNok) * 100 : null;
       enriched.push({ ...card, rarity, sf_usd:usd, sf_image:image, sugNok, diffPct });
-      setProgress({ done:i+1, total:rawCards.length });
+      setProgress({ done:i+1, total:safeCards.length });
     }
     return enriched;
   }
