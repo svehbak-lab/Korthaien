@@ -4,15 +4,39 @@ import { useState, useEffect, useRef } from "react";
 // PRICE RULES ENGINE
 // ─────────────────────────────────────────────────────────────────────────────
 const DEFAULT_RULES = {
-  mythic:   [{ max_usd: 1.5, nok: 20 }, { max_usd: 3, nok: 40 }, { max_usd: 5, nok: 60 }, { max_usd: 10, nok: 100 }, { max_usd: 20, nok: 180 }, { max_usd: 999, nok: 299 }],
-  rare:     [{ max_usd: 0.9, nok: 10 }, { max_usd: 1.3, nok: 15 }, { max_usd: 1.6, nok: 19 }, { max_usd: 2, nok: 25 }, { max_usd: 3, nok: 35 }, { max_usd: 5, nok: 55 }, { max_usd: 999, nok: 99 }],
-  uncommon: [{ max_usd: 0.3, nok: 5 }, { max_usd: 0.6, nok: 7 }, { max_usd: 1, nok: 10 }, { max_usd: 999, nok: 15 }],
-  common:   [{ max_usd: 0.2, nok: 3 }, { max_usd: 0.4, nok: 5 }, { max_usd: 999, nok: 8 }],
+  mythic:   [
+    { min_usd: 0,    max_usd: 1.49,  nok: 20 },
+    { min_usd: 1.50, max_usd: 2.99,  nok: 40 },
+    { min_usd: 3.00, max_usd: 4.99,  nok: 60 },
+    { min_usd: 5.00, max_usd: 9.99,  nok: 100 },
+    { min_usd: 10.00,max_usd: 19.99, nok: 180 },
+    { min_usd: 20.00,max_usd: 999,   nok: 299 },
+  ],
+  rare:     [
+    { min_usd: 0,    max_usd: 0.89,  nok: 10 },
+    { min_usd: 0.90, max_usd: 1.29,  nok: 15 },
+    { min_usd: 1.30, max_usd: 1.59,  nok: 19 },
+    { min_usd: 1.60, max_usd: 1.99,  nok: 25 },
+    { min_usd: 2.00, max_usd: 2.99,  nok: 35 },
+    { min_usd: 3.00, max_usd: 4.99,  nok: 55 },
+    { min_usd: 5.00, max_usd: 999,   nok: 99 },
+  ],
+  uncommon: [
+    { min_usd: 0,    max_usd: 0.29,  nok: 5 },
+    { min_usd: 0.30, max_usd: 0.59,  nok: 7 },
+    { min_usd: 0.60, max_usd: 0.99,  nok: 10 },
+    { min_usd: 1.00, max_usd: 999,   nok: 15 },
+  ],
+  common:   [
+    { min_usd: 0,    max_usd: 0.19,  nok: 3 },
+    { min_usd: 0.20, max_usd: 0.39,  nok: 5 },
+    { min_usd: 0.40, max_usd: 999,   nok: 8 },
+  ],
 };
 
 function applyRule(rules, rarity, usd) {
   const tier = rules[(rarity || "").toLowerCase()] || rules.rare;
-  for (const r of tier) if (usd <= r.max_usd) return r.nok;
+  for (const r of tier) if (usd >= r.min_usd && usd <= r.max_usd) return r.nok;
   return 99;
 }
 
@@ -181,7 +205,7 @@ function Settings({ cfg, onSave, onClose }) {
     const copy = { ...local.rules, [rarity]: local.rules[rarity].map((r, j) => j===i ? { ...r, [field]: parseFloat(val)||0 } : r) };
     setLocal(p => ({ ...p, rules: copy }));
   };
-  const addRule = r => setLocal(p => ({ ...p, rules: { ...p.rules, [r]: [...p.rules[r], { max_usd:999, nok:50 }] } }));
+  const addRule = r => setLocal(p => ({ ...p, rules: { ...p.rules, [r]: [...p.rules[r], { min_usd:0, max_usd:999, nok:50 }] } }));
   const delRule = (r, i) => setLocal(p => ({ ...p, rules: { ...p.rules, [r]: p.rules[r].filter((_,j)=>j!==i) } }));
 
   return (
@@ -213,23 +237,30 @@ function Settings({ cfg, onSave, onClose }) {
             </div>
           </section>
           <section>
-            <div style={{ fontSize:10, color:"#a1a1aa", letterSpacing:".12em", marginBottom:16 }}>PRISREGLER <span style={{ color:"#d4d4d8" }}>— maks USD → foreslått NOK</span></div>
+            <div style={{ fontSize:10, color:"#a1a1aa", letterSpacing:".12em", marginBottom:16 }}>PRISREGLER <span style={{ color:"#d4d4d8" }}>— intervall USD → foreslått NOK</span></div>
             {["mythic","rare","uncommon","common"].map(rarity => (
               <div key={rarity} style={{ marginBottom:20 }}>
-                <div style={{ marginBottom:8 }}><RarityBadge rarity={rarity} /></div>
+                <div style={{ marginBottom:6 }}><RarityBadge rarity={rarity} /></div>
+                <div style={{ display:"flex", gap:6, marginBottom:4 }}>
+                  <span style={{ fontSize:9, color:"#d4d4d8", width:70, textAlign:"center" }}>FRA USD</span>
+                  <span style={{ fontSize:9, color:"#d4d4d8", width:70, textAlign:"center" }}>TIL USD</span>
+                  <span style={{ fontSize:9, color:"#d4d4d8", width:64, textAlign:"center" }}>NOK</span>
+                </div>
                 {(local.rules[rarity]||[]).map((rule,i) => (
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
-                    <span style={{ fontSize:10, color:"#a1a1aa", width:14 }}>≤</span>
-                    <input type="number" step=".1" value={rule.max_usd} onChange={e=>setRule(rarity,i,"max_usd",e.target.value)}
-                      style={{ width:72, background:"#f4f4f5", border:"1px solid #e4e4e7", borderRadius:6, padding:"4px 8px", color:"#18181b", fontSize:11, fontFamily:"inherit" }} />
-                    <span style={{ fontSize:10, color:"#a1a1aa" }}>USD →</span>
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
+                    <input type="number" step=".01" value={rule.min_usd ?? 0} onChange={e=>setRule(rarity,i,"min_usd",e.target.value)}
+                      style={{ width:70, background:"#f4f4f5", border:"1px solid #e4e4e7", borderRadius:6, padding:"4px 8px", color:"#18181b", fontSize:11, fontFamily:"inherit", textAlign:"center" }} />
+                    <span style={{ fontSize:10, color:"#a1a1aa" }}>–</span>
+                    <input type="number" step=".01" value={rule.max_usd} onChange={e=>setRule(rarity,i,"max_usd",e.target.value)}
+                      style={{ width:70, background:"#f4f4f5", border:"1px solid #e4e4e7", borderRadius:6, padding:"4px 8px", color:"#18181b", fontSize:11, fontFamily:"inherit", textAlign:"center" }} />
+                    <span style={{ fontSize:10, color:"#a1a1aa" }}>→</span>
                     <input type="number" value={rule.nok} onChange={e=>setRule(rarity,i,"nok",e.target.value)}
-                      style={{ width:64, background:"#f4f4f5", border:"1px solid #e4e4e7", borderRadius:6, padding:"4px 8px", color:"#18181b", fontSize:11, fontFamily:"inherit" }} />
+                      style={{ width:64, background:"#f4f4f5", border:"1px solid #e4e4e7", borderRadius:6, padding:"4px 8px", color:"#18181b", fontSize:11, fontFamily:"inherit", textAlign:"center" }} />
                     <span style={{ fontSize:10, color:"#a1a1aa" }}>kr</span>
                     <button onClick={()=>delRule(rarity,i)} style={{ background:"none", border:"none", color:"#d4d4d8", cursor:"pointer", fontSize:13 }}>✕</button>
                   </div>
                 ))}
-                <button onClick={()=>addRule(rarity)} style={{ fontSize:10, color:"#a1a1aa", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }}>+ legg til rad</button>
+                <button onClick={()=>addRule(rarity)} style={{ fontSize:10, color:"#a1a1aa", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }}>+ legg til intervall</button>
               </div>
             ))}
           </section>
@@ -272,6 +303,9 @@ export default function App() {
   const [progress, setProgress]         = useState({ done:0, total:0 });
   const [status, setStatus]             = useState("");
   const [filter, setFilter]             = useState("all");
+  const [onlyInStock, setOnlyInStock]    = useState(false);
+  const [priceMin, setPriceMin]          = useState("");
+  const [priceMax, setPriceMax]          = useState("");
   const [search, setSearch]             = useState("");
   const [sort, setSort]                 = useState("diff_desc");
   const [log, setLog]                   = useState([]);
@@ -427,6 +461,9 @@ export default function App() {
       if (filter==="under"    && !((c.diffPct||0) < -5)) return false;
       if (filter==="changed"  && !(Math.abs(c.diffPct||0) > 5)) return false;
       if (filter==="approved" && !approved[c.id]) return false;
+      if (onlyInStock && !(c.stock > 0)) return false;
+      if (priceMin !== "" && (c.price_nok||0) < parseFloat(priceMin)) return false;
+      if (priceMax !== "" && (c.price_nok||0) > parseFloat(priceMax)) return false;
       return true;
     })
     .sort((a,b) => {
@@ -434,6 +471,7 @@ export default function App() {
       if (sort==="diff_asc")  return Math.abs(a.diffPct||0) - Math.abs(b.diffPct||0);
       if (sort==="name")      return a.name.localeCompare(b.name);
       if (sort==="price_d")   return (b.price_nok||0) - (a.price_nok||0);
+      if (sort==="price_a")   return (a.price_nok||0) - (b.price_nok||0);
       return 0;
     });
 
@@ -529,6 +567,7 @@ export default function App() {
               <option value="diff_asc">Minst avvik</option>
               <option value="name">Navn A–Å</option>
               <option value="price_d">Høyest pris</option>
+              <option value="price_a">Lavest pris</option>
             </select>
           </div>
         </div>
@@ -545,6 +584,26 @@ export default function App() {
               {l}
             </button>
           ))}
+          <div style={{ width:1, height:16, background:"#e4e4e7" }}/>
+          <span style={{ fontSize:10, color:"#a1a1aa" }}>Pris:</span>
+          <input
+            type="number" placeholder="Min kr" value={priceMin} onChange={e=>setPriceMin(e.target.value)}
+            style={{ width:72, background:"#fff", border:"1px solid #e4e4e7", borderRadius:6, padding:"4px 8px", color:"#18181b", fontSize:11 }} />
+          <span style={{ fontSize:10, color:"#d4d4d8" }}>–</span>
+          <input
+            type="number" placeholder="Maks kr" value={priceMax} onChange={e=>setPriceMax(e.target.value)}
+            style={{ width:72, background:"#fff", border:"1px solid #e4e4e7", borderRadius:6, padding:"4px 8px", color:"#18181b", fontSize:11 }} />
+          {(priceMin !== "" || priceMax !== "") && (
+            <button onClick={()=>{ setPriceMin(""); setPriceMax(""); }}
+              style={{ fontSize:10, color:"#a1a1aa", background:"none", border:"none", cursor:"pointer", padding:"0 2px" }}>✕</button>
+          )}
+          <div style={{ width:1, height:16, background:"#e4e4e7" }}/>
+          <button onClick={()=>setOnlyInStock(p=>!p)}
+            style={{ fontSize:10, padding:"4px 11px", borderRadius:6, border:`1px solid ${onlyInStock?"#16a34a":"#e4e4e7"}`,
+              cursor:"pointer", letterSpacing:".06em", background:onlyInStock?"#dcfce7":"transparent",
+              color:onlyInStock?"#16a34a":"#71717a", display:"flex", alignItems:"center", gap:4 }}>
+            {onlyInStock ? "✓" : ""} På lager
+          </button>
           {status && (
             <span style={{ fontSize:10, color:"#a1a1aa", marginLeft:6, display:"flex", alignItems:"center", gap:5 }}>
               {loading && <Spinner />} {status}
