@@ -471,7 +471,8 @@ export default function App() {
       setCards(result);
       setStatus(`${result.length} kort lastet ✓`);
     } catch(e) {
-      setStatus("Feil: " + e.message);
+      setStatus("Feil: " + e.message + " — " + (e.stack||"").split("\n")[1]);
+      console.error("loadMystore error:", e);
     }
     setLoading(false);
   }
