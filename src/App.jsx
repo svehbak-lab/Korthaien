@@ -186,12 +186,17 @@ function CategoryDropdown({ categories, value, onChange, loading }) {
             {filtered.map(cat => (
               <div key={cat.id}
                 onClick={() => { onChange(cat.id); setOpen(false); setSearch(""); }}
-                style={{ padding:"9px 14px", fontSize:12, cursor:"pointer",
-                  background: cat.id===value ? "#f0f9ff" : "transparent",
-                  color: cat.id===value ? "#0369a1" : "#18181b",
-                  borderBottom:"1px solid #fafafa",
-                  fontWeight: cat.id===value ? 500 : 400 }}>
-                {cat.name}
+                style={{ padding: cat.isParent ? "8px 14px" : "7px 14px 7px 26px",
+                  fontSize: cat.isParent ? 12 : 11,
+                  cursor:"pointer",
+                  background: cat.id===value ? "#f0f9ff" : cat.isParent ? "#fafafa" : "transparent",
+                  color: cat.id===value ? "#0369a1" : cat.isParent ? "#18181b" : "#52525b",
+                  borderBottom:"1px solid #f4f4f5",
+                  fontWeight: cat.isParent ? 600 : cat.id===value ? 500 : 400,
+                  borderLeft: !cat.isParent ? "2px solid #f0f0f0" : "none",
+                  marginLeft: !cat.isParent ? 14 : 0,
+                }}>
+                {cat.isParent ? cat.name : `↳ ${cat.name}`}
               </div>
             ))}
           </div>
@@ -362,10 +367,26 @@ export default function App() {
           page++;
           await new Promise(res => setTimeout(res, 300)); // respect rate limit
         }
-        const normalized = all
-          .map(c => ({ id:String(c.id), name:c.attributes?.name?.no || String(c.id) }))
-          .sort((a,b) => a.name.localeCompare(b.name, "no"));
-        setCategories(normalized);
+        // Build hierarchy: parents first, then children indented underneath
+        const flat = all.map(c => ({
+          id:        String(c.id),
+          name:      c.attributes?.name?.no || String(c.id),
+          parent_id: c.relationships?.parent?.data ? String(c.relationships.parent.data.id) : null,
+        }));
+        const byId = Object.fromEntries(flat.map(c => [c.id, c]));
+        // Sort: parents alphabetically, children alphabetically under their parent
+        const parents = flat.filter(c => !c.parent_id).sort((a,b) => a.name.localeCompare(b.name, "no"));
+        const children = flat.filter(c => c.parent_id);
+        const ordered = [];
+        for (const parent of parents) {
+          ordered.push({ ...parent, isParent: true });
+          const kids = children.filter(c => c.parent_id === parent.id).sort((a,b) => a.name.localeCompare(b.name, "no"));
+          for (const kid of kids) ordered.push({ ...kid, isParent: false });
+        }
+        // Also add orphan children (parent not in list)
+        const orphans = children.filter(c => !byId[c.parent_id]).sort((a,b) => a.name.localeCompare(b.name, "no"));
+        ordered.push(...orphans);
+        setCategories(ordered);
       } catch(e) { setStatus("Kategorifeil: " + e.message); }
       setCatsLoading(false);
     }
@@ -415,14 +436,14 @@ export default function App() {
         });
         if (!r.ok) throw new Error(`Mystore svarte ${r.status}`);
         const data = await r.json();
-        const batch = data.data || [];
-        if (!batch.length) break;
-        all = all.concat(batch);
+        const batch = Array.isArray(data.data) ? data.data : [];
+        if (batch.length === 0) break;
+        all = [...all, ...batch];
         if (page === 1 && data.links?.last) {
           const m = data.links.last.match(/page\[number\]=(\d+)/);
           if (m) totalPages = parseInt(m[1]);
         }
-        setStatus(`${all.length} produkter hentet…`);
+        setStatus(`${all.length} produkter hentet (side ${page} av ${totalPages})…`);
         page++;
         await new Promise(res => setTimeout(res, 200));
       }
