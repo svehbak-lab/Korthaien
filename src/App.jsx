@@ -454,7 +454,8 @@ export default function App() {
         page++;
         await new Promise(res => setTimeout(res, 200));
       }
-      const raw = all.map(p => ({
+      console.log("Raw all length:", all.length, "first item:", JSON.stringify(all[0]).slice(0,200));
+      const raw = all.filter(p => p && p.id).map(p => ({
         id:               String(p.id),
         name:             p.attributes?.name?.no || p.attributes?.name || "",
         sku:              p.attributes?.sku || "",
@@ -466,6 +467,7 @@ export default function App() {
         category_id:      String(p.relationships?.categories?.data?.[0]?.id || ""),
         category_name:    "",
       }));
+      console.log("Mapped raw length:", raw.length);
       setStatus(`${raw.length} kort — henter Scryfall-priser…`);
       const result = await enrichWithScryfall(raw);
       setCards(result);
