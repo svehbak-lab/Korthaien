@@ -286,21 +286,24 @@ export default function App() {
     async function fetchCats() {
       setCatsLoading(true);
       try {
-        let all = [], page = 1;
-        while (true) {
-          const r = await fetch(`${cfg.mystoreUrl}/categories?limit=100&page=${page}`, {
-            headers: { Authorization:`Bearer ${cfg.mystoreKey}`, Accept:"application/vnd.api+json", "Content-Type":"application/vnd.api+json" },
+        let all = [], page = 1, totalPages = 1;
+        while (page <= totalPages) {
+          const r = await fetch(`${cfg.mystoreUrl}/categories?page[number]=${page}&page[size]=50`, {
+            headers: { Authorization:`Bearer ${cfg.mystoreKey}`, Accept:"application/vnd.api+json" },
           });
           if (!r.ok) break;
           const data = await r.json();
-          const batch = data.categories || data.data || (Array.isArray(data) ? data : []);
+          const batch = data.data || [];
           if (!batch.length) break;
           all = all.concat(batch);
-          if (batch.length < 100) break;
+          if (data.links?.last) {
+            const m = data.links.last.match(/page\[number\]=(\d+)/);
+            if (m) totalPages = parseInt(m[1]);
+          }
           page++;
         }
         const normalized = all
-          .map(c => ({ id:String(c.id||c.categoryId), name:c.name||c.title||String(c.id) }))
+          .map(c => ({ id:String(c.id), name:c.attributes?.name?.no || String(c.id) }))
           .sort((a,b) => a.name.localeCompare(b.name, "no"));
         setCategories(normalized);
       } catch(e) { setStatus("Kategorifeil: " + e.message); }
