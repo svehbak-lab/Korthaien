@@ -3,23 +3,21 @@ import { useState, useEffect, useRef } from "react";
 // ─────────────────────────────────────────────────────────────────────────────
 // PRICE RULES ENGINE
 // ─────────────────────────────────────────────────────────────────────────────
+// Round up to nearest x9 (e.g. 127 → 129, 50 → 59, 13 → 19)
+function roundToX9(val) {
+  const base = Math.floor(val / 10) * 10;
+  const candidate = base + 9;
+  return candidate < val ? candidate + 10 : candidate;
+}
+
 const DEFAULT_RULES = {
-  mythic:   [
-    { min_usd: 0,    max_usd: 1.49,  nok: 20 },
-    { min_usd: 1.50, max_usd: 2.99,  nok: 40 },
-    { min_usd: 3.00, max_usd: 4.99,  nok: 60 },
-    { min_usd: 5.00, max_usd: 9.99,  nok: 100 },
-    { min_usd: 10.00,max_usd: 19.99, nok: 180 },
-    { min_usd: 20.00,max_usd: 999,   nok: 299 },
-  ],
-  rare:     [
-    { min_usd: 0,    max_usd: 0.89,  nok: 10 },
-    { min_usd: 0.90, max_usd: 1.29,  nok: 15 },
-    { min_usd: 1.30, max_usd: 1.59,  nok: 19 },
-    { min_usd: 1.60, max_usd: 1.99,  nok: 25 },
-    { min_usd: 2.00, max_usd: 2.99,  nok: 35 },
-    { min_usd: 3.00, max_usd: 4.99,  nok: 55 },
-    { min_usd: 5.00, max_usd: 999,   nok: 99 },
+  // mythic and rare share the same rules
+  mythic_rare: [
+    { min_usd: 0,    max_usd: 0.99,  nok: 10 },
+    { min_usd: 1.00, max_usd: 1.49,  nok: 15 },
+    { min_usd: 1.50, max_usd: 2.49,  nok: 25 },
+    { min_usd: 2.50, max_usd: 4.99,  nok: 49 },
+    { min_usd: 5.00, max_usd: 999,   multiply: 12 }, // × 12, round to x9
   ],
   uncommon: [
     { min_usd: 0,    max_usd: 0.29,  nok: 5 },
@@ -35,8 +33,16 @@ const DEFAULT_RULES = {
 };
 
 function applyRule(rules, rarity, usd) {
-  const tier = rules[(rarity || "").toLowerCase()] || rules.rare;
-  for (const r of tier) if (usd >= r.min_usd && usd <= r.max_usd) return r.nok;
+  const r = (rarity || "").toLowerCase();
+  // mythic and rare use the same tier
+  const tierKey = (r === "mythic" || r === "rare") ? "mythic_rare" : r;
+  const tier = rules[tierKey] || rules.mythic_rare;
+  for (const rule of tier) {
+    if (usd >= rule.min_usd && usd <= rule.max_usd) {
+      if (rule.multiply) return roundToX9(usd * rule.multiply);
+      return rule.nok;
+    }
+  }
   return 99;
 }
 
@@ -205,7 +211,7 @@ function Settings({ cfg, onSave, onClose }) {
     const copy = { ...local.rules, [rarity]: local.rules[rarity].map((r, j) => j===i ? { ...r, [field]: parseFloat(val)||0 } : r) };
     setLocal(p => ({ ...p, rules: copy }));
   };
-  const addRule = r => setLocal(p => ({ ...p, rules: { ...p.rules, [r]: [...p.rules[r], { min_usd:0, max_usd:999, nok:50 }] } }));
+  const addRule = r => setLocal(p => ({ ...p, rules: { ...p.rules, [r]: [...(p.rules[r]||[]), { min_usd:0, max_usd:999, nok:50 }] } }));
   const delRule = (r, i) => setLocal(p => ({ ...p, rules: { ...p.rules, [r]: p.rules[r].filter((_,j)=>j!==i) } }));
 
   return (
@@ -238,29 +244,48 @@ function Settings({ cfg, onSave, onClose }) {
           </section>
           <section>
             <div style={{ fontSize:10, color:"#a1a1aa", letterSpacing:".12em", marginBottom:16 }}>PRISREGLER <span style={{ color:"#d4d4d8" }}>— intervall USD → foreslått NOK</span></div>
-            {["mythic","rare","uncommon","common"].map(rarity => (
-              <div key={rarity} style={{ marginBottom:20 }}>
-                <div style={{ marginBottom:6 }}><RarityBadge rarity={rarity} /></div>
+            {[["mythic_rare","Mythic / Rare"],["uncommon","Uncommon"],["common","Common"]].map(([key, label]) => (
+              <div key={key} style={{ marginBottom:20 }}>
+                <div style={{ marginBottom:6, display:"flex", alignItems:"center", gap:6 }}>
+                  {key === "mythic_rare"
+                    ? <><RarityBadge rarity="mythic" /><RarityBadge rarity="rare" /></>
+                    : <RarityBadge rarity={key} />}
+                </div>
                 <div style={{ display:"flex", gap:6, marginBottom:4 }}>
                   <span style={{ fontSize:9, color:"#d4d4d8", width:70, textAlign:"center" }}>FRA USD</span>
                   <span style={{ fontSize:9, color:"#d4d4d8", width:70, textAlign:"center" }}>TIL USD</span>
-                  <span style={{ fontSize:9, color:"#d4d4d8", width:64, textAlign:"center" }}>NOK</span>
+                  <span style={{ fontSize:9, color:"#d4d4d8", width:90, textAlign:"center" }}>REGEL</span>
                 </div>
-                {(local.rules[rarity]||[]).map((rule,i) => (
+                {(local.rules[key]||[]).map((rule,i) => (
                   <div key={i} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
-                    <input type="number" step=".01" value={rule.min_usd ?? 0} onChange={e=>setRule(rarity,i,"min_usd",e.target.value)}
+                    <input type="number" step=".01" value={rule.min_usd ?? 0} onChange={e=>setRule(key,i,"min_usd",e.target.value)}
                       style={{ width:70, background:"#f4f4f5", border:"1px solid #e4e4e7", borderRadius:6, padding:"4px 8px", color:"#18181b", fontSize:11, fontFamily:"inherit", textAlign:"center" }} />
                     <span style={{ fontSize:10, color:"#a1a1aa" }}>–</span>
-                    <input type="number" step=".01" value={rule.max_usd} onChange={e=>setRule(rarity,i,"max_usd",e.target.value)}
+                    <input type="number" step=".01" value={rule.max_usd} onChange={e=>setRule(key,i,"max_usd",e.target.value)}
                       style={{ width:70, background:"#f4f4f5", border:"1px solid #e4e4e7", borderRadius:6, padding:"4px 8px", color:"#18181b", fontSize:11, fontFamily:"inherit", textAlign:"center" }} />
                     <span style={{ fontSize:10, color:"#a1a1aa" }}>→</span>
-                    <input type="number" value={rule.nok} onChange={e=>setRule(rarity,i,"nok",e.target.value)}
-                      style={{ width:64, background:"#f4f4f5", border:"1px solid #e4e4e7", borderRadius:6, padding:"4px 8px", color:"#18181b", fontSize:11, fontFamily:"inherit", textAlign:"center" }} />
-                    <span style={{ fontSize:10, color:"#a1a1aa" }}>kr</span>
-                    <button onClick={()=>delRule(rarity,i)} style={{ background:"none", border:"none", color:"#d4d4d8", cursor:"pointer", fontSize:13 }}>✕</button>
+                    {rule.multiply != null ? (
+                      <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                        <span style={{ fontSize:10, color:"#a1a1aa" }}>×</span>
+                        <input type="number" step=".1" value={rule.multiply} onChange={e=>setRule(key,i,"multiply",e.target.value)}
+                          style={{ width:44, background:"#fef9c3", border:"1px solid #fde68a", borderRadius:6, padding:"4px 8px", color:"#92400e", fontSize:11, fontFamily:"inherit", textAlign:"center" }} />
+                        <span style={{ fontSize:9, color:"#a1a1aa" }}>→ x9</span>
+                        <button onClick={()=>setRule(key,i,"multiply",undefined)||setRule(key,i,"nok",50)}
+                          style={{ fontSize:9, color:"#a1a1aa", background:"none", border:"none", cursor:"pointer" }}>fast pris</button>
+                      </div>
+                    ) : (
+                      <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                        <input type="number" value={rule.nok} onChange={e=>setRule(key,i,"nok",e.target.value)}
+                          style={{ width:64, background:"#f4f4f5", border:"1px solid #e4e4e7", borderRadius:6, padding:"4px 8px", color:"#18181b", fontSize:11, fontFamily:"inherit", textAlign:"center" }} />
+                        <span style={{ fontSize:10, color:"#a1a1aa" }}>kr</span>
+                        <button onClick={()=>{ const copy={...local.rules}; copy[key]=copy[key].map((r,j)=>j===i?{...r,multiply:12,nok:undefined}:r); setLocal(p=>({...p,rules:copy})); }}
+                          style={{ fontSize:9, color:"#a1a1aa", background:"none", border:"none", cursor:"pointer" }}>× faktor</button>
+                      </div>
+                    )}
+                    <button onClick={()=>delRule(key,i)} style={{ background:"none", border:"none", color:"#d4d4d8", cursor:"pointer", fontSize:13 }}>✕</button>
                   </div>
                 ))}
-                <button onClick={()=>addRule(rarity)} style={{ fontSize:10, color:"#a1a1aa", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }}>+ legg til intervall</button>
+                <button onClick={()=>addRule(key)} style={{ fontSize:10, color:"#a1a1aa", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }}>+ legg til intervall</button>
               </div>
             ))}
           </section>
