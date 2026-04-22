@@ -289,7 +289,7 @@ export default function App() {
         let all = [], page = 1;
         while (true) {
           const r = await fetch(`${cfg.mystoreUrl}/categories?limit=100&page=${page}`, {
-            headers: { Authorization:`Bearer ${cfg.mystoreKey}`, Accept:"application/json" },
+            headers: { Authorization:`Bearer ${cfg.mystoreKey}`, Accept:"application/json", "Content-Type":"application/json" },
           });
           if (!r.ok) break;
           const data = await r.json();
