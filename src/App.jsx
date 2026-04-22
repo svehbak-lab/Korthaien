@@ -71,13 +71,16 @@ const DEMO_CATEGORIES = [
 // ─────────────────────────────────────────────────────────────────────────────
 async function scryfallLookup(card) {
   try {
-    const r = await fetch(`https://api.scryfall.com/cards/${card.set_code}/${card.collector_number}`);
-    if (!r.ok) {
-      const r2 = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(card.name)}`);
-      if (!r2.ok) return null;
-      return await r2.json();
+    // Only use set/number lookup if both are present
+    if (card.set_code && card.collector_number) {
+      const r = await fetch(`https://api.scryfall.com/cards/${card.set_code}/${card.collector_number}`);
+      if (r.ok) return await r.json();
     }
-    return await r.json();
+    // Fall back to fuzzy name search
+    if (!card.name) return null;
+    const r2 = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(card.name)}`);
+    if (!r2.ok) return null;
+    return await r2.json();
   } catch { return null; }
 }
 
