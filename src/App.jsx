@@ -313,7 +313,17 @@ function Settings({ cfg, onSave, onClose }) {
 function loadCfg() {
   try {
     const saved = localStorage.getItem("kardex_cfg");
-    if (saved) return { mystoreUrl:"", mystoreKey:"", usdNok:10.6, rules:DEFAULT_RULES, ...JSON.parse(saved) };
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migrate old rules format (mythic+rare separate) to new (mythic_rare combined)
+      if (parsed.rules && (parsed.rules.mythic || parsed.rules.rare) && !parsed.rules.mythic_rare) {
+        parsed.rules = { ...DEFAULT_RULES, ...parsed.rules };
+        parsed.rules.mythic_rare = DEFAULT_RULES.mythic_rare;
+        delete parsed.rules.mythic;
+        delete parsed.rules.rare;
+      }
+      return { mystoreUrl:"", mystoreKey:"", usdNok:10.6, rules:DEFAULT_RULES, ...parsed };
+    }
   } catch {}
   return { mystoreUrl:"", mystoreKey:"", usdNok:10.6, rules:DEFAULT_RULES };
 }
