@@ -289,7 +289,7 @@ export default function App() {
         let all = [], page = 1;
         while (true) {
           const r = await fetch(`${cfg.mystoreUrl}/categories?limit=100&page=${page}`, {
-            headers: { Authorization:`Bearer ${cfg.mystoreKey}`, Accept:"application/json", "Content-Type":"application/json" },
+            headers: { Authorization:`Bearer ${cfg.mystoreKey}`, Accept:"application/vnd.api+json", "Content-Type":"application/vnd.api+json" },
           });
           if (!r.ok) break;
           const data = await r.json();
@@ -348,7 +348,7 @@ export default function App() {
       while (true) {
         setStatus(`Henter side ${page} fra Mystore…`);
         const r = await fetch(`${cfg.mystoreUrl}/products?limit=100&page=${page}${catParam}`, {
-          headers: { Authorization:`Bearer ${cfg.mystoreKey}`, Accept:"application/json" },
+          headers: { Authorization:`Bearer ${cfg.mystoreKey}`, Accept:"application/vnd.api+json" },
         });
         if (!r.ok) throw new Error(`Mystore svarte ${r.status}`);
         const data = await r.json();
@@ -393,7 +393,7 @@ export default function App() {
         if (configured) {
           await fetch(`${cfg.mystoreUrl}/products/${c.id}`, {
             method:"PATCH",
-            headers:{ Authorization:`Bearer ${cfg.mystoreKey}`, "Content-Type":"application/json" },
+            headers:{ Authorization:`Bearer ${cfg.mystoreKey}`, "Content-Type":"application/vnd.api+json" },
             body: JSON.stringify({ price }),
           });
         } else {
