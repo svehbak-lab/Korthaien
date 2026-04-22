@@ -347,33 +347,37 @@ export default function App() {
   async function loadMystore() {
     setLoading(true); setLog([]); setApproved({}); setNewPrices({});
     try {
-      const catParam = selectedCat ? `&category_id=${selectedCat}` : "";
-      let all = [], page = 1;
-      while (true) {
-        setStatus(`Henter side ${page} fra Mystore…`);
-        const r = await fetch(`${cfg.mystoreUrl}/products?limit=100&page=${page}${catParam}`, {
+      const catParam = selectedCat ? `&filter[categories]=${selectedCat}` : "";
+      let all = [], page = 1, totalPages = 1;
+      while (page <= totalPages) {
+        setStatus(`Henter side ${page} av ${totalPages} fra Mystore…`);
+        const r = await fetch(`${cfg.mystoreUrl}/products?page[number]=${page}&page[size]=50${catParam}`, {
           headers: { Authorization:`Bearer ${cfg.mystoreKey}`, Accept:"application/vnd.api+json" },
         });
         if (!r.ok) throw new Error(`Mystore svarte ${r.status}`);
         const data = await r.json();
-        const batch = data.products || data.data || (Array.isArray(data) ? data : []);
+        const batch = data.data || [];
         if (!batch.length) break;
         all = all.concat(batch);
+        if (page === 1 && data.links?.last) {
+          const m = data.links.last.match(/page\[number\]=(\d+)/);
+          if (m) totalPages = parseInt(m[1]);
+        }
         setStatus(`${all.length} produkter hentet…`);
-        if (batch.length < 100) break;
         page++;
+        await new Promise(res => setTimeout(res, 200));
       }
       const raw = all.map(p => ({
-        id:               String(p.id || p.productId),
-        name:             p.name || "",
-        sku:              p.sku || "",
-        set_code:         (p.set_code || p.categories?.[0]?.slug || "").toLowerCase(),
-        collector_number: p.collector_number || p.attributes?.collector_number || "",
-        rarity:           (p.rarity || p.attributes?.rarity || "").toLowerCase(),
-        price_nok:        p.price || p.regularPrice || p.price_nok || 0,
-        stock:            p.stock || p.quantity || 0,
-        category_id:      String(p.categories?.[0]?.id || p.category_id || ""),
-        category_name:    p.categories?.[0]?.name || "",
+        id:               String(p.id),
+        name:             p.attributes?.name?.no || p.attributes?.name || "",
+        sku:              p.attributes?.sku || "",
+        set_code:         "",
+        collector_number: p.attributes?.collector_number || "",
+        rarity:           (p.attributes?.rarity || "").toLowerCase(),
+        price_nok:        parseFloat(p.attributes?.price || p.attributes?.regular_price || 0),
+        stock:            parseInt(p.attributes?.stock || 0),
+        category_id:      String(p.relationships?.categories?.data?.[0]?.id || ""),
+        category_name:    "",
       }));
       setStatus(`${raw.length} kort — henter Scryfall-priser…`);
       const result = await enrichWithScryfall(raw);
