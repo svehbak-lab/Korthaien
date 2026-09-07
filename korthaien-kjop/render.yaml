@@ -1,0 +1,55 @@
+services:
+  - type: web
+    name: korthaien-kjop-api
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false        # libsql://<db>.turso.io
+      - key: DATABASE_AUTH_TOKEN
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: https://kortsalg.korthaien.no
+      - key: MYSTORE_URL
+        sync: false
+      - key: MYSTORE_KEY
+        sync: false
+
+  # Scryfall oppdaterer bulk-filene daglig. Kjøres nattestid.
+  - type: cron
+    name: korthaien-kjop-import
+    runtime: node
+    schedule: "0 3 * * *"
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/cli.js import
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_AUTH_TOKEN
+        sync: false
+
+  # Beholdningen endrer seg gjennom dagen, så denne går oftere.
+  - type: cron
+    name: korthaien-kjop-mystore
+    runtime: node
+    schedule: "0 */4 * * *"
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/cli.js mystore
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_AUTH_TOKEN
+        sync: false
+      - key: MYSTORE_URL
+        sync: false
+      - key: MYSTORE_KEY
+        sync: false

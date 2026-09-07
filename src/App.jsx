@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef } from "react";
+import {
+  MATCH, MATCH_LABEL, loadSetIndex, lookupCard,
+  priceFrom, imageFrom, flushCache, clearCache,
+} from "./scryfall.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PRICE RULES ENGINE
@@ -66,23 +70,7 @@ const DEMO_CATEGORIES = [
   { id:"demo-mh2-uncommon", name:"Modern Horizons 2 - Uncommon" },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SCRYFALL
-// ─────────────────────────────────────────────────────────────────────────────
-async function scryfallLookup(card) {
-  try {
-    // Only use set/number lookup if both are present
-    if (card.set_code && card.collector_number) {
-      const r = await fetch(`https://api.scryfall.com/cards/${card.set_code}/${card.collector_number}`);
-      if (r.ok) return await r.json();
-    }
-    // Fall back to fuzzy name search
-    if (!card.name) return null;
-    const r2 = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(card.name)}`);
-    if (!r2.ok) return null;
-    return await r2.json();
-  } catch { return null; }
-}
+// Scryfall-oppslag ligger nå i ./scryfall.js — se den for utgavelogikken.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SMALL COMPONENTS
@@ -108,6 +96,32 @@ function DiffPill({ pct }) {
   if (Math.abs(pct) < 5) return <span style={{ color:"#a1a1aa", fontSize:11 }}>≈ 0%</span>;
   if (pct > 0) return <span style={{ fontSize:11, fontWeight:700, color:"#dc2626" }}>+{pct.toFixed(0)}%</span>;
   return <span style={{ fontSize:11, fontWeight:700, color:"#16a34a" }}>{pct.toFixed(0)}%</span>;
+}
+
+const MATCH_STYLE = {
+  [MATCH.EXACT]:    { color:"#16a34a", mark:"✓" },
+  [MATCH.SET_NAME]: { color:"#0369a1", mark:"≈" },
+  [MATCH.FUZZY]:    { color:"#d97706", mark:"!" },
+  [MATCH.NONE]:     { color:"#d4d4d8", mark:"—" },
+};
+
+// Viser hvilken utgave prisen faktisk kom fra, og hvor sikkert treffet er.
+// Uten dette er det umulig å se at en pris gjelder feil trykk av kortet.
+function EditionCell({ card }) {
+  const s = MATCH_STYLE[card.match] || MATCH_STYLE[MATCH.NONE];
+  if (!card.sf_set) {
+    return <span style={{ color:"#d4d4d8", fontSize:10 }}>ingen utgave</span>;
+  }
+  return (
+    <span title={`${MATCH_LABEL[card.match] || ""}${card.set_source ? ` — settkode fra ${card.set_source}` : ""}`}
+      style={{ display:"inline-flex", alignItems:"center", gap:5, whiteSpace:"nowrap" }}>
+      <span style={{ color:s.color, fontSize:10, fontWeight:700, width:8 }}>{s.mark}</span>
+      <span style={{ color:"#52525b", fontSize:11, textTransform:"uppercase", letterSpacing:".04em" }}>
+        {card.sf_set}
+      </span>
+      {card.sf_num && <span style={{ color:"#d4d4d8", fontSize:10 }}>#{card.sf_num}</span>}
+    </span>
+  );
 }
 
 function Spinner() {
@@ -239,7 +253,13 @@ function Settings({ cfg, onSave, onClose }) {
                   style={{ width:"100%", background:"#f4f4f5", border:"1px solid #e4e4e7", borderRadius:8, padding:"8px 12px", color:"#18181b", fontSize:12, fontFamily:"inherit" }} />
               </div>
             ))}
-            <div style={{ fontSize:11, color:"#a1a1aa", marginTop:4 }}>Scryfall trenger ingen nøkkel — gratis og åpent ✓</div>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:4 }}>
+              <span style={{ fontSize:11, color:"#a1a1aa" }}>Scryfall trenger ingen nøkkel — gratis og åpent ✓</span>
+              <button onClick={()=>{ clearCache(); }}
+                style={{ fontSize:10, color:"#71717a", background:"#f4f4f5", border:"1px solid #e4e4e7", borderRadius:6, padding:"3px 9px", cursor:"pointer", fontFamily:"inherit" }}>
+                Tøm prisbuffer
+              </button>
+            </div>
           </section>
           <section>
             <div style={{ fontSize:10, color:"#a1a1aa", letterSpacing:".12em", marginBottom:12 }}>VALUTAKURS</div>
@@ -410,19 +430,26 @@ export default function App() {
   async function enrichWithScryfall(rawCards) {
     const safeCards = Array.isArray(rawCards) ? rawCards : [];
     setProgress({ done:0, total:safeCards.length });
+    const index = await loadSetIndex();
     const enriched = [];
     for (let i = 0; i < safeCards.length; i++) {
       const card = safeCards[i];
-      const sf = await scryfallLookup(card);
-      await new Promise(r => setTimeout(r, 120));
-      const usd    = sf ? parseFloat(sf.prices?.usd || sf.prices?.usd_foil || 0) : 0;
-      const image  = sf?.image_uris?.normal || sf?.card_faces?.[0]?.image_uris?.normal || null;
-      const rarity = card.rarity || sf?.rarity || "";
+      const { sf, match, set_source } = await lookupCard(card, index);
+      const { usd, foil } = priceFrom(sf);
+      const image  = imageFrom(sf);
+      // Scryfall-rariteten er nå til å stole på, siden utgaven er riktig.
+      // Butikkdata brukes bare når Scryfall ikke svarte.
+      const rarity = sf?.rarity || card.rarity || "";
       const sugNok = usd > 0 ? applyRule(cfg.rules, rarity, usd) : null;
       const diffPct = sugNok && card.price_nok ? ((card.price_nok - sugNok) / sugNok) * 100 : null;
-      enriched.push({ ...card, rarity, sf_usd:usd, sf_image:image, sugNok, diffPct });
+      enriched.push({
+        ...card, rarity, sf_usd:usd, sf_foil:foil, sf_image:image,
+        sf_set: sf?.set || "", sf_num: sf?.collector_number || "",
+        match, set_source, sugNok, diffPct,
+      });
       setProgress({ done:i+1, total:safeCards.length });
     }
+    flushCache();
     return enriched;
   }
 
@@ -464,20 +491,27 @@ export default function App() {
         page++;
         await new Promise(res => setTimeout(res, 200));
       }
-      console.log("Raw all length:", all.length, "first item:", JSON.stringify(all[0]).slice(0,200));
-      const raw = all.filter(p => p && p.id).map(p => ({
-        id:               String(p.id),
-        name:             p.attributes?.name?.no || p.attributes?.name || "",
-        sku:              p.attributes?.sku || "",
-        set_code:         "",
-        collector_number: p.attributes?.collector_number || "",
-        rarity:           (p.attributes?.rarity || "").toLowerCase(),
-        price_nok:        parseFloat(p.attributes?.price || p.attributes?.regular_price || 0),
-        stock:            parseInt(p.attributes?.stock || 0),
-        category_id:      String(p.relationships?.categories?.data?.[0]?.id || ""),
-        category_name:    "",
-      }));
-      console.log("Mapped raw length:", raw.length);
+      // Slå opp kategorinavn fra kategoriene vi allerede har hentet — navnet
+      // er en av kildene til settkode når SKU-en ikke gir den.
+      const catNames = Object.fromEntries(categories.map(c => [c.id, c.name]));
+      const raw = all.filter(p => p && p.id).map(p => {
+        const category_id = String(p.relationships?.categories?.data?.[0]?.id || "");
+        return {
+          id:               String(p.id),
+          name:             p.attributes?.name?.no || p.attributes?.name || "",
+          sku:              p.attributes?.sku || "",
+          // set_code var hardkodet tom her, og det er derfor alle oppslag
+          // havnet på fuzzy navnesøk. Utledes nå i scryfall.js fra SKU eller
+          // kategorinavn, og valideres mot Scryfalls settliste.
+          set_code:         p.attributes?.set_code || "",
+          collector_number: p.attributes?.collector_number || "",
+          rarity:           (p.attributes?.rarity || "").toLowerCase(),
+          price_nok:        parseFloat(p.attributes?.price || p.attributes?.regular_price || 0),
+          stock:            parseInt(p.attributes?.stock || 0),
+          category_id,
+          category_name:    catNames[category_id] || (selectedCat ? catNames[String(selectedCat)] : "") || "",
+        };
+      });
       setStatus(`${raw.length} kort — henter Scryfall-priser…`);
       const result = await enrichWithScryfall(raw);
       setCards(result);
@@ -527,6 +561,7 @@ export default function App() {
       if (filter==="under"    && !((c.diffPct||0) < -5)) return false;
       if (filter==="changed"  && !(Math.abs(c.diffPct||0) > 5)) return false;
       if (filter==="approved" && !approved[c.id]) return false;
+      if (filter==="uncertain" && c.match !== MATCH.FUZZY && c.match !== MATCH.NONE) return false;
       if (onlyInStock && !(c.stock > 0)) return false;
       if (priceMin !== "" && (c.price_nok||0) < parseFloat(priceMin)) return false;
       if (priceMax !== "" && (c.price_nok||0) > parseFloat(priceMax)) return false;
@@ -544,6 +579,7 @@ export default function App() {
   const approvedCount = Object.values(approved).filter(Boolean).length;
   const overCount     = cards.filter(c=>(c.diffPct||0)>5).length;
   const underCount    = cards.filter(c=>(c.diffPct||0)<-5).length;
+  const uncertainCount = cards.filter(c=>c.match===MATCH.FUZZY||c.match===MATCH.NONE).length;
 
   function approveAll() {
     const map = {};
@@ -642,7 +678,7 @@ export default function App() {
       {/* ── FILTER + STATUS ────────────────────────────────────────── */}
       <div style={{ background:"#fafafa", borderBottom:"1px solid #f0f0f0", padding:"8px 20px" }}>
         <div style={{ maxWidth:1360, margin:"0 auto", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-          {[["all","Alle"],["over","For dyre"],["under","For billige"],["changed","Endringer"],["approved","Godkjent"]].map(([v,l])=>(
+          {[["all","Alle"],["over","For dyre"],["under","For billige"],["changed","Endringer"],["approved","Godkjent"],["uncertain","Usikker utgave"]].map(([v,l])=>(
             <button key={v} onClick={()=>setFilter(v)}
               style={{ fontSize:10, padding:"4px 11px", borderRadius:6, border:`1px solid ${filter===v?"#a1a1aa":"#e4e4e7"}`,
                 cursor:"pointer", letterSpacing:".06em", background:filter===v?"#18181b":"transparent",
@@ -682,12 +718,13 @@ export default function App() {
 
         {/* ── STAT CARDS ───────────────────────────────────────────── */}
         {cards.length > 0 && (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:14 }} className="fade-up">
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:14 }} className="fade-up">
             {[
               { l:"Totalt", v:cards.length, u:"kort" },
               { l:"For dyre", v:overCount, u:"kort", c:"#dc2626" },
               { l:"For billige", v:underCount, u:"kort", c:"#16a34a" },
               { l:"Godkjent", v:approvedCount, u:"klar", c:"#2563eb" },
+              { l:"Usikker utgave", v:uncertainCount, u:"bør sjekkes", c:uncertainCount?"#d97706":"#a1a1aa" },
             ].map(s=>(
               <div key={s.l} style={{ background:"#fff", border:"1px solid #e4e4e7", borderRadius:10, padding:"12px 16px", boxShadow:"0 1px 3px rgba(0,0,0,.04)" }}>
                 <div style={{ fontSize:9, color:"#a1a1aa", letterSpacing:".12em", marginBottom:5 }}>{s.l.toUpperCase()}</div>
@@ -728,7 +765,7 @@ export default function App() {
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
               <thead>
                 <tr style={{ background:"#fafafa", borderBottom:"1px solid #f0f0f0" }}>
-                  {["#","Kort","Kategori","Raritet","Din pris","Scryfall USD","≈ NOK","Avvik","Regelforslag","Ny pris",""].map((h,i)=>(
+                  {["#","Kort","Kategori","Utgave","Raritet","Din pris","Scryfall USD","≈ NOK","Avvik","Regelforslag","Ny pris",""].map((h,i)=>(
                     <th key={i} style={{ padding:"9px 12px", textAlign:"left", fontSize:9, color:"#a1a1aa", letterSpacing:".1em", fontWeight:600, whiteSpace:"nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -756,10 +793,16 @@ export default function App() {
                           {card.category_name || (card.set_code||"").toUpperCase() || "—"}
                         </span>
                       </td>
+                      <td style={{ padding:"9px 12px" }}><EditionCell card={card} /></td>
                       <td style={{ padding:"9px 12px" }}><RarityBadge rarity={card.rarity} /></td>
                       <td style={{ padding:"9px 12px", color:"#52525b", fontFamily:"DM Mono,monospace" }}>{card.price_nok?`${card.price_nok} kr`:"—"}</td>
                       <td style={{ padding:"9px 12px", fontFamily:"DM Mono,monospace" }}>
-                        {card.sf_usd>0 ? <span style={{ color:"#18181b" }}>${card.sf_usd.toFixed(2)}</span> : <span style={{ color:"#d4d4d8" }}>ingen data</span>}
+                        {card.sf_usd>0
+                          ? <span style={{ color:"#18181b" }}>
+                              ${card.sf_usd.toFixed(2)}
+                              {card.sf_foil && <span style={{ color:"#d97706", fontSize:9, marginLeft:4 }}>FOIL</span>}
+                            </span>
+                          : <span style={{ color:"#d4d4d8" }}>ingen data</span>}
                       </td>
                       <td style={{ padding:"9px 12px", color:"#71717a", fontSize:10, fontFamily:"DM Mono,monospace" }}>
                         {card.sf_usd>0 ? `${Math.round(card.sf_usd*cfg.usdNok)} kr` : "—"}
