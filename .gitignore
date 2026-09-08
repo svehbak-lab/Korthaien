@@ -3,3 +3,8 @@ dist
 .env
 .env.local
 .DS_Store
+
+# Utpakking av leveransepakker
+filer/
+oppdater.mjs
+LES-MEG.md
