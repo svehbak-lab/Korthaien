@@ -26,6 +26,7 @@ export async function ryddOpp(
   const lenker: { sql: string; args: any[] }[] = [];
   const lager: { sql: string; args: any[] }[] = [];
 
+  // Bare ett-tegns entydige treff kobles. Resten er forslag du ser over.
   const skrivefeil = rader.filter((r) => r.gruppe === "skrivefeil" && r.forslagId);
   const tokens = rader.filter((r) => r.gruppe === "token");
 
@@ -74,10 +75,11 @@ export async function ryddOpp(
     });
   }
 
-  const igjen = rader.filter((r) => r.gruppe === "ukjent" || r.gruppe === "tvetydig");
+  const igjen = rader.filter((r) => r.gruppe !== "skrivefeil" && r.gruppe !== "token");
   logg(`${skrivefeil.length} skrivefeil koblet til riktig kort.`);
   logg(`${tokens.length} tokens merket som ikke-kort.`);
-  logg(`${igjen.length} produkter står igjen.`);
+  const medForslag = igjen.filter((r) => r.forslag).length;
+  logg(`${igjen.length} produkter står igjen, hvorav ${medForslag} har et forslag du kan se over.`);
 
   if (opts.rapportSti) skrivGjenstående(igjen, opts.rapportSti, logg);
   return { skrivefeil: skrivefeil.length, tokens: tokens.length, igjen: igjen.length };
@@ -94,12 +96,19 @@ function skrivGjenstående(rader: Rad[], sti: string, logg: (s: string) => void)
   const sortert = [...perSett.entries()].sort((a, b) => b[1].length - a[1].length);
 
   const csv = [
-    "Sett;Antall i settet;Produktnavn;Kategori;Pa lager;Naermeste treff;Avstand",
+    "Gruppe;Sett;Antall i settet;Produktnavn;Kategori;Pa lager;Naermeste treff;Avstand",
     ...sortert.flatMap(([sett, liste]) =>
       liste
-        .sort((a, b) => b.lager - a.lager || a.produkt.localeCompare(b.produkt, "nb"))
+        // Forslagene først: det er dem du faktisk kan gjøre noe med.
+        .sort(
+          (a, b) =>
+            (a.forslag ? 0 : 1) - (b.forslag ? 0 : 1) ||
+            (a.avstand ?? 9) - (b.avstand ?? 9) ||
+            b.lager - a.lager ||
+            a.produkt.localeCompare(b.produkt, "nb")
+        )
         .map((r) =>
-          [sett.toUpperCase(), liste.length, r.produkt, r.kategori, r.lager, r.forslag, r.avstand ?? ""]
+          [r.gruppe, sett.toUpperCase(), liste.length, r.produkt, r.kategori, r.lager, r.forslag, r.avstand ?? ""]
             .map((f) => `"${String(f).replace(/"/g, '""')}"`)
             .join(";")
         )

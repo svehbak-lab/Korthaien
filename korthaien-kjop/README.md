@@ -240,8 +240,11 @@ npm run skrivefeil
 
 Skriver `skrivefeil.csv` med alle ukoblede produkter, delt i tre grupper:
 
-- **skrivefeil** — produktnavnet ligger få tegn fra et kort i samme sett.
-  «Horrible Awry» mot «Horribly Awry». Forslaget står i egen kolonne.
+- **skrivefeil** — ett tegn fra et entydig kort i samme sett. «Horrible Awry»
+  mot «Horribly Awry». Disse kobles automatisk av `npm run rydd`.
+- **forslag** — entydig treff, men lenger unna. «Dawn Angel» mot «Dawn
+  Evangel» er to tegn. Kobles ikke automatisk; du ser dem over og retter i
+  Mystore.
 - **token** — tokens og emblemer. Scryfall legger dem i egne token-sett, ikke
   i settet de ble trykt sammen med, så de finnes ikke i katalogen uansett hvor
   riktig navnet er.

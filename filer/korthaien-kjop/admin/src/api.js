@@ -46,7 +46,8 @@ export const api = {
     kall(`/api/admin/cards/${id}/want?finish=${finish}`, { method: "DELETE" }),
 
   ukoblede: () => kall("/api/admin/mystore/unmatched"),
-  kategorier: (bareUkoblede) => kall(`/api/admin/mystore/categories?ukoblede=${bareUkoblede ? 1 : 0}`),
+  kategorier: (bareUkoblede, q = "") =>
+    kall(`/api/admin/mystore/categories?ukoblede=${bareUkoblede ? 1 : 0}&q=${encodeURIComponent(q)}`),
   søkSett: (q) => kall(`/api/admin/sets/search?q=${encodeURIComponent(q)}`),
   koblKategori: (id, set_code) =>
     kall(`/api/admin/mystore/categories/${id}`, { method: "PUT", body: { set_code } }),

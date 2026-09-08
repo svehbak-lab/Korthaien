@@ -97,13 +97,14 @@ if (ANGRE) {
   process.exit(0);
 }
 
-console.log(`\n  Korthaien Kjøp — settfamilier`);
+console.log(`\n  Korthaien Kjøp — skrivefeilforslag`);
 console.log(dim(`  ${ROT}\n`));
 
 speil(join(HER, "filer"), ".");
 
 console.log(`\n${g("✓")} Ferdig — ${tall.ny} nye, ${tall.endret} endret, ${tall.uendret} uendret.\n`);
-console.log("  Så, i denne rekkefølgen:");
-console.log(dim("    npm run sett       # henter familiekoblingene, tar sekunder"));
-console.log(dim("    npm run mystore    # kobler på nytt med familiene"));
+console.log("  Så:");
+console.log(dim("    npm run mystore    # plukker opp rettelsene dine"));
+console.log(dim("    npm run rydd       # kobler de sikre, lager forslagslista"));
+console.log(dim("\n  Restene med forslag havner i gjenstaende.csv"));
 console.log(dim("  Angre:  node oppdater.mjs --angre\n"));

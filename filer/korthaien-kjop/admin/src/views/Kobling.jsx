@@ -11,12 +11,14 @@ import { api } from "../api.js";
 // denne lista være tom før siden går live.
 export default function Kobling({ onFeil, onAntall }) {
   const [fane, setFane] = useState("kategorier");
+  const [visAlle, setVisAlle] = useState(false);
+  const [katSøk, setKatSøk] = useState("");
   const [kat, setKat] = useState(null);
   const [data, setData] = useState(null);
 
   async function last() {
     try {
-      const [k, p] = await Promise.all([api.kategorier(true), api.ukoblede()]);
+      const [k, p] = await Promise.all([api.kategorier(!visAlle, katSøk), api.ukoblede()]);
       setKat(k);
       setData(p);
       onAntall(k.antall + p.antall);
@@ -26,7 +28,7 @@ export default function Kobling({ onFeil, onAntall }) {
   }
   useEffect(() => {
     last();
-  }, []);
+  }, [visAlle, katSøk]);
 
   if (!data || !kat) return <p className="dempet">Henter…</p>;
 
@@ -41,13 +43,14 @@ export default function Kobling({ onFeil, onAntall }) {
         </button>
       </div>
       {fane === "kategorier"
-        ? <Kategorier kat={kat} onFerdig={last} onFeil={onFeil} />
+        ? <Kategorier kat={kat} onFerdig={last} onFeil={onFeil}
+            visAlle={visAlle} setVisAlle={setVisAlle} søk={katSøk} setSøk={setKatSøk} />
         : <Produkter data={data} onFerdig={last} onFeil={onFeil} />}
     </>
   );
 }
 
-function Kategorier({ kat, onFerdig, onFeil }) {
+function Kategorier({ kat, onFerdig, onFeil, visAlle, setVisAlle, søk, setSøk }) {
   const [kjører, setKjører] = useState(false);
 
   async function analyser() {
@@ -63,18 +66,38 @@ function Kategorier({ kat, onFerdig, onFeil }) {
     }
   }
 
+  const filterrad = (
+    <div className="rad-flex" style={{ marginBottom: 12 }}>
+      <input
+        type="text"
+        placeholder="Søk i kategorier"
+        value={søk}
+        onChange={(e) => setSøk(e.target.value)}
+        style={{ width: 240 }}
+      />
+      <label className="rad-flex" style={{ gap: 6 }}>
+        <input type="checkbox" checked={visAlle} onChange={(e) => setVisAlle(e.target.checked)} />
+        Vis også kategorier som allerede har sett
+      </label>
+    </div>
+  );
+
   if (!kat.kategorier.length) {
     return (
-      <div className="panel">
-        <div className="tom">
-          <b>Alle kategorier er knyttet til et sett</b>
-          Synken vet hvilket sett hvert produkt tilhører.
+      <>
+        {filterrad}
+        <div className="panel">
+          <div className="tom">
+            <b>{søk ? "Ingen kategorier passer søket" : "Alle kategorier er knyttet til et sett"}</b>
+            {!søk && "Synken vet hvilket sett hvert produkt tilhører."}
+          </div>
         </div>
-      </div>
+      </>
     );
   }
   return (
     <>
+      {filterrad}
       <div className="panel">
         <div className="krop">
           <div className="rad-flex">
@@ -105,6 +128,7 @@ function Kategorier({ kat, onFerdig, onFeil }) {
             <tr>
               <th>Kategori</th>
               <th>Ligger under</th>
+              <th>Koblet til</th>
               <th>Sett</th>
             </tr>
           </thead>
@@ -158,6 +182,15 @@ function KategoriRad({ rad, onFerdig, onFeil }) {
       <td>{rad.name || "(uten navn)"}</td>
       <td className="dempet">{rad.parent_name || <span title="Kategorien har ingen forelder i Mystore">—</span>}</td>
       <td>
+        {rad.set_name ? (
+          <span className="merkelapp m-lager" title={Number(rad.manuell) ? "Satt manuelt" : "Funnet automatisk"}>
+            {rad.set_name}
+          </span>
+        ) : (
+          <span className="dempet">—</span>
+        )}
+      </td>
+      <td>
         <div className="rad-flex" style={{ alignItems: "flex-start" }}>
           <div style={{ minWidth: 300 }}>
             <input
@@ -176,14 +209,18 @@ function KategoriRad({ rad, onFerdig, onFeil }) {
                     disabled={lagrer}
                     onClick={() => lagre(f.set_code)}
                     style={{ marginRight: 5, marginBottom: 4 }}
-                    title={`${f.treff} av kortene i kategorien finnes i ${f.set_name}`}
+                    title={`${f.treff} av ${f.avNavn ?? "?"} kortnavn i kategorien finnes i ${f.set_name}`}
                   >
                     {f.set_name}{" "}
-                    <span className="dempet">{Math.round(f.andel * 100)} %</span>
+                    <span className="dempet">
+                      {f.treff}
+                      {f.avNavn ? `/${f.avNavn}` : ""}
+                    </span>
                   </button>
                 ))}
                 <div className="dempet" style={{ fontSize: 11 }}>
-                  Andel av kortene i kategorien som finnes i settet
+                  Treff av antall kortnavn i kategorien. Få navn gir svakt grunnlag,
+                  selv når andelen er høy.
                 </div>
               </div>
             )}

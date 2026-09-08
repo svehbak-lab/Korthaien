@@ -34,7 +34,7 @@ function avstand(a: string, b: string, tak: number): number {
 const TOKEN = /\b(token|emblem|checklist|punch ?card|helper card)\b/i;
 
 export type Rad = {
-  gruppe: "skrivefeil" | "token" | "ukjent" | "tvetydig";
+  gruppe: "skrivefeil" | "forslag" | "token" | "ukjent" | "tvetydig";
   produkt: string;
   produktId: string;
   sku: string;
@@ -107,9 +107,11 @@ export async function lagSkrivefeilrapport(
       continue;
     }
 
-    // Taket skalerer med navnelengden: to feil i et kort navn er mye, to feil
-    // i et langt navn er lite. Aldri over fire.
-    const tak = Math.min(4, Math.max(1, Math.floor(rent.length / 8)));
+    // Taket skalerer med navnelengden. Det gamle taket på lengde/8 ga ett tegn
+    // for «Dawn Angel», som er to tegn fra «Dawn Evangel» — åpenbart samme
+    // kort for et menneske, men utenfor grensen. En fjerdedel av navnet
+    // fanger den typen feil uten å bli meningsløst løst.
+    const tak = Math.min(5, Math.max(1, Math.round(rent.length * 0.25)));
     // Vi leter etter beste treff, men også etter om noe annet er like nær.
     // Er to kort like nær, er forslaget et gjett og ikke en rettelse.
     let beste: { navn: string; d: number; id: string } | null = null;
@@ -127,8 +129,11 @@ export async function lagSkrivefeilrapport(
     }
 
     if (beste && likeNære.size === 1) {
+      // Ett tegn fra et entydig treff er trygt nok til å koble automatisk.
+      // Lengre unna er det et forslag du bør se på, ikke en konklusjon.
       rader.push({
-        ...felles, gruppe: "skrivefeil",
+        ...felles,
+        gruppe: beste.d <= 1 ? "skrivefeil" : "forslag",
         forslag: beste.navn, forslagId: beste.id, avstand: beste.d,
       });
     } else if (beste) {
@@ -163,14 +168,15 @@ export async function lagSkrivefeilrapport(
 
   const tell = (g: string) => rader.filter((r) => r.gruppe === g).length;
   logg("");
-  logg(`  ${tell("skrivefeil")} ser ut som skrivefeil med ett entydig forslag`);
+  logg(`  ${tell("skrivefeil")} er ett tegn fra et entydig kort — kobles automatisk`);
+  logg(`  ${tell("forslag")} har et entydig forslag lenger unna — se over dem selv`);
   logg(`  ${tell("tvetydig")} har flere kort like nær — må vurderes for hånd`);
   logg(`  ${tell("token")} er tokens eller lignende, som ikke finnes i katalogen`);
   logg(`  ${tell("ukjent")} har ingen nær match — trolig alternative utgaver og promoer`);
   logg("");
   logg(`Skrevet til ${filsti}`);
 
-  const topp = rader.filter((r) => r.gruppe === "skrivefeil").slice(0, 15);
+  const topp = rader.filter((r) => r.gruppe === "skrivefeil" || r.gruppe === "forslag").slice(0, 15);
   if (topp.length) {
     logg("\nDe mest sannsynlige:");
     for (const r of topp) {

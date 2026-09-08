@@ -1,68 +1,70 @@
-# Settfamilier
+# Skrivefeilforslag, og bedre grunnlag i koblingen
 
-## Installer
+## Bruk
 
 ```
 node oppdater.mjs
 cd korthaien-kjop
-npm run sett
 npm run mystore
+npm run rydd
 ```
 
-`npm run sett` henter bare settlista og tar sekunder. Ingen ny kortimport
-trengs — de 105 000 kortene ligger allerede riktig.
+Start backend på nytt etterpå for admin-endringene.
 
-## Hva analysen viste
+Forslagslista havner i `gjenstaende.csv`, med de mest sannsynlige øverst.
 
-Fire av de fem gruppene var samme problem: Scryfall splitter én utgivelse i
-flere sett.
+## Taket var for stramt
 
-| Din kategori | Scryfall-settene |
-|---|---|
-| Strixhaven | `stx` + `sta` (Mystical Archive) + `astx` (Art Series) |
-| The Brothers' War | `bro` + `brr` (Retro Artifacts) + `brc` (Commander) + `abro` |
-| March of the Machine | `mom` + `mul` (Multiverse Legends) + `mat` |
+«Dawn Angel» er to tegn fra «Dawn Evangel» — åpenbart samme kort for et
+menneske. Det gamle taket ga ett tillatt tegn for et navn på ni, så forslaget
+ble aldri laget. Kortet endte i «ukjent» uten noen antydning om hva det var.
 
-Tallene bekreftet det: STX hadde 98 % av navnene i `sta`, BRO 61 % i `brr`,
-MOM 54 % i `mul`. Det var aldri feilkoblinger — bare bonusark som Scryfall
-regner som egne sett, mens butikken din holder dem samlet.
+Taket er nå en fjerdedel av navnelengden. «Dawn Angel» fanges, uten at grensen
+blir meningsløs for korte navn.
 
-Kategoriene dine er altså riktige. Det er oppslaget som var for smalt.
+## To grupper i stedet for én
 
-## Hva som er endret
+**skrivefeil** er ett tegn fra et entydig kort. Disse kobles automatisk av
+`npm run rydd`, som før.
 
-Synken søker nå i hele familien: hovedsettet pluss alle sett som peker på det
-gjennom Scryfalls `parent_set_code`. Ved likhet vinner hovedsettet, deretter
-eldste barn.
+**forslag** er entydige treff lenger unna. De kobles ikke automatisk — du ser
+dem i CSV-en med forslag og avstand, og retter i Mystore. Det er den lista du
+ba om.
 
-Familiene vedlikeholdes ikke for hånd. Scryfall oppgir forelderen selv, så
-kommende utgivelser med bonusark virker uten oppsett.
+Skillet er med vilje. Ett tegn er nesten alltid en skrivefeil. To eller tre kan
+være et helt annet kort, og en automatisk kobling der ville gitt deg feil
+beholdning uten noe varsel.
 
-## Overlappsadvarslene løser seg selv
+## «100 %» skjulte et tynt grunnlag
 
-Analysen advarte om at 324 navn fantes i flere sett. De aller fleste av dem
-var `plst` (The List) og `sld` (Secret Lair Drop), som inneholder reprints fra
-hele Magics historie.
+Du fant at fire sett viste 100 % på samme kategori, noe som ikke går an. Årsaken
+var at andelen ble regnet av de få navnene som lot seg slå opp — er de fleste
+feilstavet, står du igjen med en håndfull vanlige kort som finnes overalt.
 
-De er ikke barn av noe hovedsett, så de faller utenfor familiesøket
-automatisk. Det er riktig: et Strixhaven-kort i butikken din er et
-Strixhaven-kort, ikke en tilfeldig List-reprint med samme navn.
+Forslagene viser nå treff av antall i stedet for prosent: «Ultimate Masters
+3/3» sier tydelig at grunnlaget er tre kortnavn. «The List 412/512» er noe helt
+annet, og skal se annerledes ut.
 
-## To du må rette selv
+## Du kan endre kategorier som allerede har sett
 
-CMB1 og SPG er ekte feilkoblinger, ikke familier.
+Kobling-fanen viste bare kategorier uten sett, så CMB1 og SPG var utilgjengelige.
+Nå finnes et søkefelt og en avkrysning for «Vis også kategorier som allerede har
+sett», pluss en kolonne som viser hva de er koblet til.
 
-CMB1 viste 714 av 714 i The List, og Mystery Booster dukket ikke opp i det
-hele tatt. Kategorien din inneholder altså The List-kort. SPG peker mot Time
-Spiral. Begge rettes i Kobling-fanen — én kategori hver, og alle produktene
-følger med.
+## Rekkefølgen for kategorien med 1254 kort
 
-Kjør `npm run analyser cmb1 spg` etter synken for å se om tallene har endret
-seg først.
+Skrivefeilmatchingen sammenligner mot kort i **samme sett**, så den trenger at
+settet er riktig først. For den kategorien betyr det:
+
+1. Koble kategorien til riktig sett i Kobling
+2. `npm run mystore`
+3. `npm run rydd`
+
+Da får skrivefeilene et sett å sammenlignes mot, og de fleste løser seg selv.
+Å gjøre det i motsatt rekkefølge gir ingenting.
 
 ## Testet
 
-Fem tester: at kort fra bonusark finnes under hovedsettet, at hovedsettets
-egne kort fortsatt finnes, at The List ikke forstyrrer selv når navnet
-kolliderer, at kort utenfor familien ikke gir treff, og at sett uten barn
-oppfører seg som før.
+Syv tester, blant annet at «Dawn Angel» nå gir forslag med avstand 2, at ett
+tegn fortsatt kobles automatisk mens to ikke gjør det, og at CSV-en åpner
+riktig i norsk Excel.

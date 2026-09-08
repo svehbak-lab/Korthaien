@@ -16,6 +16,9 @@ export type Kandidat = {
   set_name: string;
   treff: number;
   andel: number;
+  // Hvor mange navn andelen er regnet av. «100 % av 3» og «100 % av 300»
+  // er to helt ulike opplysninger, og skal ikke se like ut.
+  avNavn: number;
 };
 
 export type Gjetning = {
@@ -52,6 +55,7 @@ export async function gjettSett(navn: string[]): Promise<Gjetning> {
     set_name: String(x.set_name || x.set_code),
     treff: Number(x.treff),
     andel: Number(x.treff) / normer.length,
+    avNavn: normer.length,
   }));
 
   let sikker: Kandidat | null = null;

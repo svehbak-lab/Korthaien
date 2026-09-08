@@ -391,6 +391,7 @@ app.delete("/api/admin/cards/:id/want", krevAdmin, fang(async (req: any, res: an
 // produktene i grenen, så dette er langt mer effektivt enn å koble enkeltkort.
 app.get("/api/admin/mystore/categories", krevAdmin, fang(async (req: any, res: any) => {
   const bareUkoblede = String(req.query.ukoblede || "") === "1";
+  const søk = String(req.query.q || "").trim();
   const r = await db().execute({
     sql: `SELECT c.category_id, c.name, c.parent_id, c.set_code, c.manuell,
                  c.gjettet, c.forslag,
@@ -399,9 +400,10 @@ app.get("/api/admin/mystore/categories", krevAdmin, fang(async (req: any, res: a
             LEFT JOIN mystore_categories p ON p.category_id = c.parent_id
             LEFT JOIN sets s ON s.code = c.set_code
            WHERE (? = 0 OR (c.set_code IS NULL AND c.manuell = 0))
+             AND (? = '' OR c.name LIKE ? OR p.name LIKE ? OR s.name LIKE ?)
              AND NOT EXISTS (SELECT 1 FROM mystore_categories b WHERE b.parent_id = c.category_id)
-           ORDER BY c.name LIMIT 400`,
-    args: [bareUkoblede ? 1 : 0],
+           ORDER BY (c.set_code IS NULL) DESC, c.name LIMIT 400`,
+    args: [bareUkoblede ? 1 : 0, søk, `%${søk}%`, `%${søk}%`, `%${søk}%`],
   });
   // Forslag per kategori, så du slipper å lete i 988 sett manuelt.
   const alleSett = await db().execute("SELECT code, name FROM sets");

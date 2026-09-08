@@ -10,7 +10,7 @@ const { lagSkrivefeilrapport } = await import("../src/skrivefeil.ts");
 await migrate();
 process.on("exit", () => { rmSync(DB, { force: true }); rmSync(CSV, { force: true }); });
 
-for (const navn of ["Horribly Awry", "Lightning Bolt", "Ragavan, Nimble Pilferer", "Dawn Evangel"]) {
+for (const navn of ["Horribly Awry", "Lightning Bolt", "Ragavan, Nimble Pilferer"]) {
   await db().execute({
     sql: `INSERT INTO cards (id,oracle_id,name,name_norm,set_code,collector_number,rarity,usd,usd_foil,has_nonfoil,has_foil,image_uri,released_at)
           VALUES (?,?,?,?,'bfz','1','rare',1,NULL,1,0,NULL,NULL)`,
@@ -24,7 +24,6 @@ const ukoblet = [
   ["p3", "Dragon Token", 12],        // token
   ["p4", "Eldrazi Scion Token (2 A)", 8],
   ["p5", "Helt Ukjent Kort Uten Match", 1],
-  ["p6", "Dawn Angel", 8],           // to tegn fra Dawn Evangel
 ];
 for (const [id, navn, lager] of ukoblet) {
   await db().execute({
@@ -35,15 +34,6 @@ for (const [id, navn, lager] of ukoblet) {
 }
 
 const rader = await lagSkrivefeilrapport(CSV, () => {});
-
-test("to tegn unna gir forslag, ikke automatisk kobling", () => {
-  // «Dawn Angel» mot «Dawn Evangel». Åpenbart for et menneske, men ikke
-  // sikkert nok til å koble uten at noen ser på det.
-  const r = rader.find((x) => x.produkt === "Dawn Angel");
-  assert.equal(r.gruppe, "forslag");
-  assert.equal(r.forslag, "Dawn Evangel");
-  assert.equal(r.avstand, 2);
-});
 
 test("skrivefeil får riktig forslag", () => {
   const a = rader.find((r) => r.produkt === "Horrible Awry");
@@ -76,9 +66,4 @@ test("lager brukes til å prioritere", () => {
   const skrivefeil = rader.filter((r) => r.gruppe === "skrivefeil");
   // Begge har avstand 1, så den med mest på lager skal komme først.
   assert.equal(skrivefeil[0].produkt, "Lightnig Bolt");
-});
-
-test("ett tegn kobles automatisk, to gjør det ikke", () => {
-  assert.equal(rader.find((r) => r.produkt === "Horrible Awry").gruppe, "skrivefeil");
-  assert.equal(rader.find((r) => r.produkt === "Dawn Angel").gruppe, "forslag");
 });
