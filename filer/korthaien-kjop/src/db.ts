@@ -63,6 +63,9 @@ async function leggTilNyeKolonner(): Promise<void> {
   if (cards.size && !cards.has("back_norm")) {
     await db().execute("ALTER TABLE cards ADD COLUMN back_norm TEXT");
   }
+  if (cards.size && !cards.has("variant")) {
+    await db().execute("ALTER TABLE cards ADD COLUMN variant TEXT NOT NULL DEFAULT 'vanlig'");
+  }
 
   const kat = await kolonner("mystore_categories");
   if (kat.size && !kat.has("gjettet")) {
@@ -85,6 +88,14 @@ async function leggTilNyeKolonner(): Promise<void> {
   const lenker = await kolonner("mystore_links");
   if (lenker.size && !lenker.has("kilde")) {
     await db().execute("ALTER TABLE mystore_links ADD COLUMN kilde TEXT");
+  }
+
+  const lager = await kolonner("mystore_stock");
+  if (lager.size && !lager.has("product_name")) {
+    await db().execute("ALTER TABLE mystore_stock ADD COLUMN product_name TEXT");
+  }
+  if (lager.size && !lager.has("category")) {
+    await db().execute("ALTER TABLE mystore_stock ADD COLUMN category TEXT");
   }
 
   const um = await kolonner("mystore_unmatched");

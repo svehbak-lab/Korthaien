@@ -1,70 +1,66 @@
-# Skrivefeilforslag, og bedre grunnlag i koblingen
+# Rate limiting
 
-## Bruk
+Den siste tekniske tingen som faktisk stopper lansering.
+
+## Installer
 
 ```
 node oppdater.mjs
-cd korthaien-kjop
-npm run mystore
-npm run rydd
 ```
 
-Start backend på nytt etterpå for admin-endringene.
+Start backend på nytt. Grensene gjelder med én gang, ingen synk eller import
+nødvendig.
 
-Forslagslista havner i `gjenstaende.csv`, med de mest sannsynlige øverst.
+## Hvorfor
 
-## Taket var for stramt
+`/api/search` er hele innkjøpslista di. Hvilke sett du kjøper fra, hvilke kort
+du mangler, og nøyaktig hva du betaler for hvert av dem. En konkurrent kunne
+hentet ut alt på noen minutter og lagt seg like over.
 
-«Dawn Angel» er to tegn fra «Dawn Evangel» — åpenbart samme kort for et
-menneske. Det gamle taket ga ett tillatt tegn for et navn på ni, så forslaget
-ble aldri laget. Kortet endte i «ukjent» uten noen antydning om hva det var.
+## Grensene
 
-Taket er nå en fjerdedel av navnelengden. «Dawn Angel» fanges, uten at grensen
-blir meningsløs for korte navn.
+Per IP-adresse, med to vinduer for hver regel:
 
-## To grupper i stedet for én
+| | Per minutt | Per døgn |
+|---|---|---|
+| Søk og settliste | 60 | 2000 |
+| Bulkinnlegging | 10 | 200 |
+| Innsending av ordre | 3 | 20 |
+| Admin-innlogging | 5 | 50 |
 
-**skrivefeil** er ett tegn fra et entydig kort. Disse kobles automatisk av
-`npm run rydd`, som før.
+Det korte vinduet stopper støt, det lange stopper jevn tapping. Med bare det
+korte ville en tålmodig skraper gått under radaren ved å vente ett sekund
+mellom hvert kall.
 
-**forslag** er entydige treff lenger unna. De kobles ikke automatisk — du ser
-dem i CSV-en med forslag og avstand, og retter i Mystore. Det er den lista du
-ba om.
+En ekte kunde møter dem aldri. Den som limer inn 50 linjer og bruker et
+kvarter på å velge utgaver, ligger langt under 60 søk i minuttet.
 
-Skillet er med vilje. Ett tegn er nesten alltid en skrivefeil. To eller tre kan
-være et helt annet kort, og en automatisk kobling der ville gitt deg feil
-beholdning uten noe varsel.
+Innlogging begrenses hardere. Ett passord uten brukernavn er en fristende ting
+å gjette på, og fem forsøk i minuttet gjør det upraktisk.
 
-## «100 %» skjulte et tynt grunnlag
+## En detalj som må være riktig på Render
 
-Du fant at fire sett viste 100 % på samme kategori, noe som ikke går an. Årsaken
-var at andelen ble regnet av de få navnene som lot seg slå opp — er de fleste
-feilstavet, står du igjen med en håndfull vanlige kort som finnes overalt.
+`app.set("trust proxy", 1)` er lagt inn. Bak Render kommer alle forespørsler
+fra proxyen, og den ekte adressen ligger i `X-Forwarded-For`. Uten dette ville
+alle kunder sett ut som én adresse — og den første som søkte litt mye, ville
+låst ute alle andre.
 
-Forslagene viser nå treff av antall i stedet for prosent: «Ultimate Masters
-3/3» sier tydelig at grunnlaget er tre kortnavn. «The List 412/512» er noe helt
-annet, og skal se annerledes ut.
+## Hva dette ikke løser
 
-## Du kan endre kategorier som allerede har sett
+Grensene er per adresse. Noen med tilgang til mange adresser kan fortsatt
+hente ut lista over tid. Det gjør jobben dyr nok til at tilfeldig skraping
+stopper, men det er ikke et forsvar mot en målrettet konkurrent.
 
-Kobling-fanen viste bare kategorier uten sett, så CMB1 og SPG var utilgjengelige.
-Nå finnes et søkefelt og en avkrysning for «Vis også kategorier som allerede har
-sett», pluss en kolonne som viser hva de er koblet til.
+Skulle det bli aktuelt, er neste steg å kreve innlogging for søk. Det koster
+konvertering, så jeg ville ventet til du ser at det trengs.
 
-## Rekkefølgen for kategorien med 1254 kort
-
-Skrivefeilmatchingen sammenligner mot kort i **samme sett**, så den trenger at
-settet er riktig først. For den kategorien betyr det:
-
-1. Koble kategorien til riktig sett i Kobling
-2. `npm run mystore`
-3. `npm run rydd`
-
-Da får skrivefeilene et sett å sammenlignes mot, og de fleste løser seg selv.
-Å gjøre det i motsatt rekkefølge gir ingenting.
+Tellingen ligger i minnet. Ved omstart av backend nullstilles den. Det er et
+bevisst valg: alternativet ville lagt en databaseskriving på hver eneste
+forespørsel, og omstart skjer sjelden nok til at det ikke er et hull verdt å
+tette.
 
 ## Testet
 
-Syv tester, blant annet at «Dawn Angel» nå gir forslag med avstand 2, at ett
-tegn fortsatt kobles automatisk mens to ikke gjør det, og at CSV-en åpner
-riktig i norsk Excel.
+Syv tester på logikken, pluss en kjøring mot ekte server: søk nummer 61 fikk
+429 med `Retry-After: 60`, en annen adresse var upåvirket, og innloggingen
+stoppet på forsøk seks.

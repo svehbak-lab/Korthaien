@@ -5,6 +5,7 @@ import { synkMystore, gjettKategorier } from "./mystore.js";
 import { lagSkrivefeilrapport } from "./skrivefeil.js";
 import { ryddOpp, angreOpprydding } from "./rydd.js";
 import { analyserGruppe, skrivAnalyse } from "./analyser.js";
+import { helsesjekk } from "./helse.js";
 import { utløpGamleOrdrer } from "./orders.js";
 
 // Kommandolinje for jobbene. Render kjører disse som cron.
@@ -88,6 +89,9 @@ switch (kommando) {
     // Bare settlista. Går på sekunder, mot minutter for hele katalogen.
     await importerSett();
     break;
+  case "helse":
+    await helsesjekk();
+    break;
   case "analyser": {
     const koder = process.argv.slice(3).filter((a) => !a.startsWith("--"));
     if (!koder.length) {
@@ -124,6 +128,6 @@ switch (kommando) {
     break;
   }
   default:
-    console.log("Bruk: import | sett | mystore | gjett | analyser [settkode…] | skrivefeil | rydd | reindeks | seed | expire | sett-kurs <tall>");
+    console.log("Bruk: import | sett | mystore | gjett | helse | analyser [settkode…] | skrivefeil | rydd | reindeks | seed | expire | sett-kurs <tall>");
 }
 process.exit(0);

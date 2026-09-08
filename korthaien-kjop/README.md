@@ -174,6 +174,33 @@ minutt, med inntil seks forsøk.
 Blir en jobb avbrutt likevel, er alt som er gjort lagret. Vent noen minutter og
 kjør på nytt.
 
+## Varianter
+
+Scryfall gir hver versjon av et kort sin egen rad med eget samlernummer og
+egen pris. «Bold Plagiarist» i Commander Legends finnes som nr. 40 til $2,50 og
+nr. 641 (extended art) til $9. Butikken har begge som separate produkter, og
+skiller dem med et tilleggsord i navnet.
+
+Uten variantmatching tok oppslaget én av radene vilkårlig. Et kort kunne altså
+telle som koblet og likevel ligge på feil versjon med feil pris — usynlig, siden
+koblingen så vellykket ut.
+
+Kolonnen `variant` holder etiketten: vanlig, extended, borderless, showcase,
+etched eller fullart. Den utledes fra Scryfalls `border_color`, `frame_effects`
+og `full_art`, og fra tilleggsordet i butikkens produktnavn. Oppslaget
+foretrekker rad med samme variant.
+
+**Samlernummer i navnet.** «Island 267» og «Mountain 274» har nummeret lagt inn
+av butikken, mens Scryfall bare kaller kortet «Island». Nummeret leses ut og
+brukes direkte — det er entydig. Treffer det ikke, faller oppslaget tilbake på
+navnet i stedet for å bomme helt.
+
+**Bokstav i eldre sett.** Revised skiller basic lands med «Swamp A», «Swamp B».
+Bokstaven oversettes til posisjon blant kortets utgaver i settet. Bare basic
+lands behandles slik — «Kird Ape» deles ikke opp.
+
+Endringen krever ny kortimport, siden variantfeltene ikke finnes i eldre data.
+
 ## Dobbeltsidige kort
 
 Scryfall lagrer flip-, transform-, adventure- og splittkort med begge navn:
@@ -212,6 +239,23 @@ familiesøket av seg selv — som de skal.
 ```
 npm run sett     # oppdaterer bare settlista, tar sekunder
 ```
+
+## Helsesjekk
+
+```
+npm run helse
+```
+
+Feil i koblingene er stille. Et produkt koblet til to kort, eller beholdning
+fra et produkt som ikke finnes lenger, gir feil kvote uten at noe varsler.
+Kommandoen leter etter fire ting:
+
+- produkter koblet til flere kort — beholdningen telles da to steder
+- lagerrader uten produkt bak seg
+- koblinger som ikke er oppdatert på en uke i sett du kjøper fra
+- enkeltkort du vil ha, uten kobling mot Korthaien
+
+Verdt å kjøre etter hver synk den første tiden.
 
 ## Analyser en gruppe
 
@@ -277,6 +321,42 @@ fjerner alle automatiske koblinger og lar de manuelle stå.
 Det som blir igjen skrives til `gjenstaende.csv`, gruppert per sett. Mange fra
 samme sett betyr som regel én årsak — feil settkobling — og ikke hundre
 uavhengige feil.
+
+## Rate limiting
+
+De åpne endepunktene er hele innkjøpslista: hvilke kort du mangler og hva du
+betaler. Uten grenser kan den hentes ut i sin helhet på noen minutter.
+
+Grensene er per IP-adresse, med to vinduer for hver regel:
+
+| | Per minutt | Per døgn |
+|---|---|---|
+| Søk og settliste | 60 | 2000 |
+| Bulkinnlegging | 10 | 200 |
+| Innsending av ordre | 3 | 20 |
+| Admin-innlogging | 5 | 50 |
+
+Det korte vinduet stopper støt, det lange stopper jevn tapping. Bare det korte
+ville sluppet gjennom en skraper som går sakte nok.
+
+En ekte kunde møter dem aldri. Den som limer inn 50 linjer og bruker et kvarter
+på å velge utgaver, ligger langt under 60 søk i minuttet.
+
+Innlogging begrenses hardere enn resten, siden ett passord uten brukernavn er
+en fristende ting å gjette på.
+
+`app.set("trust proxy", 1)` er nødvendig: bak Render ligger den ekte adressen i
+`X-Forwarded-For`, og uten det ville alle kunder sett ut som én og rammet
+hverandres grenser.
+
+**Hva dette ikke løser.** Grensene er per adresse, så noen med tilgang til
+mange adresser kan fortsatt hente ut lista over tid. Det gjør jobben dyr nok
+til at tilfeldig skraping stopper, men det er ikke et forsvar mot en målrettet
+konkurrent. Skulle det bli aktuelt, er neste steg å kreve innlogging for søk.
+
+Tellingen ligger i minnet, ikke i databasen. Ved omstart av backend nullstilles
+den. Det er akseptabelt her — omstart skjer sjelden, og alternativet ville lagt
+en databaseskriving på hver eneste forespørsel.
 
 ## Ikke bygget ennå
 - E-post med ordrebekreftelse. Ordren opprettes og instruksjonene vises på

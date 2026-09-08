@@ -1,6 +1,7 @@
 import { db, normaliser } from "./db.js";
 import { byggIndeks, finnSett } from "./settnavn.js";
 import { gjettSett } from "./gjett.js";
+import { variantFraNavn, skillUtNummer, skillUtBokstav } from "./varianter.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MYSTORE
@@ -249,39 +250,84 @@ export async function synkMystore(
 
     for (const p of produkter) {
       const foil = /\bfoil\b/i.test(p.navn) || /\bfoil\b/i.test(kat.navn);
+      // Varianten leses ut av navnet før parentesene kastes — det er nettopp
+      // der den står: «Bold Plagiarist (Extended Art)».
+      const variant = variantFraNavn(p.navn);
       const utenFoil = p.navn.replace(/\bfoil\b/gi, "");
-      const rent = utenFoil.replace(/\([^)]*\)/g, "").trim();
+      let rent = utenFoil.replace(/\([^)]*\)/g, "").trim();
+
+      // Samlernummer eller bokstav i navnet: «Island 267», «Swamp B».
+      // Basic lands finnes i mange like utgaver, og dette er det eneste som
+      // skiller dem — Scryfall kaller dem alle bare «Island».
+      const medNummer = skillUtNummer(rent);
+      let nummer: string | null = medNummer.nummer;
+      rent = medNummer.navn;
+      let posisjon: number | null = null;
+      if (!nummer) {
+        const medBokstav = skillUtBokstav(rent);
+        posisjon = medBokstav.posisjon;
+        rent = medBokstav.navn;
+      }
+
       const n = normaliser(rent);
       // Splittkort listes én gang per halvdel: «Determined (Bound/Determined)».
-      // Parentesen inneholder hele kortet, og «Bound/Determined» normaliseres
-      // likt som Scryfalls «Bound // Determined».
       const iParentes = utenFoil.match(/\(([^)]*\/[^)]*)\)/);
       const helt = iParentes ? normaliser(iParentes[1]) : n;
-      // Søk i hele familien, ikke bare hovedsettet. Hovedsettet vinner ved
-      // likhet, deretter eldste barn — bonusark kom etter hovedutgivelsen.
+      // Søk i hele familien, ikke bare hovedsettet.
       const sett = familie.get(setCode) || [setCode];
       const plass = sett.map(() => "?").join(",");
-      const treff = await db().execute({
-        sql: `SELECT c.id FROM cards c LEFT JOIN sets s ON s.code = c.set_code
-               WHERE c.set_code IN (${plass})
-                 AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)
-               ORDER BY (c.set_code = ?) DESC,
-                        (c.name_norm = ? OR c.name_norm = ?) DESC,
-                        s.released_at ASC
-               LIMIT 1`,
-        args: [...sett, n, helt, n, n, setCode, n, helt],
-      });
+
+      let treff;
+      if (nummer) {
+        // Nummeret er entydig. Da trenger vi verken variant eller navn.
+        treff = await db().execute({
+          sql: `SELECT id FROM cards
+                 WHERE set_code IN (${plass}) AND lower(collector_number) = ?
+                   AND (name_norm = ? OR front_norm = ? OR back_norm = ?)
+                 LIMIT 1`,
+          args: [...sett, nummer, n, n, n],
+        });
+        // Feil nummer skal ikke gi feil kort. Bommer det, faller vi tilbake
+        // til vanlig navneoppslag under.
+        if (!treff.rows[0]) treff = null as any;
+      }
+
+      if (!treff?.rows?.[0]) {
+        treff = await db().execute({
+          sql: `SELECT c.id FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+                 WHERE c.set_code IN (${plass})
+                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)
+                 ORDER BY (c.variant = ?) DESC,
+                          (c.set_code = ?) DESC,
+                          (c.name_norm = ? OR c.name_norm = ?) DESC,
+                          CAST(c.collector_number AS INTEGER) ASC,
+                          s.released_at ASC
+                 LIMIT 1 OFFSET ?`,
+          args: [...sett, n, helt, n, n, variant, setCode, n, helt, posisjon || 0],
+        });
+      }
       if (!treff.rows[0]) {
         uløste.push({ p, kat: kat.navn, setCode });
         continue;
       }
       koblet++;
+      // Et produkt kan bare være ett kort. Flytter det seg — fordi
+      // variantmatchingen ble bedre, eller fordi du rettet et navn — må den
+      // gamle raden bort. Ellers står beholdningen igjen på et kort som ikke
+      // lenger peker noe sted, og kvoten der blir feil uten at noe varsler.
       stockRader.push({
-        sql: `INSERT INTO mystore_stock (card_id, finish, qty, product_id, synced_at)
-              VALUES (?, ?, ?, ?, ?)
+        sql: `DELETE FROM mystore_stock
+               WHERE product_id = ? AND NOT (card_id = ? AND finish = ?)`,
+        args: [p.id, String(treff.rows[0].id), foil ? "foil" : "nonfoil"],
+      });
+      stockRader.push({
+        sql: `INSERT INTO mystore_stock (card_id, finish, qty, product_id, product_name, category, synced_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(card_id, finish) DO UPDATE SET
-                qty = excluded.qty, product_id = excluded.product_id, synced_at = excluded.synced_at`,
-        args: [String(treff.rows[0].id), foil ? "foil" : "nonfoil", p.lager, p.id, nå],
+                qty = excluded.qty, product_id = excluded.product_id,
+                product_name = excluded.product_name, category = excluded.category,
+                synced_at = excluded.synced_at`,
+        args: [String(treff.rows[0].id), foil ? "foil" : "nonfoil", p.lager, p.id, p.navn, kat.navn, nå],
       });
     }
     if ((i + 1) % 25 === 0) logg(`  ${i + 1}/${skalHentes.length} kategorier — ${koblet} koblet`);
@@ -289,6 +335,20 @@ export async function synkMystore(
 
   for (let i = 0; i < stockRader.length; i += 300) {
     await db().batch(stockRader.slice(i, i + 300), "write");
+  }
+
+  // Produkter som ikke lenger finnes i Mystore, eller som har byttet
+  // kategori til et sett vi ikke synker. Raden ville ellers blitt stående
+  // for alltid med et lagertall ingen oppdaterer.
+  const foreldet = await db().execute({
+    sql: `DELETE FROM mystore_stock
+           WHERE synced_at < ?
+             AND card_id IN (SELECT id FROM cards WHERE set_code IN
+                 (SELECT set_code FROM set_rules WHERE enabled = 1))`,
+    args: [nå],
+  });
+  if (foreldet.rowsAffected) {
+    logg(`  ${foreldet.rowsAffected} foreldede koblinger fjernet.`);
   }
 
   // Lista bygges på nytt hver synk, så koblede produkter forsvinner av seg selv.

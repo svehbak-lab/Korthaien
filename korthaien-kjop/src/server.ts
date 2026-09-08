@@ -10,8 +10,12 @@ import { importerScryfall } from "./import-scryfall.js";
 import { synkMystore, gjettKategorier, harMystore } from "./mystore.js";
 import { krevAdmin, sjekkPassord, settCookie, fjernCookie } from "./auth.js";
 import { byggIndeks, foreslå } from "./settnavn.js";
+import { grense, REGLER } from "./ratelimit.js";
 
 const app = express();
+// Render setter X-Forwarded-For. Uten dette ser alle brukere ut som én
+// adresse, og rate limiting ville rammet alle samtidig.
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
@@ -37,7 +41,7 @@ app.get("/api/health", fang(async (_req: any, res: any) => {
   res.json({ ok: true, kort: Number(k.rows[0]?.n || 0), mystore: harMystore() });
 }));
 
-app.get("/api/sets", fang(async (_req: any, res: any) => {
+app.get("/api/sets", grense(REGLER.søk), fang(async (_req: any, res: any) => {
   // Bare sett jeg faktisk kjøper fra vises i filteret.
   const r = await db().execute(`
     SELECT s.code, s.name, s.released_at, r.wanted_default, r.conditions
@@ -46,7 +50,7 @@ app.get("/api/sets", fang(async (_req: any, res: any) => {
   res.json(r.rows);
 }));
 
-app.get("/api/search", fang(async (req: any, res: any) => {
+app.get("/api/search", grense(REGLER.søk), fang(async (req: any, res: any) => {
   const q = String(req.query.q || "").trim();
   const set = String(req.query.set || "").trim();
   if (!q && !set) return res.json([]);
@@ -54,7 +58,7 @@ app.get("/api/search", fang(async (req: any, res: any) => {
   res.json(await søk({ q, set, rarity: String(req.query.rarity || "") }));
 }));
 
-app.post("/api/bulk", fang(async (req: any, res: any) => {
+app.post("/api/bulk", grense(REGLER.bulk), fang(async (req: any, res: any) => {
   const tekst = String(req.body?.tekst || "");
   if (!tekst.trim()) throw new HttpFeil(400, "Tom liste");
   const linjer = parseBulk(tekst);
@@ -66,7 +70,7 @@ app.post("/api/bulk", fang(async (req: any, res: any) => {
   });
 }));
 
-app.post("/api/orders", fang(async (req: any, res: any) => {
+app.post("/api/orders", grense(REGLER.ordre), fang(async (req: any, res: any) => {
   await utløpGamleOrdrer();
   const ordre = await lagOrdre({
     customer_name: req.body?.customer_name,
@@ -78,7 +82,7 @@ app.post("/api/orders", fang(async (req: any, res: any) => {
   res.status(201).json(ordre);
 }));
 
-app.get("/api/orders/:orderNo", fang(async (req: any, res: any) => {
+app.get("/api/orders/:orderNo", grense(REGLER.søk), fang(async (req: any, res: any) => {
   const o = await hentOrdre(String(req.params.orderNo));
   if (!o) throw new HttpFeil(404, "Fant ikke ordren");
   // Publikumsvisningen viser kvittering, ikke kundedata utover navnet.
@@ -87,7 +91,9 @@ app.get("/api/orders/:orderNo", fang(async (req: any, res: any) => {
 }));
 
 // ── admin ────────────────────────────────────────────────────────────────────
-app.post("/api/admin/login", (req, res) => {
+// Innloggingen begrenses hardere enn resten. Ett passord uten brukernavn er
+// en fristende ting å gjette på.
+app.post("/api/admin/login", grense(REGLER.innlogging), (req, res) => {
   if (!sjekkPassord(req.body?.password)) {
     return res.status(401).json({ feil: "Feil passord" });
   }
@@ -299,13 +305,17 @@ app.get("/api/admin/cards", krevAdmin, fang(async (req: any, res: any) => {
   // produkt hos deg.
   const r = await db().execute({
     sql: `SELECT c.id, c.name, c.collector_number, c.rarity, c.usd, c.usd_foil,
-                 c.has_foil, c.image_uri,
+                 c.has_foil, c.image_uri, c.variant, c.set_code,
                  (SELECT wanted FROM card_wants w WHERE w.card_id = c.id AND w.finish='nonfoil') AS want_nonfoil,
                  (SELECT wanted FROM card_wants w WHERE w.card_id = c.id AND w.finish='foil')    AS want_foil,
                  (SELECT qty        FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS stock_nonfoil,
-                 (SELECT product_id FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS prod_nonfoil,
+                 (SELECT product_id   FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS prod_nonfoil,
+                 (SELECT product_name FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS pnavn_nonfoil,
+                 (SELECT category     FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS pkat_nonfoil,
                  (SELECT qty        FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS stock_foil,
-                 (SELECT product_id FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS prod_foil,
+                 (SELECT product_id   FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS prod_foil,
+                 (SELECT product_name FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS pnavn_foil,
+                 (SELECT category     FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS pkat_foil,
                  (SELECT COALESCE(SUM(l.qty),0) FROM order_lines l JOIN orders o ON o.id = l.order_id
                    WHERE l.card_id = c.id AND l.finish='nonfoil' AND o.status IN ('pending','received')) AS res_nonfoil,
                  (SELECT COALESCE(SUM(l.qty),0) FROM order_lines l JOIN orders o ON o.id = l.order_id
@@ -484,6 +494,21 @@ app.get("/api/admin/cards/search", krevAdmin, fang(async (req: any, res: any) =>
   res.json(r.rows);
 }));
 
+// Ukoblede produkter i ett bestemt sett. Brukes når du står på kortlista og
+// vil koble et kort til produktet ditt manuelt.
+app.get("/api/admin/mystore/unmatched-for-set", krevAdmin, fang(async (req: any, res: any) => {
+  const set = String(req.query.set || "").toLowerCase();
+  if (!set) throw new HttpFeil(400, "Mangler ?set=");
+  const q = String(req.query.q || "").trim();
+  const r = await db().execute({
+    sql: `SELECT product_id, sku, name, stock, category FROM mystore_unmatched
+           WHERE set_code = ? AND (? = '' OR name LIKE ?)
+           ORDER BY stock DESC, name LIMIT 60`,
+    args: [set, q, `%${q}%`],
+  });
+  res.json(r.rows);
+}));
+
 app.post("/api/admin/mystore/link", krevAdmin, fang(async (req: any, res: any) => {
   const { product_id, card_id, finish, ignored } = req.body || {};
   if (!product_id) throw new HttpFeil(400, "Mangler product_id");
@@ -505,16 +530,22 @@ app.post("/api/admin/mystore/link", krevAdmin, fang(async (req: any, res: any) =
   // neste nattlige synk.
   if (!ignored) {
     const p = await db().execute({
-      sql: "SELECT stock FROM mystore_unmatched WHERE product_id = ?",
+      sql: "SELECT stock, name, category FROM mystore_unmatched WHERE product_id = ?",
       args: [String(product_id)],
     });
     if (p.rows[0]) {
       await db().execute({
-        sql: `INSERT INTO mystore_stock (card_id, finish, qty, product_id, synced_at)
-              VALUES (?, ?, ?, ?, ?)
+        sql: `INSERT INTO mystore_stock (card_id, finish, qty, product_id, product_name, category, synced_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(card_id, finish) DO UPDATE SET
-                qty = excluded.qty, product_id = excluded.product_id, synced_at = excluded.synced_at`,
-        args: [String(card_id), finish, Number(p.rows[0].stock || 0), String(product_id), nå],
+                qty = excluded.qty, product_id = excluded.product_id,
+                product_name = excluded.product_name, category = excluded.category,
+                synced_at = excluded.synced_at`,
+        args: [
+          String(card_id), finish, Number(p.rows[0].stock || 0), String(product_id),
+          p.rows[0].name ? String(p.rows[0].name) : null,
+          p.rows[0].category ? String(p.rows[0].category) : null, nå,
+        ],
       });
     }
   }
@@ -524,6 +555,17 @@ app.post("/api/admin/mystore/link", krevAdmin, fang(async (req: any, res: any) =
 }));
 
 // ── admin: innstillinger og jobber ───────────────────────────────────────────
+// Fjern en kobling som er feil. Produktet havner tilbake i Kobling ved neste
+// synk, så du mister ingenting ved å angre.
+app.delete("/api/admin/mystore/stock/:cardId", krevAdmin, fang(async (req: any, res: any) => {
+  const finish = String(req.query.finish || "nonfoil");
+  await db().execute({
+    sql: "DELETE FROM mystore_stock WHERE card_id = ? AND finish = ?",
+    args: [String(req.params.cardId), finish],
+  });
+  res.json({ ok: true });
+}));
+
 app.get("/api/admin/settings", krevAdmin, fang(async (_req: any, res: any) => {
   res.json(await hentSettings());
 }));

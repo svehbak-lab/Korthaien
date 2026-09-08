@@ -29,6 +29,10 @@ CREATE TABLE IF NOT EXISTS cards (
   -- ...og baksiden. Butikker lister splittkort én gang per halvdel:
   -- «Determined (Bound/Determined)» er samme kort som «Bound // Determined».
   back_norm         TEXT,
+  -- Hvilken versjon av kortet dette er: vanlig, extended, borderless,
+  -- showcase, etched, fullart. Butikken skiller dem med et tilleggsord i
+  -- navnet, Scryfall med egne rader og egen pris.
+  variant           TEXT NOT NULL DEFAULT 'vanlig',
   set_code          TEXT NOT NULL,
   collector_number  TEXT,
   rarity            TEXT,
@@ -42,6 +46,7 @@ CREATE TABLE IF NOT EXISTS cards (
 CREATE INDEX IF NOT EXISTS idx_cards_name    ON cards(name_norm);
 CREATE INDEX IF NOT EXISTS idx_cards_front   ON cards(front_norm);
 CREATE INDEX IF NOT EXISTS idx_cards_back    ON cards(back_norm);
+CREATE INDEX IF NOT EXISTS idx_cards_variant ON cards(set_code, name_norm, variant);
 CREATE INDEX IF NOT EXISTS idx_cards_set     ON cards(set_code, collector_number);
 CREATE INDEX IF NOT EXISTS idx_cards_oracle  ON cards(oracle_id);
 
@@ -71,11 +76,16 @@ CREATE TABLE IF NOT EXISTS card_wants (
 
 -- Speil av beholdningen i Mystore. Fylles av synkjobben.
 CREATE TABLE IF NOT EXISTS mystore_stock (
-  card_id     TEXT NOT NULL,
-  finish      TEXT NOT NULL,
-  qty         INTEGER NOT NULL DEFAULT 0,
-  product_id  TEXT,
-  synced_at   TEXT NOT NULL,
+  card_id       TEXT NOT NULL,
+  finish        TEXT NOT NULL,
+  qty           INTEGER NOT NULL DEFAULT 0,
+  product_id    TEXT,
+  -- Navn og kategori lagres så du kan se hvilket produkt kortet faktisk er
+  -- koblet til. Uten dem er en kobling bare en ID, og da kan du ikke
+  -- kontrollere om den er riktig.
+  product_name  TEXT,
+  category      TEXT,
+  synced_at     TEXT NOT NULL,
   PRIMARY KEY (card_id, finish)
 );
 

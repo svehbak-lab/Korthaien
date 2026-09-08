@@ -179,7 +179,11 @@ function KategoriRad({ rad, onFerdig, onFeil }) {
 
   return (
     <tr>
-      <td>{rad.name || "(uten navn)"}</td>
+      <td>
+        {rad.name || "(uten navn)"}
+        {/* ID-en trengs når du skal slå opp kategorien direkte mot Mystore. */}
+        <div className="kode dempet" style={{ fontSize: 11 }}>#{rad.category_id}</div>
+      </td>
       <td className="dempet">{rad.parent_name || <span title="Kategorien har ingen forelder i Mystore">—</span>}</td>
       <td>
         {rad.set_name ? (

@@ -97,14 +97,11 @@ if (ANGRE) {
   process.exit(0);
 }
 
-console.log(`\n  Korthaien Kjøp — skrivefeilforslag`);
+console.log(`\n  Korthaien Kjøp — rate limiting`);
 console.log(dim(`  ${ROT}\n`));
 
 speil(join(HER, "filer"), ".");
 
 console.log(`\n${g("✓")} Ferdig — ${tall.ny} nye, ${tall.endret} endret, ${tall.uendret} uendret.\n`);
-console.log("  Så:");
-console.log(dim("    npm run mystore    # plukker opp rettelsene dine"));
-console.log(dim("    npm run rydd       # kobler de sikre, lager forslagslista"));
-console.log(dim("\n  Restene med forslag havner i gjenstaende.csv"));
+console.log("  Start backend på nytt. Grensene gjelder med én gang.");
 console.log(dim("  Angre:  node oppdater.mjs --angre\n"));

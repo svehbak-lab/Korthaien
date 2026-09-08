@@ -1,4 +1,5 @@
 import { db, normaliser } from "./db.js";
+import { variantFraScryfall } from "./varianter.js";
 import { Readable } from "node:stream";
 import { createGunzip } from "node:zlib";
 import { createInterface } from "node:readline";
@@ -34,6 +35,9 @@ type Rå = {
   finishes?: string[];
   released_at?: string;
   prices?: { usd?: string | null; usd_foil?: string | null };
+  border_color?: string;
+  frame_effects?: string[];
+  full_art?: boolean;
   image_uris?: { normal?: string; small?: string };
   card_faces?: { image_uris?: { normal?: string; small?: string } }[];
 };
@@ -144,12 +148,13 @@ async function skrivBolk(bolk: Rå[]): Promise<void> {
       k.image_uris?.normal || k.card_faces?.[0]?.image_uris?.normal || k.image_uris?.small || null;
     return {
       sql: `INSERT INTO cards
-              (id, oracle_id, name, name_norm, front_norm, back_norm, set_code, collector_number, rarity,
-               usd, usd_foil, has_nonfoil, has_foil, image_uri, released_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              (id, oracle_id, name, name_norm, front_norm, back_norm, variant, set_code,
+               collector_number, rarity, usd, usd_foil, has_nonfoil, has_foil, image_uri, released_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               usd = excluded.usd, usd_foil = excluded.usd_foil,
-              image_uri = excluded.image_uri, rarity = excluded.rarity`,
+              image_uri = excluded.image_uri, rarity = excluded.rarity,
+              variant = excluded.variant`,
       args: [
         k.id,
         k.oracle_id || k.id,
@@ -158,6 +163,7 @@ async function skrivBolk(bolk: Rå[]): Promise<void> {
         // Hver halvdel for seg, for kort som «Bonecrusher Giant // Stomp».
         k.name.includes("//") ? normaliser(k.name.split("//")[0]) : null,
         k.name.includes("//") ? normaliser(k.name.split("//")[1] || "") || null : null,
+        variantFraScryfall(k),
         k.set.toLowerCase(),
         k.collector_number || null,
         (k.rarity || "").toLowerCase() || null,

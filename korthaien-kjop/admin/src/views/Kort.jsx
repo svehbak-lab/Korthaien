@@ -6,6 +6,7 @@ const KOLONNER = [
   { id: "name", navn: "Kort" },
   { id: "rarity", navn: "Raritet", bredde: 90 },
   { id: "usd", navn: "USD", h: true, bredde: 70 },
+  { id: "prod_nonfoil", navn: "Hos Korthaien", bredde: 230 },
   { id: "stock_nonfoil", navn: "På lager", h: true, bredde: 80 },
   { id: "ledig_nonfoil", navn: "Kan selges", h: true, bredde: 90 },
   { id: "want_nonfoil", navn: "Vil ha", h: true, bredde: 70 },
@@ -203,7 +204,7 @@ export default function Kort({ sett, onFeil, onByttSett }) {
           </thead>
           <tbody>
             {synlige.slice(0, 500).map((k) => (
-              <KortRad key={k.id} kort={k} onFeil={onFeil} />
+              <KortRad key={k.id} kort={k} onFeil={onFeil} onEndret={last} sett={sett} />
             ))}
           </tbody>
         </table>
@@ -256,13 +257,36 @@ function Massefelt({ antall, raritet, harFoil, jobber, onSett }) {
   );
 }
 
-function KortRad({ kort, onFeil }) {
+function KortRad({ kort, onFeil, onEndret, sett }) {
   return (
     <tr>
-      <td className="kode dempet">{kort.collector_number || "\u2014"}</td>
-      <td>{kort.name}</td>
+      <td className="kode dempet">
+        {/* Lenke rett til kortet hos Scryfall, så du kan se hvilken versjon
+            dette faktisk er. */}
+        {kort.collector_number ? (
+          <a
+            href={`https://scryfall.com/card/${kort.set_code}/${kort.collector_number}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Åpne kortet hos Scryfall"
+          >
+            {kort.collector_number}
+          </a>
+        ) : (
+          "\u2014"
+        )}
+      </td>
+      <td>
+        {kort.name}
+        {kort.variant && kort.variant !== "vanlig" && (
+          <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>{kort.variant}</span>
+        )}
+      </td>
       <td className="dempet">{kort.rarity || "\u2014"}</td>
       <td className="h tall dempet">{kort.usd ? `$${Number(kort.usd).toFixed(2)}` : "\u2014"}</td>
+      <td>
+        <Kobling kort={kort} onFeil={onFeil} onEndret={onEndret} sett={sett} />
+      </td>
       <td className="h tall"><Lager qty={kort.stock_nonfoil} koblet={!!kort.prod_nonfoil} /></td>
       <td className="h tall">
         {kort.ledig_nonfoil > 0 ? kort.ledig_nonfoil : <span className="dempet">0</span>}
@@ -335,5 +359,137 @@ function ØnskeFelt({ kortId, finish, verdi, onFeil }) {
         borderColor: status === "ok" ? "var(--ok)" : status === "feil" ? "var(--feil)" : undefined,
       }}
     />
+  );
+}
+
+// Viser hvilket produkt hos deg kortet faktisk er koblet til. En kobling som
+// bare er en ID kan ikke kontrolleres — her ser du navnet og kategorien, og
+// kan sammenligne med kortet hos Scryfall.
+function Kobling({ kort, onFeil, onEndret, sett }) {
+  const [åpen, setÅpen] = useState(false);
+  const [treff, setTreff] = useState(null);
+  const [q, setQ] = useState(kort.name);
+
+  const koblet = kort.prod_nonfoil || kort.prod_foil;
+
+  async function søk(tekst) {
+    try {
+      setTreff(await api.ukobledeISett(sett, tekst));
+    } catch (e) {
+      onFeil(e);
+    }
+  }
+
+  async function koble(produktId, finish) {
+    try {
+      await api.koble({ product_id: produktId, card_id: kort.id, finish });
+      setÅpen(false);
+      onEndret();
+    } catch (e) {
+      onFeil(e);
+    }
+  }
+
+  async function fjern(finish) {
+    if (!confirm("Fjerne koblingen? Produktet dukker opp i Kobling ved neste synk.")) return;
+    try {
+      await api.fjernKobling(kort.id, finish);
+      onEndret();
+    } catch (e) {
+      onFeil(e);
+    }
+  }
+
+  if (!koblet && !åpen) {
+    return (
+      <button
+        className="knapp liten"
+        onClick={() => { setÅpen(true); søk(kort.name); }}
+        title="Finn produktet hos Korthaien og koble det til dette kortet"
+      >
+        Koble
+      </button>
+    );
+  }
+
+  return (
+    <div>
+      {kort.prod_nonfoil && (
+        <ProduktLinje
+          navn={kort.pnavn_nonfoil}
+          kategori={kort.pkat_nonfoil}
+          merke=""
+          onFjern={() => fjern("nonfoil")}
+        />
+      )}
+      {kort.prod_foil && (
+        <ProduktLinje
+          navn={kort.pnavn_foil}
+          kategori={kort.pkat_foil}
+          merke="foil"
+          onFjern={() => fjern("foil")}
+        />
+      )}
+
+      {åpen && (
+        <div style={{ marginTop: 6 }}>
+          <input
+            type="text"
+            value={q}
+            onChange={(e) => { setQ(e.target.value); søk(e.target.value); }}
+            placeholder="Søk blant ukoblede produkter"
+            style={{ width: "100%", marginBottom: 4 }}
+          />
+          {treff?.length === 0 && (
+            <span className="dempet" style={{ fontSize: 11 }}>
+              Ingen ukoblede produkter i dette settet passer søket.
+            </span>
+          )}
+          {(treff || []).slice(0, 8).map((p) => (
+            <div key={p.product_id} className="rad-flex" style={{ gap: 4, marginBottom: 3 }}>
+              <span style={{ fontSize: 12, flex: 1 }}>
+                {p.name} <span className="dempet">({p.stock})</span>
+              </span>
+              <button className="knapp liten" onClick={() => koble(p.product_id, "nonfoil")}>
+                Vanlig
+              </button>
+              {Number(kort.has_foil) > 0 && (
+                <button className="knapp liten" onClick={() => koble(p.product_id, "foil")}>
+                  Foil
+                </button>
+              )}
+            </div>
+          ))}
+          <button className="knapp liten" onClick={() => setÅpen(false)} style={{ marginTop: 4 }}>
+            Lukk
+          </button>
+        </div>
+      )}
+
+      {koblet && !åpen && (
+        <button
+          className="knapp blank"
+          style={{ fontSize: 11 }}
+          onClick={() => { setÅpen(true); søk(kort.name); }}
+        >
+          Koble et produkt til
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ProduktLinje({ navn, kategori, merke, onFjern }) {
+  return (
+    <div className="rad-flex" style={{ gap: 5, fontSize: 12 }}>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        {navn || "(uten navn)"}
+        {merke && <span className="merkelapp m-vent" style={{ marginLeft: 4 }}>{merke}</span>}
+        {kategori && <span className="dempet"> · {kategori}</span>}
+      </span>
+      <button className="knapp blank" style={{ fontSize: 11 }} onClick={onFjern} title="Fjern koblingen">
+        ×
+      </button>
+    </div>
   );
 }
