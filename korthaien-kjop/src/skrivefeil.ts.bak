@@ -1,0 +1,156 @@
+import { db, normaliser } from "./db.js";
+import { writeFileSync } from "node:fs";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SKRIVEFEILRAPPORT
+// ─────────────────────────────────────────────────────────────────────────────
+// Produkter som ikke fant kortet sitt, sortert etter hvorfor. «Horrible Awry»
+// finnes ingen steder fordi kortet heter «Horribly Awry» — én bokstav. Slike
+// bør rettes i Mystore, ikke omgås med uskarp matching: uskarpt nok til å
+// fange skrivefeil er også uskarpt nok til å koble feil kort, og da får du
+// feil beholdning uten å merke det.
+
+// Levenshtein med tidlig utgang. Vi bryr oss bare om korte avstander, så
+// beregningen avbrytes så snart raden er over taket.
+function avstand(a: string, b: string, tak: number): number {
+  if (Math.abs(a.length - b.length) > tak) return tak + 1;
+  let forrige = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const rad = [i];
+    let minste = i;
+    for (let j = 1; j <= b.length; j++) {
+      const kost = a[i - 1] === b[j - 1] ? 0 : 1;
+      rad[j] = Math.min(rad[j - 1] + 1, forrige[j] + 1, forrige[j - 1] + kost);
+      if (rad[j] < minste) minste = rad[j];
+    }
+    if (minste > tak) return tak + 1;
+    forrige = rad;
+  }
+  return forrige[b.length];
+}
+
+// Tokens ligger i egne token-sett hos Scryfall, ikke i settet de ble trykt
+// sammen med. De finnes derfor ikke i katalogen uansett hvor riktig navnet er.
+const TOKEN = /\b(token|emblem|checklist|punch ?card|helper card)\b/i;
+
+export type Rad = {
+  gruppe: "skrivefeil" | "token" | "ukjent";
+  produkt: string;
+  sku: string;
+  kategori: string;
+  sett: string;
+  lager: number;
+  forslag: string;
+  avstand: number | null;
+};
+
+export async function lagSkrivefeilrapport(
+  filsti: string,
+  logg: (s: string) => void = console.log
+): Promise<Rad[]> {
+  const u = await db().execute(
+    `SELECT product_id, sku, name, stock, category, set_code
+       FROM mystore_unmatched ORDER BY set_code, name`
+  );
+  if (!u.rows.length) {
+    logg("Ingen ukoblede produkter — ingenting å rapportere.");
+    return [];
+  }
+  logg(`Undersøker ${u.rows.length} ukoblede produkter…`);
+
+  // Kortnavnene per sett hentes én gang, ikke per produkt.
+  const perSett = new Map<string, { norm: string; navn: string }[]>();
+  async function kortISett(kode: string) {
+    if (!perSett.has(kode)) {
+      const r = await db().execute({
+        sql: "SELECT name, name_norm, front_norm, back_norm FROM cards WHERE set_code = ?",
+        args: [kode],
+      });
+      const liste: { norm: string; navn: string }[] = [];
+      for (const x of r.rows as any[]) {
+        for (const felt of ["name_norm", "front_norm", "back_norm"]) {
+          if (x[felt]) liste.push({ norm: String(x[felt]), navn: String(x.name) });
+        }
+      }
+      perSett.set(kode, liste);
+    }
+    return perSett.get(kode)!;
+  }
+
+  const rader: Rad[] = [];
+
+  for (const p of u.rows as any[]) {
+    const navn = String(p.name || "");
+    const sett = String(p.set_code || "");
+    const felles = {
+      produkt: navn,
+      sku: String(p.sku || ""),
+      kategori: String(p.category || ""),
+      sett,
+      lager: Number(p.stock || 0),
+    };
+
+    if (TOKEN.test(navn)) {
+      rader.push({ ...felles, gruppe: "token", forslag: "", avstand: null });
+      continue;
+    }
+
+    const rent = normaliser(navn.replace(/\bfoil\b/gi, "").replace(/\([^)]*\)/g, ""));
+    if (!rent || !sett) {
+      rader.push({ ...felles, gruppe: "ukjent", forslag: "", avstand: null });
+      continue;
+    }
+
+    // Taket skalerer med navnelengden: to feil i et kort navn er mye, to feil
+    // i et langt navn er lite. Aldri over fire.
+    const tak = Math.min(4, Math.max(1, Math.floor(rent.length / 8)));
+    let beste: { navn: string; d: number } | null = null;
+    for (const k of await kortISett(sett)) {
+      const d = avstand(rent, k.norm, tak);
+      if (d <= tak && (!beste || d < beste.d)) beste = { navn: k.navn, d };
+      if (beste?.d === 1) break;
+    }
+
+    if (beste) {
+      rader.push({ ...felles, gruppe: "skrivefeil", forslag: beste.navn, avstand: beste.d });
+    } else {
+      rader.push({ ...felles, gruppe: "ukjent", forslag: "", avstand: null });
+    }
+  }
+
+  rader.sort(
+    (a, b) =>
+      a.gruppe.localeCompare(b.gruppe) ||
+      (a.avstand ?? 9) - (b.avstand ?? 9) ||
+      b.lager - a.lager ||
+      a.produkt.localeCompare(b.produkt, "nb")
+  );
+
+  // Semikolon og BOM, så norsk Excel åpner filen riktig uten import-dialog.
+  const csv = [
+    "Gruppe;Produktnavn i Mystore;Forslag fra katalogen;Avstand;Sett;Kategori;Pa lager;SKU",
+    ...rader.map((r) =>
+      [r.gruppe, r.produkt, r.forslag, r.avstand ?? "", r.sett.toUpperCase(), r.kategori, r.lager, r.sku]
+        .map((f) => `"${String(f).replace(/"/g, '""')}"`)
+        .join(";")
+    ),
+  ].join("\r\n");
+  writeFileSync(filsti, "\uFEFF" + csv, "utf8");
+
+  const tell = (g: string) => rader.filter((r) => r.gruppe === g).length;
+  logg("");
+  logg(`  ${tell("skrivefeil")} ser ut som skrivefeil — ett forslag hver`);
+  logg(`  ${tell("token")} er tokens eller lignende, som ikke finnes i katalogen`);
+  logg(`  ${tell("ukjent")} har ingen nær match — trolig alternative utgaver og promoer`);
+  logg("");
+  logg(`Skrevet til ${filsti}`);
+
+  const topp = rader.filter((r) => r.gruppe === "skrivefeil").slice(0, 15);
+  if (topp.length) {
+    logg("\nDe mest sannsynlige:");
+    for (const r of topp) {
+      logg(`  ${r.sett.toUpperCase().padEnd(5)} «${r.produkt}» → «${r.forslag}» (${r.avstand} tegn, ${r.lager} på lager)`);
+    }
+  }
+  return rader;
+}
