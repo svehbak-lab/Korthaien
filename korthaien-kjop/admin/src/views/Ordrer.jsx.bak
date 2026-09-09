@@ -41,7 +41,7 @@ export default function Ordrer({ onFeil, onAntall }) {
           Aktive
         </button>
         <button className={`knapp ${arkiv ? "primar" : ""}`} onClick={() => setArkiv(true)}>
-          Ferdige
+          Arkiv
         </button>
         <button className="knapp" onClick={last}>Oppdater</button>
       </div>
@@ -49,8 +49,8 @@ export default function Ordrer({ onFeil, onAntall }) {
       {!ordrer.length && (
         <div className="panel">
           <div className="tom">
-            <b>{arkiv ? "Ingen ferdige ordrer" : "Ingen ordrer venter"}</b>
-            {arkiv ? "Ordrer havner her når de er gjort opp." : "Nye salg dukker opp her med én gang de sendes inn."}
+            <b>{arkiv ? "Arkivet er tomt" : "Ingen ordrer venter"}</b>
+            {arkiv ? "Ordrer havner her når de er lagerført." : "Nye salg dukker opp her med én gang de sendes inn."}
           </div>
         </div>
       )}
@@ -100,10 +100,7 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
             {dager > 0 ? `${dager} dager igjen` : "Fristen har gått ut"}
           </span>
         )}
-        {ordre.discount_code && (
-          <span className="merkelapp m-ok" title="Rabattkode lagt inn">{ordre.discount_code}</span>
-        )}
-        <span style={{ marginLeft: "auto" }} className="sum">{kroner(ordre.total_ore)}</span>
+        <span style={{ marginLeft: "auto" }} className="sum">{kroner(ordre.total_nok)}</span>
       </header>
 
       {åpen && (
@@ -116,16 +113,10 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
 
           <Linjer linjer={ordre.linjer} onEndret={onEndret} onFeil={onFeil} />
 
-          <Avvik ordre={ordre} />
-
-          {["received", "stocked"].includes(ordre.status) && (
-            <Oppgjør ordre={ordre} onEndret={onEndret} onFeil={onFeil} />
-          )}
-
           <div className="spred" style={{ marginTop: 16 }}>
             <span className="dempet">
               {ordre.status === "received"
-                ? "Kvoten holdes til ordren er gjort opp."
+                ? "Kvoten holdes til du merker ordren lagerført."
                 : ordre.status === "pending"
                 ? "Kortene er ikke kommet ennå."
                 : ""}
@@ -138,7 +129,10 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
                 </>
               )}
               {ordre.status === "received" && (
-                <button className="knapp" onClick={() => sett("pending")}>Angre mottak</button>
+                <>
+                  <button className="knapp" onClick={() => sett("pending")}>Angre mottak</button>
+                  <button className="knapp primar" onClick={() => sett("stocked")}>Lagerført i Mystore</button>
+                </>
               )}
               {["stocked", "cancelled", "expired"].includes(ordre.status) && (
                 <button className="knapp" onClick={() => sett("pending")}>Åpne på nytt</button>
@@ -179,18 +173,18 @@ function Linjer({ linjer, onEndret, onFeil }) {
 
 function Linje({ linje, onEndret, onFeil }) {
   const [mottatt, setMottatt] = useState(linje.qty_received ?? linje.qty);
+  const [pris, setPris] = useState(linje.unit_nok);
   const [cond, setCond] = useState(linje.condition);
   const [lagrer, setLagrer] = useState(false);
 
-  const endret = mottatt !== (linje.qty_received ?? linje.qty) || cond !== linje.condition;
+  const endret =
+    mottatt !== (linje.qty_received ?? linje.qty) || pris !== linje.unit_nok || cond !== linje.condition;
   const avvik = mottatt !== linje.qty;
 
   async function lagre() {
     setLagrer(true);
     try {
-      // Prisen settes ikke her. Serveren regner den om etter trappen for
-      // settet når tilstanden endres — ellers ville to steder bestemt beløpet.
-      await api.endreLinje(linje.id, { qty_received: mottatt, condition: cond });
+      await api.endreLinje(linje.id, { qty_received: mottatt, unit_nok: pris, condition: cond });
       onEndret();
     } catch (e) {
       onFeil(e);
@@ -236,11 +230,16 @@ function Linje({ linje, onEndret, onFeil }) {
           onChange={(e) => setMottatt(Math.max(0, parseInt(e.target.value) || 0))}
         />
       </td>
-      <td className="h tall">
-        {kroner(linje.unit_ore)}
-        {cond !== linje.condition && <div className="sett">regnes om ved lagring</div>}
+      <td className="h">
+        <input
+          type="number"
+          className="pris"
+          min="0"
+          value={pris}
+          onChange={(e) => setPris(Math.max(0, parseInt(e.target.value) || 0))}
+        />
       </td>
-      <td className="h tall">{kroner(mottatt * linje.unit_ore)}</td>
+      <td className="h tall">{kroner(mottatt * pris)}</td>
       <td className="h">
         <div className="rad-flex" style={{ justifyContent: "flex-end" }}>
           {endret && (
@@ -254,130 +253,5 @@ function Linje({ linje, onEndret, onFeil }) {
         </div>
       </td>
     </tr>
-  );
-}
-
-// Bestilt mot mottatt. Endrer du tilstand eller antall, er dette forskjellen
-// kunden må få vite om — og det er tallet som skal stå på rabattkoden.
-function Avvik({ ordre }) {
-  const lovet = Number(ordre.quoted_ore || 0);
-  const nå = Number(ordre.total_ore || 0);
-  const antall = ordre.linjer.filter((l) => l.qty_received != null && l.qty_received !== l.qty);
-  const cond = ordre.linjer.filter((l) => l.condition_start && l.condition_start !== l.condition);
-  if (lovet === nå && !antall.length && !cond.length) return null;
-
-  return (
-    <div className="varsel info" style={{ marginTop: 12 }}>
-      <b>Ordren er justert.</b> Kunden ble forespeilet {kroner(lovet)} og får nå{" "}
-      {kroner(nå)}.
-      <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>
-        {cond.map((l) => (
-          <li key={"c" + l.id}>
-            {l.card_name} ({l.set_name}): {l.condition_start} → {l.condition}
-          </li>
-        ))}
-        {antall.map((l) => (
-          <li key={"a" + l.id}>
-            {l.card_name} ({l.set_name}): {l.qty} oppgitt, {l.qty_received} mottatt
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// OPPGJØR
-// ─────────────────────────────────────────────────────────────────────────────
-// Koden lages manuelt i Mystore som et fastbeløp, og limes inn her. Først når
-// den ligger inne kan ordren gjøres opp — ellers ville den havnet i arkivet
-// uten at kunden hadde fått noe.
-function Oppgjør({ ordre, onEndret, onFeil }) {
-  const [kode, setKode] = useState(ordre.discount_code || "");
-  const [notat, setNotat] = useState(ordre.credit_note || "");
-  const [jobber, setJobber] = useState(false);
-  const ferdig = ordre.status === "stocked";
-
-  async function lagre(gjørOpp) {
-    setJobber(true);
-    try {
-      await api.lagreKreditt(ordre.id, {
-        discount_code: kode.trim() || null,
-        credit_note: notat.trim() || null,
-        sendt: gjørOpp,
-      });
-      // Kvoten holdes helt til ordren er gjort opp. Da overtar beholdningen i
-      // Mystore tellingen, og derfor må kortene være lagt inn der først.
-      if (gjørOpp) await api.endreOrdre(ordre.id, { status: "stocked" });
-      onEndret();
-    } catch (e) {
-      onFeil(e);
-    } finally {
-      setJobber(false);
-    }
-  }
-
-  if (ferdig) {
-    return (
-      <div className="panel" style={{ marginTop: 14, background: "var(--papir)" }}>
-        <div className="krop">
-          <div className="rad-flex">
-            <strong>Gjort opp</strong>
-            <span className="kode">{ordre.discount_code || "ingen kode"}</span>
-            <span className="dempet">{ordre.credit_sent_at ? dato(ordre.credit_sent_at) : ""}</span>
-            {ordre.credit_note && <span className="dempet">{ordre.credit_note}</span>}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="panel" style={{ marginTop: 14, background: "var(--aksent-svak)", borderColor: "#ccd8f7" }}>
-      <div className="krop">
-        <strong>Gjør opp</strong>
-        <p className="dempet" style={{ margin: "4px 0 12px" }}>
-          Lag en rabattkode på {kroner(ordre.total_ore)} i Mystore, lim den inn her, og
-          legg kortene inn på lager. Når du bekrefter, frigjøres kvoten og
-          beholdningen i Mystore overtar tellingen — er ikke kortene lagt inn ennå,
-          kan du love bort de samme kortene på nytt.
-        </p>
-        <div className="rad-flex" style={{ marginBottom: 10 }}>
-          <label>
-            <span className="navn">Rabattkode</span>
-            <input
-              type="text"
-              value={kode}
-              onChange={(e) => setKode(e.target.value)}
-              placeholder="hhrl5l"
-              style={{ width: 160, fontFamily: "var(--kode, monospace)" }}
-            />
-          </label>
-          <label style={{ flex: 1 }}>
-            <span className="navn">Notat <span className="dempet">— hva som eventuelt ble endret</span></span>
-            <input
-              type="text"
-              value={notat}
-              onChange={(e) => setNotat(e.target.value)}
-              placeholder="To kort var EX, ikke NM"
-              style={{ width: "100%" }}
-            />
-          </label>
-        </div>
-        <div className="rad-flex">
-          <button className="knapp" onClick={() => lagre(false)} disabled={jobber}>
-            Lagre uten å gjøre opp
-          </button>
-          <button
-            className="knapp primar"
-            onClick={() => lagre(true)}
-            disabled={jobber || !kode.trim()}
-            title={!kode.trim() ? "Legg inn rabattkoden først" : "Ordren flyttes til arkivet"}
-          >
-            {jobber ? "Lagrer…" : "Mottatt og godkjent — gjør opp"}
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

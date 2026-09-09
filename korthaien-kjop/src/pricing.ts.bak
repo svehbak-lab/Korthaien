@@ -6,8 +6,6 @@ import { db, hentSettings, type Condition, type Ladder, type Settings } from "./
 // Kunden får en andel av Scryfall-prisen omregnet til NOK, justert for
 // condition. Trappen settes per sett; settene som ikke har egen trapp følger
 // standarden. Alt regnes på server — klienten får aldri bestemme en pris.
-//
-// Enheten er øre hele veien inn til visningen. Se beregnØre.
 
 export type SetRule = {
   set_code: string;
@@ -18,71 +16,23 @@ export type SetRule = {
   wanted_foil: number;
   conditions: Condition[];
   ladder: Ladder;
-  // Andel av markedsprisen for Near Mint fra dette settet. null = følg den
-  // globale satsen i Innstillinger.
-  buy_pct: number | null;
 };
 
-export function beregnØre(
+export function beregnPris(
   usd: number,
   condition: Condition,
-  regel: { ladder: Ladder; buy_pct?: number | null },
-  s: Pick<Settings, "usd_nok" | "buy_pct" | "min_buy_ore">
+  regel: Pick<SetRule, "ladder">,
+  s: Pick<Settings, "usd_nok" | "buy_pct" | "min_buy_nok">
 ): number {
   if (!usd || usd <= 0) return 0;
   const condPct = regel.ladder[condition];
   // En condition uten sats i trappen kjøpes ikke. Å falle tilbake på 100 %
   // her ville betydd at et Good-kort ble betalt som Near Mint.
   if (condPct === undefined || condPct === null) return 0;
-  // Alt regnes i øre. Kroner som desimaltall ville gitt avrundingsdrift over
-  // en ordre på mange linjer, og et kort til ti øre ville blitt null.
-  // Settets egen sats slår den globale. Trappen er relativ til den, så et
-  // sett på 80 % med NM 100 i trappen betaler 80 % av markedsprisen for NM.
-  const andel = regel.buy_pct === null || regel.buy_pct === undefined ? s.buy_pct : regel.buy_pct;
-  const øre = usd * s.usd_nok * (andel / 100) * (condPct / 100) * 100;
-  const rundet = Math.round(øre);
-  if (rundet < s.min_buy_ore) return 0;
+  const nok = usd * s.usd_nok * (s.buy_pct / 100) * (condPct / 100);
+  const rundet = Math.round(nok);
+  if (rundet < s.min_buy_nok) return 0;
   return rundet;
-}
-
-// Manuell dollarpris slår Scryfall for akkurat dette kortet. Alt annet er
-// uendret: kurs, buy_pct og trappen for settet gjelder som før, så NM, EX, VG
-// og G følger av det ene tallet du skriver inn.
-export function prisØre(
-  kort: { usd?: number | null; usd_foil?: number | null },
-  finish: string,
-  condition: Condition,
-  regel: { ladder: Ladder; buy_pct?: number | null },
-  s: Pick<Settings, "usd_nok" | "buy_pct" | "min_buy_ore">,
-  manuellUsd?: number | null
-): number {
-  const usd = manuellUsd && manuellUsd > 0 ? manuellUsd : prisenFor(kort, finish);
-  return beregnØre(usd, condition, regel, s);
-}
-
-// ── manuelle priser ──────────────────────────────────────────────────────────
-export async function hentManuellePriser(cardIds: string[]): Promise<Map<string, number>> {
-  const kart = new Map<string, number>();
-  const ider = [...new Set(cardIds)].filter(Boolean);
-  if (!ider.length) return kart;
-  for (let i = 0; i < ider.length; i += 400) {
-    const del = ider.slice(i, i + 400);
-    const r = await db().execute({
-      sql: `SELECT card_id, finish, usd FROM card_prices
-             WHERE card_id IN (${del.map(() => "?").join(",")})`,
-      args: del,
-    });
-    for (const x of r.rows as any[]) kart.set(`${x.card_id}:${x.finish}`, Number(x.usd));
-  }
-  return kart;
-}
-
-export async function hentManuellPris(cardId: string, finish: string): Promise<number | null> {
-  const r = await db().execute({
-    sql: "SELECT usd FROM card_prices WHERE card_id = ? AND finish = ?",
-    args: [cardId, finish],
-  });
-  return r.rows[0] ? Number(r.rows[0].usd) : null;
 }
 
 export function prisenFor(kort: { usd?: number | null; usd_foil?: number | null }, finish: string): number {
@@ -106,7 +56,6 @@ export async function hentSetRule(setCode: string, s?: Settings): Promise<SetRul
       wanted_foil: 0,
       conditions: settings.default_conditions,
       ladder: settings.default_ladder,
-      buy_pct: null,
     };
   }
   return {
@@ -116,7 +65,6 @@ export async function hentSetRule(setCode: string, s?: Settings): Promise<SetRul
     wanted_foil: Number(rad.wanted_foil || 0),
     conditions: trygtJson(rad.conditions, settings.default_conditions),
     ladder: trygtJson(rad.ladder, settings.default_ladder),
-    buy_pct: rad.buy_pct === null || rad.buy_pct === undefined ? null : Number(rad.buy_pct),
   };
 }
 
@@ -132,7 +80,6 @@ export async function hentAlleSetRules(s?: Settings): Promise<Map<string, SetRul
       wanted_foil: Number(rad.wanted_foil || 0),
       conditions: trygtJson(rad.conditions, settings.default_conditions),
       ladder: trygtJson(rad.ladder, settings.default_ladder),
-      buy_pct: rad.buy_pct === null || rad.buy_pct === undefined ? null : Number(rad.buy_pct),
     });
   }
   return kart;
@@ -146,7 +93,6 @@ export function standardRegel(setCode: string, s: Settings): SetRule {
     wanted_foil: 0,
     conditions: s.default_conditions,
     ladder: s.default_ladder,
-    buy_pct: null,
   };
 }
 

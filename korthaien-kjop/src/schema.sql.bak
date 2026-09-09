@@ -61,28 +61,11 @@ CREATE TABLE IF NOT EXISTS set_rules (
   wanted_foil     INTEGER NOT NULL DEFAULT 0,
   conditions      TEXT,
   ladder          TEXT,
-  -- Hvor stor andel av markedsprisen du betaler for et Near Mint-eksemplar
-  -- fra dette settet. NULL betyr at den globale satsen gjelder. Trappen er
-  -- relativ til denne, ikke til markedsprisen.
-  buy_pct         REAL,
   updated_at      TEXT NOT NULL
 );
 
 -- Overstyring for enkeltkort. Finish skilles, siden foil og vanlig er
 -- forskjellige varer med helt ulik verdi.
--- Manuell markedspris på enkeltkort, i dollar. Erstatter Scryfall-prisen for
--- akkurat dette kortet og ellers ingenting: kurs, buy_pct og trappen for
--- settet gjelder som før. For reservelistekort er indeksene for tynne til å
--- stoles på, og da henter du tallet fra en butikk som faktisk selger dem.
-CREATE TABLE IF NOT EXISTS card_prices (
-  card_id     TEXT NOT NULL,
-  finish      TEXT NOT NULL CHECK (finish IN ('nonfoil','foil')),
-  usd         REAL NOT NULL,
-  kilde       TEXT,
-  updated_at  TEXT NOT NULL,
-  PRIMARY KEY (card_id, finish)
-);
-
 CREATE TABLE IF NOT EXISTS card_wants (
   card_id     TEXT NOT NULL,
   finish      TEXT NOT NULL CHECK (finish IN ('nonfoil','foil')),
@@ -121,16 +104,11 @@ CREATE TABLE IF NOT EXISTS orders (
   status         TEXT NOT NULL DEFAULT 'pending'
                  CHECK (status IN ('pending','received','stocked','cancelled','expired')),
   total_nok      INTEGER NOT NULL DEFAULT 0,
-  total_ore      INTEGER NOT NULL DEFAULT 0,
-  quoted_ore     INTEGER NOT NULL DEFAULT 0,
   note           TEXT,
   admin_note     TEXT,
-  discount_code  TEXT,
-  credit_note    TEXT,
   created_at     TEXT NOT NULL,
   expires_at     TEXT NOT NULL,
-  received_at    TEXT,
-  credit_sent_at TEXT
+  received_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, created_at);
 
@@ -144,9 +122,6 @@ CREATE TABLE IF NOT EXISTS order_lines (
   condition         TEXT NOT NULL,
   qty               INTEGER NOT NULL,
   unit_nok          INTEGER NOT NULL,
-  unit_ore          INTEGER NOT NULL DEFAULT 0,
-  unit_ore_start    INTEGER NOT NULL DEFAULT 0,
-  condition_start   TEXT,
   card_name         TEXT NOT NULL,
   set_code          TEXT NOT NULL,
   set_name          TEXT NOT NULL,

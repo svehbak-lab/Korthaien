@@ -4,7 +4,8 @@ import { api, kroner, ledig } from "../api.js";
 const EKSEMPEL = `4 Lightning Bolt
 2 Ragavan, Nimble Pilferer (MH2) 138
 1 Void [INV]
-3 Counterspell foil`;
+3 Counterspell foil
+1 Black Lotus (LEA) 232 HP`;
 
 export default function Bulk({ kurv, onLegg, onFeil }) {
   const [tekst, setTekst] = useState("");
@@ -27,10 +28,30 @@ export default function Bulk({ kurv, onLegg, onFeil }) {
   return (
     <>
       <p className="ingress">
-        Lim inn lista di, én linje per kort. Antall foran navnet, og settkode i
-        parentes hvis du vet hvilken utgave du har. Jeg tar inntil 50 linjer om
-        gangen.
+        Lim inn lista di, én linje per kort. Antall foran navnet. Har du settkode,
+        tilstand eller samlernummer med, tar jeg det med — ellers spør jeg. Inntil
+        50 linjer om gangen.
       </p>
+
+      <details className="hjelp">
+        <summary>Hvilke formater kan jeg lime inn?</summary>
+        <p>
+          Det meste. Eksport fra Moxfield og Archidekt, kolonner fra et regneark,
+          CSV, eller bare håndskrevet. Alle disse blir lest riktig:
+        </p>
+        <pre>{`4 Lightning Bolt
+4x Lightning Bolt
+4 Lightning Bolt (M10) 146
+1 Fable of the Mirror-Breaker (NEO) 144 *F*
+4 Lightning Bolt [Magic 2010]
+4 stk Lightning Bolt NM
+Lightning Bolt x4 foil`}</pre>
+        <p className="dempet">
+          Ett unntak verdt å vite om: «3. Lightning Bolt» med punktum leses som
+          punkt nummer tre i en liste, altså ett kort. Skal du ha tre, skriv «3
+          Lightning Bolt» uten punktum.
+        </p>
+      </details>
 
       <textarea
         rows={9}
@@ -65,7 +86,9 @@ export default function Bulk({ kurv, onLegg, onFeil }) {
 }
 
 function Linje({ rad, kurv, onLegg }) {
-  const [åpen, setÅpen] = useState(rad.status === "velg");
+  // Skrev kunden en settkode, er valget allerede tatt. Ellers står den på
+  // første utgave, men må bekreftes aktivt — se knappeteksten under.
+  const [valgt, setValgt] = useState(0);
 
   if (rad.status === "ukjent" || rad.status === "feil" || rad.status === "ikke_ønsket") {
     return (
@@ -81,7 +104,8 @@ function Linje({ rad, kurv, onLegg }) {
     );
   }
 
-  const ett = rad.status === "løst" ? rad.valg[0] : null;
+  const flere = rad.status === "velg";
+  const tilbud = rad.valg[Math.min(valgt, rad.valg.length - 1)];
 
   return (
     <div className="treff">
@@ -90,76 +114,94 @@ function Linje({ rad, kurv, onLegg }) {
           <span className="navn">
             {rad.qty}× {rad.navn}
           </span>
-          {rad.status === "velg" ? (
+          {flere ? (
             <span className="merkelapp m-velg">{rad.valg.length} utgaver</span>
           ) : (
             <span className="merkelapp m-ok">Én utgave</span>
           )}
-          {rad.status === "velg" && (
-            <button className="knapp blank" onClick={() => setÅpen(!åpen)}>
-              {åpen ? "Skjul" : "Vis utgavene"}
-            </button>
-          )}
         </div>
 
-        {/* Ett mulig trykk: kunden trenger bare velge tilstand.
-            Flere trykk: hen må se kunsten for å vite hvilket kort hen har. */}
-        {ett && !åpen && <Valg tilbud={ett} qty={rad.qty} kurv={kurv} onLegg={onLegg} />}
+        {rad.melding && !flere && <div className="sett">{rad.melding}</div>}
 
-        {rad.status === "velg" && åpen && (
+        {/* Med titalls utgaver av samme kort er en nedtrekksmeny raskere å
+            komme gjennom enn et rutenett. Bildet av den valgte står ved siden
+            av, for settnavnet alene forteller ikke alltid hvilket trykk man
+            har liggende. */}
+        {flere && (
           <>
             <p className="dempet" style={{ margin: 0 }}>
               {rad.navn} finnes i flere utgaver, og de er ikke verdt det samme.
               Velg den du faktisk har — se på kunsten, ikke bare settnavnet.
             </p>
-            <div className="utgaver" style={{ width: "100%" }}>
-              {rad.valg.map((t) => (
-                <Utgave key={`${t.card_id}:${t.finish}`} tilbud={t} qty={rad.qty} kurv={kurv} onLegg={onLegg} />
+            <select
+              className="utgavevalg"
+              value={valgt}
+              onChange={(e) => setValgt(Number(e.target.value))}
+              aria-label="Velg utgave"
+            >
+              {rad.valg.map((t, i) => (
+                <option key={`${t.card_id}:${t.finish}`} value={i}>
+                  {t.set_name}
+                  {t.collector_number ? ` #${t.collector_number}` : ""}
+                  {t.finish === "foil" ? " (foil)" : ""} — {kroner(t.conditions[0]?.ore)}
+                </option>
               ))}
-            </div>
+            </select>
           </>
         )}
+
+        <Utgave tilbud={tilbud} qty={rad.qty} kurv={kurv} onLegg={onLegg} condHint={rad.condHint} />
       </div>
     </div>
   );
 }
 
-function Utgave({ tilbud, qty, kurv, onLegg }) {
-  const plass = ledig(kurv, tilbud);
-  return (
-    <div className="utgave">
-      {tilbud.image_uri
-        ? <img src={tilbud.image_uri} alt={`${tilbud.name}, ${tilbud.set_name}`} loading="lazy" />
-        : <div style={{ aspectRatio: "5 / 7", background: "var(--papir)", borderRadius: 5 }} />}
-      <div>
-        <div className="sett">{tilbud.set_name}</div>
-        {tilbud.finish === "foil" && <span className="merkelapp m-foil">Foil</span>}
-      </div>
-      <Valg tilbud={tilbud} qty={qty} kurv={kurv} onLegg={onLegg} kompakt />
-      <span className="dempet" style={{ fontSize: 12 }}>
-        {plass > 0 ? `${plass} ${plass === 1 ? "ledig" : "ledige"}` : "kvoten er full"}
-      </span>
-    </div>
-  );
-}
-
-function Valg({ tilbud, qty, kurv, onLegg, kompakt }) {
+function Utgave({ tilbud, qty, kurv, onLegg, condHint }) {
   const plass = ledig(kurv, tilbud);
   const antall = Math.min(qty, plass) || 0;
+  // Skrev kunden en tilstand på linjen, settes den først i rekka — men bare
+  // hvis settet tar imot den.
+  const conditions = [...tilbud.conditions].sort(
+    (a, b) => (b.condition === condHint) - (a.condition === condHint)
+  );
+
   return (
-    <div className="priser" style={kompakt ? { marginTop: 0 } : undefined}>
-      {tilbud.conditions.map((c) => (
-        <button
-          key={c.condition}
-          className="pris-knapp"
-          disabled={plass <= 0}
-          onClick={() => onLegg(tilbud, c.condition, c.pris, antall)}
-          title={`Legg til ${antall} i ${c.navn}`}
-        >
-          <span className="cond">{kompakt ? c.condition : c.navn}</span>
-          <b>{kroner(c.pris)}</b>
-        </button>
-      ))}
+    <div className="utgave-rad">
+      {tilbud.image_uri ? (
+        <img src={tilbud.image_uri} alt={`${tilbud.name}, ${tilbud.set_name}`} loading="lazy" />
+      ) : (
+        <div className="bilde-tom" />
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="sett">
+          {tilbud.set_name}
+          {tilbud.collector_number ? <span className="kode dempet"> #{tilbud.collector_number}</span> : null}
+          {tilbud.finish === "foil" && <span className="merkelapp m-foil" style={{ marginLeft: 6 }}>Foil</span>}
+        </div>
+        <div className="kreditt-merk">Store credit</div>
+        <div className="priser">
+          {conditions.map((c) => (
+            <button
+              key={c.condition}
+              className="pris-knapp"
+              disabled={plass <= 0}
+              onClick={() => onLegg(tilbud, c.condition, antall)}
+              title={`Legg til ${antall} i ${c.navn} — ${kroner(c.ore)} per kort`}
+            >
+              <span className="cond">
+                {c.navn}
+                {c.condition === condHint && " ✓"}
+              </span>
+              <b>{kroner(c.ore)}</b>
+            </button>
+          ))}
+        </div>
+        <span className="dempet" style={{ fontSize: 12 }}>
+          {plass > 0
+            ? `Legger til ${antall} — inntil ${plass} stk. av denne`
+            : "kvoten er full"}
+        </span>
+      </div>
     </div>
   );
 }

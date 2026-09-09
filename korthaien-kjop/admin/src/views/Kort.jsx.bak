@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { api, kroner } from "../api.js";
+import { api } from "../api.js";
 
 const KOLONNER = [
   { id: "collector_number", navn: "Nr.", bredde: 50 },
@@ -30,7 +30,6 @@ export default function Kort({ sett, onFeil, onByttSett }) {
   const [raritet, setRaritet] = useState("");
   const [sortering, setSortering] = useState({ kolonne: "collector_number", stigende: true });
   const [jobber, setJobber] = useState(false);
-  const [modus, setModus] = useState("oversikt");
 
   async function last() {
     if (!sett) return;
@@ -154,16 +153,6 @@ export default function Kort({ sett, onFeil, onByttSett }) {
       </div>
 
       <div className="rad-flex" style={{ marginBottom: 12 }}>
-        <button
-          className={`knapp liten ${modus === "priser" ? "primar" : ""}`}
-          onClick={() => {
-            // Hentes på nytt når du går ut, så oversikten viser det du satte.
-            if (modus === "priser") last();
-            setModus(modus === "priser" ? "oversikt" : "priser");
-          }}
-        >
-          {modus === "priser" ? "Ferdig med prisene" : "Manuell prising"}
-        </button>
         <span className="dempet">Raritet:</span>
         <button className={`knapp liten ${!raritet ? "primar" : ""}`} onClick={() => setRaritet("")}>
           Alle
@@ -183,16 +172,6 @@ export default function Kort({ sett, onFeil, onByttSett }) {
         })}
       </div>
 
-      {modus === "priser" ? (
-        <Prisliste
-          kort={synlige}
-          regel={regel}
-          settings={data.settings}
-          onFeil={onFeil}
-          onRegelEndret={last}
-        />
-      ) : (
-      <>
       <Massefelt
         antall={filtrert.length}
         raritet={raritet ? RARITETER.find(([v]) => v === raritet)?.[1] : null}
@@ -234,8 +213,6 @@ export default function Kort({ sett, onFeil, onByttSett }) {
           <div className="krop dempet">Viser 500 av {synlige.length}. Masseoperasjonen over tar likevel alle.</div>
         )}
       </div>
-      </>
-      )}
     </>
   );
 }
@@ -306,11 +283,7 @@ function KortRad({ kort, onFeil, onEndret, sett }) {
         )}
       </td>
       <td className="dempet">{kort.rarity || "\u2014"}</td>
-      <td className="h tall dempet">
-        {kort.pris_nonfoil
-          ? <span title="Manuell pris">${Number(kort.pris_nonfoil).toFixed(2)}<span style={{ color: "var(--aksent)" }}>*</span></span>
-          : kort.usd ? `$${Number(kort.usd).toFixed(2)}` : "\u2014"}
-      </td>
+      <td className="h tall dempet">{kort.usd ? `$${Number(kort.usd).toFixed(2)}` : "\u2014"}</td>
       <td>
         <Kobling kort={kort} onFeil={onFeil} onEndret={onEndret} sett={sett} />
       </td>
@@ -517,180 +490,6 @@ function ProduktLinje({ navn, kategori, merke, onFjern }) {
       <button className="knapp blank" style={{ fontSize: 11 }} onClick={onFjern} title="Fjern koblingen">
         ×
       </button>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MANUELL PRISING
-// ─────────────────────────────────────────────────────────────────────────────
-// Ett redigerbart felt per kort — markedsprisen i dollar, hentet fra en butikk
-// som faktisk selger kortet. NM, EX, VG og G regnes ut mens du skriver, og
-// oppdateres først i basen når feltet forlates. Ingenting annet er fokuserbart
-// i tabellen, så Tab hopper rett fra kort til kort.
-function Prisliste({ kort, regel, settings, onFeil, onRegelEndret }) {
-  const conditions = regel.conditions?.length ? regel.conditions : ["NM"];
-  const ladder = regel.ladder || {};
-  const [utkast, setUtkast] = useState({});
-  const [lagret, setLagret] = useState({});
-  // Tomt felt betyr «følg den globale satsen». Vi holder det som tekst, ikke
-  // tall, nettopp for å kunne skille tomt fra null.
-  const [andel, setAndel] = useState(regel.buy_pct === null || regel.buy_pct === undefined ? "" : String(regel.buy_pct));
-  const brukt = andel.trim() === "" ? settings.buy_pct : Number(andel.replace(",", ".")) || 0;
-
-  async function lagreAndel() {
-    const v = andel.trim() === "" ? null : Number(andel.replace(",", "."));
-    if (v !== null && (!Number.isFinite(v) || v < 0 || v > 200)) return;
-    try {
-      // Endepunktet skriver hele regelen, så alt annet må sendes med
-      // uendret. Sender vi bare prosenten, nulles ønsket antall og settet
-      // slås av — uten at noe sier fra.
-      await api.lagreSett(regel.set_code, {
-        enabled: regel.enabled,
-        wanted_default: regel.wanted_default,
-        wanted_foil: regel.wanted_foil,
-        conditions: regel.conditions,
-        ladder: regel.ladder,
-        buy_pct: v,
-      });
-      onRegelEndret();
-    } catch (e) {
-      onFeil(e);
-    }
-  }
-
-  // Samme regnestykke som på serveren. Står de to noen gang i utakt, er det
-  // serveren som gjelder — dette er bare for å se tallet mens du taster.
-  function øre(usd, cond) {
-    const pct = ladder[cond];
-    if (!usd || pct === undefined || pct === null) return null;
-    const o = Math.round(usd * settings.usd_nok * (brukt / 100) * (pct / 100) * 100);
-    return o < settings.min_buy_ore ? 0 : o;
-  }
-
-  async function lagre(k, tekst) {
-    const rå = (tekst ?? "").trim().replace(",", ".");
-    const gjeldende = k.pris_nonfoil ? String(k.pris_nonfoil) : "";
-    if (rå === gjeldende) return;
-    try {
-      if (rå === "") {
-        if (k.pris_nonfoil) await api.nullstillPris(k.id, "nonfoil");
-      } else {
-        const usd = Number(rå);
-        if (!Number.isFinite(usd) || usd <= 0) return;
-        await api.lagrePris(k.id, "nonfoil", usd);
-      }
-      // Ingen ny henting her. Tabellen ville blitt bygget om mens du taber
-      // videre, og fokus ville hoppet til toppen. Utkastet er sannheten på
-      // skjermen til du forlater modusen.
-      setLagret((l) => ({ ...l, [k.id]: true }));
-      setTimeout(() => setLagret((l) => ({ ...l, [k.id]: false })), 1400);
-    } catch (e) {
-      onFeil(e);
-    }
-  }
-
-  return (
-    <div className="panel">
-      <div className="krop">
-        <p style={{ margin: "0 0 4px" }}>
-          <strong>Manuell prising</strong> — skriv markedsprisen i dollar, for eksempel
-          fra Card Kingdom. Kolonnene til høyre viser hva kunden får, og oppdateres
-          mens du skriver. Tab hopper til neste kort.
-        </p>
-        <div className="rad-flex" style={{ margin: "10px 0 2px" }}>
-          <label>
-            <span className="navn">Du betaler for Near Mint</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={andel}
-              placeholder={String(settings.buy_pct)}
-              onChange={(e) => setAndel(e.target.value.replace(/[^\d.,]/g, ""))}
-              onBlur={lagreAndel}
-              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-              style={{ width: 64, textAlign: "right" }}
-            />
-            <span className="dempet"> % av markedsprisen</span>
-          </label>
-          <span className="dempet">
-            {andel.trim() === ""
-              ? `Følger den globale satsen på ${settings.buy_pct} %`
-              : `Bare for dette settet — globalt er ${settings.buy_pct} %`}
-          </span>
-        </div>
-        <p className="dempet" style={{ margin: 0 }}>
-          Kurs {settings.usd_nok} · trapp{" "}
-          {conditions.map((c) => `${c} ${ladder[c] ?? "—"} %`).join(" · ")} regnet av de{" "}
-          {brukt} prosentene. Tomt prisfelt på en rad betyr at Scryfall-prisen gjelder.
-        </p>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th style={{ width: 50 }}>Nr.</th>
-            <th>Kort</th>
-            <th className="h" style={{ width: 90 }}>Scryfall</th>
-            <th className="h" style={{ width: 110 }}>Din pris $</th>
-            {conditions.map((c) => (
-              <th key={c} className="h" style={{ width: 110 }}>{c}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {kort.map((k) => {
-            const verdi = utkast[k.id] ?? (k.pris_nonfoil ? String(k.pris_nonfoil) : "");
-            const usd = Number(String(verdi).replace(",", ".")) || Number(k.usd) || 0;
-            const egen = verdi !== "";
-            return (
-              <tr key={k.id}>
-                <td className="kode dempet">{k.collector_number}</td>
-                <td>
-                  {k.name}
-                  {k.variant && k.variant !== "vanlig" && (
-                    <span className="dempet"> · {k.variant}</span>
-                  )}
-                </td>
-                <td className="h tall dempet">{k.usd ? `$${Number(k.usd).toFixed(2)}` : "—"}</td>
-                <td className="h">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={verdi}
-                    placeholder="auto"
-                    onChange={(e) =>
-                      setUtkast((u) => ({ ...u, [k.id]: e.target.value.replace(/[^\d.,]/g, "") }))
-                    }
-                    onBlur={(e) => lagre(k, e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                      if (e.key === "Escape") {
-                        setUtkast((u) => ({ ...u, [k.id]: k.pris_nonfoil ? String(k.pris_nonfoil) : "" }));
-                        e.currentTarget.blur();
-                      }
-                    }}
-                    style={{
-                      width: 92,
-                      textAlign: "right",
-                      borderColor: lagret[k.id] ? "var(--ok)" : undefined,
-                      fontWeight: egen ? 600 : 400,
-                    }}
-                  />
-                </td>
-                {conditions.map((c) => {
-                  const o = øre(usd, c);
-                  return (
-                    <td key={c} className="h tall" style={{ color: egen ? "inherit" : "var(--dempet)" }}>
-                      {o === null ? "—" : kroner(o)}
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {!kort.length && <div className="tom">Ingen kort passer filteret.</div>}
     </div>
   );
 }

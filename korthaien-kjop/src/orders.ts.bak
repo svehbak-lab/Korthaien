@@ -1,5 +1,5 @@
 import { db, hentSettings, CONDITIONS, type Condition } from "./db.js";
-import { prisØre, hentSetRule, hentManuellPris } from "./pricing.js";
+import { beregnPris, hentSetRule, prisenFor } from "./pricing.js";
 import { hentKvote } from "./quota.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -85,8 +85,7 @@ export async function lagOrdre(input: {
     }
 
     const qty = Math.min(l.qty, ledig);
-    const manuell = await hentManuellPris(l.card_id, l.finish);
-    const pris = prisØre(kort, l.finish, l.condition, regel, s, manuell);
+    const pris = beregnPris(prisenFor(kort, l.finish), l.condition, regel, s);
     if (pris <= 0) {
       avvist.push({ ...l, grunn: "Ingen gyldig pris for dette kortet" });
       continue;
@@ -101,7 +100,7 @@ export async function lagOrdre(input: {
       finish: l.finish,
       condition: l.condition,
       qty,
-      unit_ore: pris,
+      unit_nok: pris,
       card_name: String(kort.name),
       set_code: String(kort.set_code),
       set_name: String(kort.set_name || kort.set_code),
@@ -121,42 +120,30 @@ export async function lagOrdre(input: {
       CONDITIONS.indexOf(a.condition) - CONDITIONS.indexOf(b.condition)
   );
 
-  const total = godkjent.reduce((n, l) => n + l.unit_ore * l.qty, 0);
-  // Bunnen sjekkes på det som faktisk ble godkjent, ikke på det kunden la i
-  // kurven. Røk halve ordren på kvote, skal hen få vite at resten er for lite
-  // — ikke få en bekreftelse på en ordre jeg ikke vil ha i posten.
-  if (total < s.min_order_ore) {
-    throw new HttpFeil(400, `Ordren må være på minst ${Math.round(s.min_order_ore / 100)} kr. Denne er på ${(total / 100).toFixed(2).replace(".", ",")} kr.`, {
-      total_ore: total,
-      min_order_ore: s.min_order_ore,
-      avvist,
-    });
-  }
+  const total = godkjent.reduce((n, l) => n + l.unit_nok * l.qty, 0);
   const nå = new Date();
   const utløp = new Date(nå.getTime() + s.order_expiry_days * 86400000);
   const ordreNr = await nyttOrdrenummer(nå);
 
   const res = await db().execute({
-    sql: `INSERT INTO orders (order_no, customer_name, email, phone, status, total_nok, total_ore, quoted_ore, note, created_at, expires_at)
-          VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
-    args: [ordreNr, navn, epost, input.phone || null, Math.round(total / 100), total, total, input.note || null, nå.toISOString(), utløp.toISOString()],
+    sql: `INSERT INTO orders (order_no, customer_name, email, phone, status, total_nok, note, created_at, expires_at)
+          VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+    args: [ordreNr, navn, epost, input.phone || null, total, input.note || null, nå.toISOString(), utløp.toISOString()],
   });
   const ordreId = Number(res.lastInsertRowid);
 
   for (const l of godkjent) {
     await db().execute({
       sql: `INSERT INTO order_lines
-              (order_id, card_id, finish, condition, condition_start, qty, unit_nok, unit_ore, unit_ore_start,
-               card_name, set_code, set_name, collector_number)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [ordreId, l.card_id, l.finish, l.condition, l.condition, l.qty, Math.round(l.unit_ore / 100), l.unit_ore, l.unit_ore,
-             l.card_name, l.set_code, l.set_name, l.collector_number],
+              (order_id, card_id, finish, condition, qty, unit_nok, card_name, set_code, set_name, collector_number)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [ordreId, l.card_id, l.finish, l.condition, l.qty, l.unit_nok, l.card_name, l.set_code, l.set_name, l.collector_number],
     });
   }
 
   return {
     order_no: ordreNr,
-    total_ore: total,
+    total_nok: total,
     expires_at: utløp.toISOString(),
     linjer: godkjent,
     avvist,
@@ -166,12 +153,11 @@ export async function lagOrdre(input: {
 
 function instruksjoner(ordreNr: string, adresse: string, utløp: Date) {
   return [
-    "Sorter kortene i nøyaktig samme rekkefølge som kortlista under. Lista er sortert på sett, så kortnavn. Gjør du dette, går mottaket raskere og du får oppgjøret fortere.",
+    "Sorter kortene i nøyaktig samme rekkefølge som kortlista i denne bekreftelsen. Det gjør mottaket raskere, og du får oppgjøret fortere.",
     "Legg en lapp i pakken med ordrenummer " + ordreNr + ".",
     "Send til:\n" + adresse,
-    "Du betaler portoen inn. Pakken må være sendt innen " + utløp.toLocaleDateString("nb-NO") + " — etter det frigjøres kortene til andre selgere.",
-    "Summen er et anslag. Jeg går gjennom alle kortene ved mottak og sjekker antall og tilstand. Avviker noe fra det du oppga, justerer jeg linjen og skriver hva som ble endret.",
-    "Oppgjøret er butikkreditt på korthaien.no. Når kortene er godkjent, får du en rabattkode på e-post som du bruker i kassen.",
+    "Pakken må være sendt innen " + utløp.toLocaleDateString("nb-NO") + ". Etter det frigjøres kortene til andre selgere.",
+    "Kortene sjekkes mot oppgitt condition ved mottak. Avviker de, tar jeg kontakt før noe justeres.",
   ];
 }
 
@@ -205,88 +191,6 @@ export async function hentOrdre(orderNo: string) {
     args: [o.rows[0].id],
   });
   return { ...o.rows[0], linjer: l.rows };
-}
-
-// ── endring ved mottak ───────────────────────────────────────────────────────
-// Du endrer tilstand på en linje, og prisen skal følge trappen for settet.
-// Regnestykket må gjøres her og ikke i admin — klienten skal aldri kunne
-// bestemme et beløp, heller ikke din egen.
-export async function regnOmLinje(
-  linjeId: number,
-  endring: { condition?: Condition; qty?: number; qty_received?: number }
-): Promise<{ unit_ore: number; condition: Condition }> {
-  const s = await hentSettings();
-  const r = await db().execute({ sql: "SELECT * FROM order_lines WHERE id = ?", args: [linjeId] });
-  const linje: any = r.rows[0];
-  if (!linje) throw new HttpFeil(404, "Fant ikke linjen");
-
-  const condition = (endring.condition || String(linje.condition)) as Condition;
-  if (!CONDITIONS.includes(condition)) throw new HttpFeil(400, "Ukjent condition");
-
-  const k = await db().execute({ sql: "SELECT * FROM cards WHERE id = ?", args: [String(linje.card_id)] });
-  const kort: any = k.rows[0];
-  // Kortet kan være borte etter en ny Scryfall-import. Da beholder vi prisen
-  // linjen ble frosset med heller enn å nulle den ut.
-  let unitØre = Number(linje.unit_ore || 0);
-  if (kort) {
-    const regel = await hentSetRule(String(kort.set_code), s);
-    const manuell = await hentManuellPris(String(linje.card_id), String(linje.finish));
-    const ny = prisØre(kort, String(linje.finish), condition, regel, s, manuell);
-    // Tar jeg ikke imot tilstanden fra dette settet, blir prisen 0. Det er et
-    // gyldig utfall — linjen betales ikke — men den skal ikke stilltiende
-    // beholde gammel pris.
-    unitØre = ny;
-  }
-
-  const felt: string[] = ["condition = ?", "unit_ore = ?", "unit_nok = ?"];
-  const args: any[] = [condition, unitØre, Math.round(unitØre / 100)];
-  for (const [navn, verdi] of [["qty", endring.qty], ["qty_received", endring.qty_received]] as const) {
-    if (verdi !== undefined) {
-      const n = Math.floor(Number(verdi));
-      if (!Number.isFinite(n) || n < 0) throw new HttpFeil(400, `Ugyldig ${navn}`);
-      felt.push(`${navn} = ?`);
-      args.push(n);
-    }
-  }
-  args.push(linjeId);
-  await db().execute({ sql: `UPDATE order_lines SET ${felt.join(", ")} WHERE id = ?`, args });
-  return { unit_ore: unitØre, condition };
-}
-
-// Totalen regnes alltid på det som faktisk er mottatt når det tallet finnes.
-export async function oppdaterTotal(orderId: number): Promise<number> {
-  const r = await db().execute({
-    sql: `SELECT COALESCE(SUM(unit_ore * COALESCE(qty_received, qty)), 0) AS n
-            FROM order_lines WHERE order_id = ?`,
-    args: [orderId],
-  });
-  const ore = Number(r.rows[0]?.n || 0);
-  await db().execute({
-    sql: "UPDATE orders SET total_ore = ?, total_nok = ? WHERE id = ?",
-    args: [ore, Math.round(ore / 100), orderId],
-  });
-  return ore;
-}
-
-// ── rabattkode ───────────────────────────────────────────────────────────────
-// Koden lages manuelt i Mystore som et fastbeløp. Her lagres den bare, slik at
-// den kan sendes i mottakseposten og slås opp igjen senere.
-export async function settRabattkode(orderId: number, kode: string | null, notat?: string | null) {
-  const ren = (kode || "").trim() || null;
-  await db().execute({
-    sql: "UPDATE orders SET discount_code = ?, credit_note = ? WHERE id = ?",
-    args: [ren, notat ?? null, orderId],
-  });
-}
-
-export async function markerKredittSendt(orderId: number) {
-  const r = await db().execute({ sql: "SELECT discount_code FROM orders WHERE id = ?", args: [orderId] });
-  if (!r.rows[0]) throw new HttpFeil(404, "Fant ikke ordren");
-  if (!r.rows[0].discount_code) throw new HttpFeil(400, "Legg inn rabattkoden før du sender den");
-  await db().execute({
-    sql: "UPDATE orders SET credit_sent_at = ? WHERE id = ?",
-    args: [new Date().toISOString(), orderId],
-  });
 }
 
 export class HttpFeil extends Error {

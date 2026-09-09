@@ -56,11 +56,6 @@ export const api = {
   koblKategori: (id, set_code) =>
     kall(`/api/admin/mystore/categories/${id}`, { method: "PUT", body: { set_code } }),
   søkKort: (q) => kall(`/api/admin/cards/search?q=${encodeURIComponent(q)}`),
-  lagreKreditt: (id, felt) => kall(`/api/admin/orders/${id}/kreditt`, { method: "PUT", body: felt }),
-  lagrePris: (id, finish, usd) =>
-    kall(`/api/admin/cards/${id}/pris`, { method: "PUT", body: { finish, usd } }),
-  nullstillPris: (id, finish) =>
-    kall(`/api/admin/cards/${id}/pris?finish=${finish}`, { method: "DELETE" }),
   koble: (felt) => kall("/api/admin/mystore/link", { method: "POST", body: felt }),
 
   innstillinger: () => kall("/api/admin/settings"),
@@ -76,21 +71,8 @@ export const CONDITION_NAVN = {
   G: "Good",
 };
 
-// Alt kommer fra serveren i øre. Ørene vises bare når de finnes — «122 kr»
-// leser bedre enn «122,00 kr», men et kort til sju øre må ikke se ut som null.
-export function kroner(øre) {
-  const n = Math.round(Number(øre) || 0);
-  const hele = Math.trunc(n / 100);
-  const rest = Math.abs(n % 100);
-  const tall = new Intl.NumberFormat("nb-NO").format(hele);
-  if (!rest) return tall + " kr";
-  return (n < 0 && hele === 0 ? "-" : "") + tall + "," + String(rest).padStart(2, "0") + " kr";
-}
-
-// Oppgjøret er butikkreditt, aldri kontanter. Det skal stå på hver eneste
-// pris, ikke bare i vilkårene — ingen skal rekke å tro noe annet.
-export function kreditt(øre) {
-  return "Store credit: " + kroner(øre);
+export function kroner(n) {
+  return new Intl.NumberFormat("nb-NO").format(Math.round(n || 0)) + " kr";
 }
 
 export function dato(iso) {

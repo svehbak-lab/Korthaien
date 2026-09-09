@@ -108,25 +108,24 @@ export function Treff({ tilbud, kurv, onLegg }) {
             {tilbud.collector_number ? <span className="kode dempet"> #{tilbud.collector_number}</span> : null}
           </div>
 
-          <div className="kreditt-merk">Store credit</div>
           <div className="priser">
             {tilbud.conditions.map((c) => (
               <button
                 key={c.condition}
                 className="pris-knapp"
                 disabled={plass <= 0}
-                onClick={() => onLegg(tilbud, c.condition)}
-                title={`Legg til ett kort i ${c.navn} — ${kroner(c.ore)} i butikkreditt`}
+                onClick={() => onLegg(tilbud, c.condition, c.pris)}
+                title={`Legg til ett kort i ${c.navn}`}
               >
                 <span className="cond">{c.navn}</span>
-                <b>{kroner(c.ore)}</b>
+                <b>{kroner(c.pris)}</b>
               </button>
             ))}
           </div>
 
           <div style={{ marginTop: 7 }}>
             {plass > 0 ? (
-              <span className="merkelapp m-ledig">Inntil {plass} stk.</span>
+              <span className="merkelapp m-ledig">Jeg tar imot {plass} til</span>
             ) : (
               <span className="merkelapp m-nei">Kvoten er full</span>
             )}

@@ -10,15 +10,14 @@
     "import": "tsx src/cli.ts import",
     "mystore": "tsx src/cli.ts mystore",
     "seed": "tsx src/cli.ts seed",
-    "test": "tsx --test test/*.test.mjs",
+    "test": "node --test test/",
     "reindeks": "tsx src/cli.ts reindeks",
     "gjett": "tsx src/cli.ts gjett",
     "skrivefeil": "tsx src/cli.ts skrivefeil",
     "rydd": "tsx src/cli.ts rydd",
     "analyser": "tsx src/cli.ts analyser",
     "sett": "tsx src/cli.ts sett",
-    "helse": "tsx src/cli.ts helse",
-    "hvorfor": "tsx src/cli.ts hvorfor"
+    "helse": "tsx src/cli.ts helse"
   },
   "dependencies": {
     "@libsql/client": "^0.14.0",

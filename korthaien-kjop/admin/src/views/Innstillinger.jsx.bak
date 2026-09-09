@@ -35,7 +35,7 @@ export default function Innstillinger({ onFeil, onMelding }) {
   }
 
   // Regneeksempel så du ser hva en endring faktisk gjør med utbetalingen.
-  const eksempel = Math.round(5 * s.usd_nok * (s.buy_pct / 100) * 100);
+  const eksempel = 5 * s.usd_nok * (s.buy_pct / 100);
 
   return (
     <>
@@ -56,26 +56,17 @@ export default function Innstillinger({ onFeil, onMelding }) {
               />
               <span className="dempet"> %</span>
             </Felt>
-            <Felt navn="Minste kortbeløp">
+            <Felt navn="Minste linjebeløp">
               <input
-                type="number" min="0" value={s.min_buy_ore}
-                onChange={(e) => endre("min_buy_ore", parseInt(e.target.value) || 0)}
+                type="number" min="0" value={s.min_buy_nok}
+                onChange={(e) => endre("min_buy_nok", parseInt(e.target.value) || 0)}
               />
-              <span className="dempet"> øre</span>
-            </Felt>
-            <Felt navn="Minste ordrebeløp">
-              <input
-                type="number" min="0" step="100" value={s.min_order_ore}
-                onChange={(e) => endre("min_order_ore", parseInt(e.target.value) || 0)}
-              />
-              <span className="dempet"> øre ({kroner(s.min_order_ore)})</span>
+              <span className="dempet"> kr</span>
             </Felt>
           </div>
           <p className="dempet" style={{ margin: 0 }}>
-            Et kort til $5 gir kunden {kroner(eksempel)} i Near Mint. Alle beløp regnes
-            i øre. Kortbeløpet er bunnen per kort — står den på 1, får kunden sju øre
-            for et kort som er verdt sju øre, i stedet for null. Ordrebeløpet er bunnen
-            for hele sendingen, og sjekkes på det som faktisk blir godkjent.
+            Et kort til $5 gir kunden {kroner(eksempel)} i Near Mint. Kort som havner
+            under minstebeløpet tilbys ikke.
           </p>
         </div>
       </div>

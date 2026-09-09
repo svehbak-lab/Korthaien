@@ -2,12 +2,9 @@ import "dotenv/config";
 import express from "express";
 import cookieParser from "cookie-parser";
 import { db, migrate, hentSettings, settSetting, normaliser, CONDITIONS, type Settings } from "./db.js";
-import { søk, løsBulk, tilbudFor } from "./catalog.js";
+import { søk, løsBulk } from "./catalog.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
-import {
-  lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal,
-  settRabattkode, markerKredittSendt, HttpFeil,
-} from "./orders.js";
+import { lagOrdre, hentOrdre, utløpGamleOrdrer, HttpFeil } from "./orders.js";
 import { hentSetRule } from "./pricing.js";
 import { importerScryfall } from "./import-scryfall.js";
 import { synkMystore, gjettKategorier, harMystore } from "./mystore.js";
@@ -44,18 +41,6 @@ app.get("/api/health", fang(async (_req: any, res: any) => {
   res.json({ ok: true, kort: Number(k.rows[0]?.n || 0), mystore: harMystore() });
 }));
 
-// Kundesiden trenger adressen, minstesummen og fristen. Alt annet i settings
-// er internt og deles ikke.
-app.get("/api/config", grense(REGLER.søk), fang(async (_req: any, res: any) => {
-  const s = await hentSettings();
-  res.json({
-    min_order_ore: s.min_order_ore,
-    order_expiry_days: s.order_expiry_days,
-    ship_to: s.ship_to,
-    oppgjor: "butikkreditt",
-  });
-}));
-
 app.get("/api/sets", grense(REGLER.søk), fang(async (_req: any, res: any) => {
   // Bare sett jeg faktisk kjøper fra vises i filteret.
   const r = await db().execute(`
@@ -85,13 +70,6 @@ app.post("/api/bulk", grense(REGLER.bulk), fang(async (req: any, res: any) => {
   });
 }));
 
-// Kurven gjenopprettes herfra. Kunden sender kort-ID-ene den husker, og får
-// dagens priser og kvoter tilbake — aldri motsatt vei.
-app.post("/api/quote", grense(REGLER.bulk), fang(async (req: any, res: any) => {
-  const linjer = Array.isArray(req.body?.linjer) ? req.body.linjer : [];
-  res.json(await tilbudFor(linjer));
-}));
-
 app.post("/api/orders", grense(REGLER.ordre), fang(async (req: any, res: any) => {
   await utløpGamleOrdrer();
   const ordre = await lagOrdre({
@@ -107,20 +85,9 @@ app.post("/api/orders", grense(REGLER.ordre), fang(async (req: any, res: any) =>
 app.get("/api/orders/:orderNo", grense(REGLER.søk), fang(async (req: any, res: any) => {
   const o = await hentOrdre(String(req.params.orderNo));
   if (!o) throw new HttpFeil(404, "Fant ikke ordren");
-  // Ordrenummeret alene er ikke hemmelig nok — det er kort og datobasert, og
-  // uten innlogging er e-posten det eneste vi kan sjekke mot.
-  const oppgitt = String(req.query.epost || "").trim().toLowerCase();
-  if (!oppgitt || oppgitt !== String((o as any).email || "").toLowerCase()) {
-    throw new HttpFeil(404, "Fant ikke ordren");
-  }
   // Publikumsvisningen viser kvittering, ikke kundedata utover navnet.
-  //
-  // Rabattkoden holdes utenfor med vilje. Ordrenummeret er fire siffer per
-  // dato, og en e-postadresse er ingen hemmelighet — til sammen er det ikke
-  // sterkt nok til å beskytte et beløp. Koden sendes bare på e-post, til
-  // adressen kunden selv oppga. Her sier vi bare at den er sendt.
-  const { email, phone, admin_note, credit_note, discount_code, ...trygt } = o as any;
-  res.json({ ...trygt, credit_sent: !!(o as any).credit_sent_at });
+  const { email, phone, admin_note, ...trygt } = o as any;
+  res.json(trygt);
 }));
 
 // ── admin ────────────────────────────────────────────────────────────────────
@@ -185,18 +152,33 @@ app.patch("/api/admin/orders/:id", krevAdmin, fang(async (req: any, res: any) =>
   res.json({ ok: true });
 }));
 
-// Justering av linjer ved mottak. Endrer du tilstand, følger prisen trappen
-// for settet automatisk — du skal ikke måtte regne prosenter i hodet.
+// Justering av linjer ved mottak: antall og pris kan avvike fra det kunden
+// oppga, typisk fordi condition ikke stemte.
 app.patch("/api/admin/lines/:id", krevAdmin, fang(async (req: any, res: any) => {
   const id = Number(req.params.id);
-  const { qty, qty_received, condition } = req.body || {};
-  if (condition === undefined && qty === undefined && qty_received === undefined) {
-    throw new HttpFeil(400, "Ingenting å endre");
+  const { qty, unit_nok, qty_received, condition } = req.body || {};
+  const felt: string[] = [];
+  const args: any[] = [];
+  for (const [navn, verdi] of [["qty", qty], ["unit_nok", unit_nok], ["qty_received", qty_received]] as const) {
+    if (verdi !== undefined) {
+      const n = Math.floor(Number(verdi));
+      if (!Number.isFinite(n) || n < 0) throw new HttpFeil(400, `Ugyldig ${navn}`);
+      felt.push(`${navn} = ?`);
+      args.push(n);
+    }
   }
-  const ut = await regnOmLinje(id, { condition, qty, qty_received });
+  if (condition !== undefined) {
+    if (!CONDITIONS.includes(condition)) throw new HttpFeil(400, "Ukjent condition");
+    felt.push("condition = ?");
+    args.push(condition);
+  }
+  if (!felt.length) throw new HttpFeil(400, "Ingenting å endre");
+  args.push(id);
+  await db().execute({ sql: `UPDATE order_lines SET ${felt.join(", ")} WHERE id = ?`, args });
+
   const l = await db().execute({ sql: "SELECT order_id FROM order_lines WHERE id = ?", args: [id] });
-  const total = l.rows[0] ? await oppdaterTotal(Number(l.rows[0].order_id)) : 0;
-  res.json({ ok: true, ...ut, total_ore: total });
+  if (l.rows[0]) await oppdaterTotal(Number(l.rows[0].order_id));
+  res.json({ ok: true });
 }));
 
 app.delete("/api/admin/lines/:id", krevAdmin, fang(async (req: any, res: any) => {
@@ -207,15 +189,16 @@ app.delete("/api/admin/lines/:id", krevAdmin, fang(async (req: any, res: any) =>
   res.json({ ok: true });
 }));
 
-// Tom eller manglende verdi betyr «følg den globale satsen». 0 er ikke det
-// samme — det ville betydd at du ikke betaler noe.
-function kjøpsandel(v: any): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  const n = Number(v);
-  if (!Number.isFinite(n) || n < 0 || n > 200) throw new HttpFeil(400, "Kjøpsandel må være mellom 0 og 200 %");
-  return n;
+async function oppdaterTotal(orderId: number): Promise<void> {
+  await db().execute({
+    sql: `UPDATE orders SET total_nok =
+            COALESCE((SELECT SUM(unit_nok * COALESCE(qty_received, qty)) FROM order_lines WHERE order_id = ?), 0)
+          WHERE id = ?`,
+    args: [orderId, orderId],
+  });
 }
 
+// ── admin: sett og kort ──────────────────────────────────────────────────────
 app.get("/api/admin/sets", krevAdmin, fang(async (_req: any, res: any) => {
   const s = await hentSettings();
   const r = await db().execute(`
@@ -245,13 +228,12 @@ app.put("/api/admin/sets/:code", krevAdmin, fang(async (req: any, res: any) => {
   const wanted = Math.max(0, Math.floor(Number(wanted_default ?? 0)) || 0);
   const wantedFoil = Math.max(0, Math.floor(Number(wanted_foil ?? 0)) || 0);
   await db().execute({
-    sql: `INSERT INTO set_rules (set_code, enabled, wanted_default, wanted_foil, conditions, ladder, buy_pct, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    sql: `INSERT INTO set_rules (set_code, enabled, wanted_default, wanted_foil, conditions, ladder, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(set_code) DO UPDATE SET
             enabled = excluded.enabled, wanted_default = excluded.wanted_default,
             wanted_foil = excluded.wanted_foil,
             conditions = excluded.conditions, ladder = excluded.ladder,
-            buy_pct = excluded.buy_pct,
             updated_at = excluded.updated_at`,
     args: [
       code,
@@ -260,7 +242,6 @@ app.put("/api/admin/sets/:code", krevAdmin, fang(async (req: any, res: any) => {
       wantedFoil,
       conditions ? JSON.stringify(conditions) : null,
       ladder ? JSON.stringify(ladder) : null,
-      kjøpsandel(req.body?.buy_pct),
       new Date().toISOString(),
     ],
   });
@@ -327,8 +308,6 @@ app.get("/api/admin/cards", krevAdmin, fang(async (req: any, res: any) => {
                  c.has_foil, c.image_uri, c.variant, c.set_code,
                  (SELECT wanted FROM card_wants w WHERE w.card_id = c.id AND w.finish='nonfoil') AS want_nonfoil,
                  (SELECT wanted FROM card_wants w WHERE w.card_id = c.id AND w.finish='foil')    AS want_foil,
-                 (SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='nonfoil') AS pris_nonfoil,
-                 (SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='foil')    AS pris_foil,
                  (SELECT qty        FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS stock_nonfoil,
                  (SELECT product_id   FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS prod_nonfoil,
                  (SELECT product_name FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS pnavn_nonfoil,
@@ -345,9 +324,7 @@ app.get("/api/admin/cards", krevAdmin, fang(async (req: any, res: any) => {
            ORDER BY CAST(c.collector_number AS INTEGER), c.name`,
     args: [set],
   });
-  // Innstillingene følger med, ellers kan ikke manuell prising vise hva et
-  // dollarbeløp faktisk blir i kroner mens du skriver.
-  res.json({ regel: await hentSetRule(set), settings: await hentSettings(), kort: r.rows });
+  res.json({ regel: await hentSetRule(set), kort: r.rows });
 }));
 
 // Sett antall for mange kort samtidig — en hel raritet, eller et utvalg.
@@ -422,30 +399,6 @@ app.delete("/api/admin/cards/:id/want", krevAdmin, fang(async (req: any, res: an
 // ── admin: kobling av Mystore-produkter ──────────────────────────────────────
 // Kategorier som ikke lot seg knytte til et sett. Én kobling her fikser alle
 // produktene i grenen, så dette er langt mer effektivt enn å koble enkeltkort.
-// Manuell markedspris i dollar på ett kort.
-app.put("/api/admin/cards/:id/pris", krevAdmin, fang(async (req: any, res: any) => {
-  const finish = String(req.body?.finish || "nonfoil");
-  if (finish !== "nonfoil" && finish !== "foil") throw new HttpFeil(400, "Ukjent finish");
-  const usd = Number(req.body?.usd);
-  if (!Number.isFinite(usd) || usd <= 0) throw new HttpFeil(400, "Oppgi en pris i dollar");
-  await db().execute({
-    sql: `INSERT INTO card_prices (card_id, finish, usd, kilde, updated_at)
-          VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(card_id, finish) DO UPDATE SET
-            usd = excluded.usd, kilde = excluded.kilde, updated_at = excluded.updated_at`,
-    args: [String(req.params.id), finish, usd, req.body?.kilde || null, new Date().toISOString()],
-  });
-  res.json({ ok: true, usd });
-}));
-
-app.delete("/api/admin/cards/:id/pris", krevAdmin, fang(async (req: any, res: any) => {
-  await db().execute({
-    sql: "DELETE FROM card_prices WHERE card_id = ? AND finish = ?",
-    args: [String(req.params.id), String(req.query.finish || "nonfoil")],
-  });
-  res.json({ ok: true });
-}));
-
 app.get("/api/admin/mystore/categories", krevAdmin, fang(async (req: any, res: any) => {
   const bareUkoblede = String(req.query.ukoblede || "") === "1";
   const søk = String(req.query.q || "").trim();
@@ -613,23 +566,13 @@ app.delete("/api/admin/mystore/stock/:cardId", krevAdmin, fang(async (req: any, 
   res.json({ ok: true });
 }));
 
-// Rabattkoden lages manuelt i Mystore og limes inn her.
-app.put("/api/admin/orders/:id/kreditt", krevAdmin, fang(async (req: any, res: any) => {
-  const id = Number(req.params.id);
-  await settRabattkode(id, req.body?.discount_code ?? null, req.body?.credit_note ?? null);
-  if (req.body?.sendt) await markerKredittSendt(id);
-  const r = await db().execute({ sql: "SELECT * FROM orders WHERE id = ?", args: [id] });
-  if (!r.rows[0]) throw new HttpFeil(404, "Fant ikke ordren");
-  res.json(r.rows[0]);
-}));
-
 app.get("/api/admin/settings", krevAdmin, fang(async (_req: any, res: any) => {
   res.json(await hentSettings());
 }));
 
 app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
   const lov: (keyof Settings)[] = [
-    "usd_nok", "buy_pct", "min_buy_ore", "min_order_ore", "default_conditions",
+    "usd_nok", "buy_pct", "min_buy_nok", "default_conditions",
     "default_ladder", "order_expiry_days", "ship_to",
   ];
   for (const [k, v] of Object.entries(req.body || {})) {
@@ -674,23 +617,11 @@ app.use((feil: any, _req: any, res: any, _next: any) => {
 
 const PORT = Number(process.env.PORT || 3000);
 
-// Eksporteres så tester kan lukke serveren igjen. Uten det holder lytteren
-// prosessen i live, og hele testkjøringen henger.
-export let server: import("http").Server | undefined;
-let ryddeTimer: NodeJS.Timeout | undefined;
-export function stopp() {
-  ryddeTimer && clearInterval(ryddeTimer);
-  return new Promise<void>((r) => (server ? server.close(() => r()) : r()));
-}
-
 migrate()
   .then(() => {
-    server = app.listen(PORT, () => console.log(`Korthaien Kjøp lytter på :${PORT}`));
+    app.listen(PORT, () => console.log(`Korthaien Kjøp lytter på :${PORT}`));
     // Rydder reservasjoner hver time, så kvoter ikke blir stående låst.
-    // unref, slik at en test som importerer serveren ikke holdes i live av
-    // en timer som aldri skal rekke å slå til.
-    ryddeTimer = setInterval(() => utløpGamleOrdrer().catch(console.error), 3600_000);
-    ryddeTimer.unref?.();
+    setInterval(() => utløpGamleOrdrer().catch(console.error), 3600_000);
   })
   .catch((e) => {
     console.error("Klarte ikke migrere databasen:", e);

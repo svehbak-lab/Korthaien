@@ -7,7 +7,6 @@ import { ryddOpp, angreOpprydding } from "./rydd.js";
 import { analyserGruppe, skrivAnalyse } from "./analyser.js";
 import { helsesjekk } from "./helse.js";
 import { utløpGamleOrdrer } from "./orders.js";
-import { hvorfor } from "./hvorfor.js";
 
 // Kommandolinje for jobbene. Render kjører disse som cron.
 
@@ -118,9 +117,6 @@ switch (kommando) {
     console.log(n ? `${n} dobbeltsidige kort oppdatert.` : "Alt er allerede indeksert.");
     break;
   }
-  case "hvorfor":
-    await hvorfor(process.argv.slice(3).join(" "));
-    break;
   case "expire":
     console.log(`${await utløpGamleOrdrer()} ordrer utløpt.`);
     break;
@@ -132,6 +128,6 @@ switch (kommando) {
     break;
   }
   default:
-    console.log("Bruk: import | sett | mystore | gjett | helse | hvorfor <kortnavn> | analyser [settkode…] | skrivefeil | rydd | reindeks | seed | expire | sett-kurs <tall>");
+    console.log("Bruk: import | sett | mystore | gjett | helse | analyser [settkode…] | skrivefeil | rydd | reindeks | seed | expire | sett-kurs <tall>");
 }
 process.exit(0);

@@ -1,8 +1,7 @@
-import { db, hentSettings, normaliser, CONDITION_NAVN, type Condition, type Settings } from "./db.js";
-import { prisØre, hentAlleSetRules, hentManuellePriser, standardRegel, type SetRule } from "./pricing.js";
+import { db, hentSettings, normaliser, type Condition, type Settings } from "./db.js";
+import { beregnPris, hentAlleSetRules, prisenFor, standardRegel, type SetRule } from "./pricing.js";
 import { hentKvoterBulk, regnLedig } from "./quota.js";
 import { finnKandidater, type Kandidat } from "./bulk.js";
-import { byggIndeks, finnSett } from "./settnavn.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KATALOG
@@ -21,8 +20,7 @@ export type Tilbud = {
   image_uri: string | null;
   finish: "nonfoil" | "foil";
   available: number;
-  // Beløpet er i øre. Kunden ser kroner, men alt regnes og lagres i øre.
-  conditions: { condition: Condition; navn: string; ore: number }[];
+  conditions: { condition: Condition; navn: string; pris: number }[];
 };
 
 async function byggTilbud(
@@ -36,7 +34,6 @@ async function byggTilbud(
     if (k.has_foil) nøkler.push({ card_id: k.card_id, finish: "foil" });
   }
   const kvoter = await hentKvoterBulk(nøkler);
-  const manuelle = await hentManuellePriser(kandidater.map((k) => k.card_id));
 
   const ut: Tilbud[] = [];
   for (const k of kandidater) {
@@ -48,10 +45,14 @@ async function byggTilbud(
       const kvote = regnLedig(kvoter.get(`${k.card_id}:${finish}`), finish, regel);
       if (kvote.available <= 0) continue;
 
-      const manuell = manuelle.get(`${k.card_id}:${finish}`) ?? null;
+      const usd = prisenFor(k, finish);
       const conditions = regel.conditions
-        .map((c) => ({ condition: c, navn: CONDITION_NAVN[c], ore: prisØre(k, finish, c, regel, s, manuell) }))
-        .filter((c) => c.ore > 0);
+        .map((c) => ({
+          condition: c,
+          navn: ({ NM: "Near Mint", EX: "Excellent", VG: "Very Good", G: "Good" } as const)[c],
+          pris: beregnPris(usd, c, regel, s),
+        }))
+        .filter((c) => c.pris > 0);
       if (!conditions.length) continue;
 
       ut.push({
@@ -117,26 +118,6 @@ export async function søk(opts: {
   return tilbud.slice(0, opts.limit || 100);
 }
 
-// ── gjenoppslag ──────────────────────────────────────────────────────────────
-// Kurven i nettleseren husker bare kort-ID, finish og tilstand. Priser og
-// kvoter hentes hit hver gang den åpnes, slik at kunden ser hva som faktisk
-// gjelder nå og ikke det som gjaldt da hen la kortet inn.
-export async function tilbudFor(nøkler: { card_id: string }[]): Promise<Tilbud[]> {
-  const ider = [...new Set(nøkler.map((n) => String(n.card_id)).filter(Boolean))].slice(0, 500);
-  if (!ider.length) return [];
-  const s = await hentSettings();
-  const regler = await hentAlleSetRules(s);
-  const r = await db().execute({
-    sql: `SELECT c.id AS card_id, c.name, c.set_code, s.name AS set_name,
-                 c.collector_number, c.rarity, c.image_uri, c.usd, c.usd_foil,
-                 c.has_foil, c.has_nonfoil, c.released_at
-            FROM cards c LEFT JOIN sets s ON s.code = c.set_code
-           WHERE c.id IN (${ider.map(() => "?").join(",")})`,
-    args: ider,
-  });
-  return byggTilbud(r.rows.map(radTilKandidat), regler, s);
-}
-
 // ── bulkoppløsning ───────────────────────────────────────────────────────────
 export type BulkResultat = {
   linje: number;
@@ -145,56 +126,26 @@ export type BulkResultat = {
   navn: string;
   status: "løst" | "velg" | "ikke_ønsket" | "ukjent" | "feil";
   melding?: string;
-  // Tilstanden kunden skrev på linjen, hvis vi kjente den igjen. Frontend
-  // forhåndsvelger den — men bare der settet faktisk tar imot den.
-  condHint: Condition | null;
   valg: Tilbud[];
 };
-
-// Settnavn i klamme («[Magic 2010]») må slås opp mot settlista. Indeksen
-// bygges én gang per bulkkall, ikke én gang per linje.
-async function settIndeks() {
-  const r = await db().execute("SELECT code, name FROM sets");
-  return byggIndeks(r.rows.map((x: any) => ({ code: String(x.code), name: String(x.name) })));
-}
 
 export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").parseBulk>): Promise<BulkResultat[]> {
   const s = await hentSettings();
   const regler = await hentAlleSetRules(s);
-  const trengerIndeks = linjer.some((l) => l.settNavnHint);
-  const indeks = trengerIndeks ? await settIndeks() : null;
   const ut: BulkResultat[] = [];
 
   for (const l of linjer) {
-    const grunn = { linje: l.linje, rå: l.rå, qty: l.qty, navn: l.navn, condHint: l.condHint };
     if (l.feil) {
-      ut.push({ ...grunn, status: "feil", melding: l.feil, valg: [] });
+      ut.push({ linje: l.linje, rå: l.rå, qty: l.qty, navn: l.navn, status: "feil", melding: l.feil, valg: [] });
       continue;
     }
 
-    let settHint = l.settHint;
-    // «[Magic 2010]» er et settnavn, ikke en kode. Vi godtar bare entydige
-    // treff — to mulige sett er verre enn ingen, for da gjetter vi feil pris.
-    if (!settHint && l.settNavnHint && indeks) {
-      const t = finnSett(l.settNavnHint, indeks);
-      if (t) settHint = t.code;
-    }
-
-    let kandidater = await finnKandidater(l.navn, settHint, l.nummerHint);
-
-    // «4 Lightning Bolt M10» — settkoden står uten parentes, så den henger
-    // fortsatt igjen bakerst i navnet. Fant vi ingenting med hele navnet,
-    // prøver vi å tolke det siste ordet som settkode i stedet.
-    if (!kandidater.length && l.settGjett) {
-      const kortere = l.navn.slice(0, l.navn.length - l.settGjett.length).trim();
-      if (kortere.length >= 2) {
-        kandidater = await finnKandidater(kortere, l.settGjett, l.nummerHint);
-        if (kandidater.length) grunn.navn = kortere;
-      }
-    }
-
+    const kandidater = await finnKandidater(l.navn, l.settHint, l.nummerHint);
     if (!kandidater.length) {
-      ut.push({ ...grunn, status: "ukjent", melding: "Fant ikke kortet. Sjekk stavemåten.", valg: [] });
+      ut.push({
+        linje: l.linje, rå: l.rå, qty: l.qty, navn: l.navn,
+        status: "ukjent", melding: "Fant ikke kortet. Sjekk stavemåten.", valg: [],
+      });
       continue;
     }
 
@@ -205,7 +156,7 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
 
     if (!valg.length) {
       ut.push({
-        ...grunn,
+        linje: l.linje, rå: l.rå, qty: l.qty, navn: l.navn,
         status: "ikke_ønsket",
         melding: "Jeg kjøper ikke dette kortet nå — enten er kvoten full eller settet er ikke aktivt.",
         valg: [],
@@ -216,17 +167,12 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
     // Ett mulig trykk: løst. Flere: kunden må peke ut riktig utgave selv.
     // Dette er hele poenget med steget — å gjette her ville gitt meg feil
     // kort i posten og kunden feil pris.
-    const løst = valg.length === 1;
-    let melding: string | undefined = løst ? undefined : `${valg.length} utgaver — velg den du faktisk har`;
-
-    // Skrev kunden en tilstand jeg ikke tar imot for dette settet, må det sies
-    // med én gang. Ellers oppdager hen det først i kassen.
-    if (l.condHint && løst && !valg[0].conditions.some((c) => c.condition === l.condHint)) {
-      const tilbudt = valg[0].conditions.map((c) => c.condition).join(", ");
-      melding = `Jeg tar ikke imot ${l.condHint} fra dette settet — bare ${tilbudt}.`;
-    }
-
-    ut.push({ ...grunn, status: løst ? "løst" : "velg", melding, valg });
+    ut.push({
+      linje: l.linje, rå: l.rå, qty: l.qty, navn: l.navn,
+      status: valg.length === 1 ? "løst" : "velg",
+      melding: valg.length === 1 ? undefined : `${valg.length} utgaver — velg den du faktisk har`,
+      valg,
+    });
   }
   return ut;
 }
