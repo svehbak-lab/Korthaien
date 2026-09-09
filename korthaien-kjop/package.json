@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc && cp src/schema.sql dist/schema.sql",
     "start": "node dist/server.js",
     "import": "tsx src/cli.ts import",
     "mystore": "tsx src/cli.ts mystore",
