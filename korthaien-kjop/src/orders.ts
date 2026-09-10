@@ -71,7 +71,7 @@ export async function lagOrdre(input: {
 
   for (const l of slått.values()) {
     const r = await db().execute({
-      sql: `SELECT c.*, s.name AS set_name FROM cards c
+      sql: `SELECT c.*, COALESCE(s.visningsnavn, s.name) AS set_name FROM cards c
               LEFT JOIN sets s ON s.code = c.set_code WHERE c.id = ?`,
       args: [l.card_id],
     });
@@ -309,7 +309,7 @@ export async function leggTilLinje(
   const manuell = await hentManuellPris(input.card_id, input.finish);
   const ore = prisØre(kort, input.finish, input.condition, regel, s, manuell);
 
-  const sett = await db().execute({ sql: "SELECT name FROM sets WHERE code = ?", args: [String(kort.set_code)] });
+  const sett = await db().execute({ sql: "SELECT COALESCE(visningsnavn, name) AS name FROM sets WHERE code = ?", args: [String(kort.set_code)] });
   await db().execute({
     sql: `INSERT INTO order_lines
             (order_id, card_id, finish, condition, condition_start, qty, qty_received,

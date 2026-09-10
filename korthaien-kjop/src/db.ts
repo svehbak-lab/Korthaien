@@ -80,6 +80,10 @@ async function leggTilNyeKolonner(): Promise<void> {
     await db().execute("ALTER TABLE sets ADD COLUMN parent_code TEXT");
   }
 
+  if (settKol.size && !settKol.has("visningsnavn")) {
+    await db().execute("ALTER TABLE sets ADD COLUMN visningsnavn TEXT");
+  }
+
   const regler = await kolonner("set_rules");
   if (regler.size && !regler.has("wanted_foil")) {
     await db().execute("ALTER TABLE set_rules ADD COLUMN wanted_foil INTEGER NOT NULL DEFAULT 0");

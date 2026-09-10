@@ -21,6 +21,11 @@ export default function Sett({ onFeil, onVelgSett }) {
     last();
   }, []);
 
+  // Nesten tusen rader med skjemafelter på én gang gjør siden treg. Vi viser
+  // en bolk om gangen i stedet, og tilbakestiller når filteret endres.
+  const [tak, setTak] = useState(300);
+  useEffect(() => setTak(300), [søk, filter]);
+
   const synlige = useMemo(() => {
     if (!data) return [];
     const q = søk.trim().toLowerCase();
@@ -28,7 +33,11 @@ export default function Sett({ onFeil, onVelgSett }) {
       if (filter === "på" && !Number(s.enabled)) return false;
       if (filter === "av" && Number(s.enabled)) return false;
       if (!q) return true;
-      return String(s.name).toLowerCase().includes(q) || String(s.code).toLowerCase().includes(q);
+      return (
+        String(s.name).toLowerCase().includes(q) ||
+        String(s.scryfall_navn || "").toLowerCase().includes(q) ||
+        String(s.code).toLowerCase().includes(q)
+      );
     });
   }, [data, søk, filter]);
 
@@ -146,7 +155,7 @@ export default function Sett({ onFeil, onVelgSett }) {
             </tr>
           </thead>
           <tbody>
-            {synlige.slice(0, 400).map((s) => (
+            {synlige.slice(0, tak).map((s) => (
               <SettRad
                 key={s.code}
                 sett={s}
@@ -156,15 +165,24 @@ export default function Sett({ onFeil, onVelgSett }) {
                 onVelg={() => veksleValg(s.code)}
                 onEndre={(felt) => endre(s.code, felt)}
                 onVelgSett={onVelgSett}
+                onDøpt={last}
               />
             ))}
           </tbody>
         </table>
         {!synlige.length && <div className="tom">Ingen sett passer søket.</div>}
-        {synlige.length > 400 && (
-          <div className="krop dempet">
-            Viser 400 av {synlige.length}. Søk for å snevre inn — eller bruk «Velg alle synlige»,
-            som tar med alle {synlige.length}.
+        {synlige.length > tak && (
+          <div className="krop rad-flex">
+            <button className="knapp" onClick={() => setTak(tak + 300)}>
+              Vis 300 til
+            </button>
+            <button className="knapp blank" onClick={() => setTak(synlige.length)}>
+              Vis alle {synlige.length}
+            </button>
+            <span className="dempet">
+              Viser {tak} av {synlige.length}. «Velg alle synlige» tar med alle{" "}
+              {synlige.length} uansett hva som vises.
+            </span>
           </div>
         )}
       </div>
@@ -239,7 +257,56 @@ function Massefelt({ antall, standard, onBruk, onTøm, lagrer }) {
   );
 }
 
-function SettRad({ sett, standard, endring, valgt, onVelg, onEndre, onVelgSett }) {
+// Kundene sier «Beta», ikke «Limited Edition Beta». Scryfall-navnet blir
+// stående i basen, så nattens import kan fortsette å oppdatere det uten å
+// røre ditt eget.
+function Navn({ sett, onDøpt }) {
+  const [redigerer, setRedigerer] = useState(false);
+  const [v, setV] = useState(sett.visningsnavn || "");
+
+  async function lagre() {
+    if ((v.trim() || null) !== (sett.visningsnavn || null)) {
+      await api.døpOmSett(sett.code, v.trim());
+      onDøpt();
+    }
+    setRedigerer(false);
+  }
+
+  if (redigerer) {
+    return (
+      <input
+        type="text"
+        value={v}
+        placeholder={sett.scryfall_navn}
+        autoFocus
+        onChange={(e) => setV(e.target.value)}
+        onBlur={lagre}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") { setV(sett.visningsnavn || ""); setRedigerer(false); }
+        }}
+        style={{ width: "100%", maxWidth: 240 }}
+      />
+    );
+  }
+
+  return (
+    <span
+      onDoubleClick={() => setRedigerer(true)}
+      title="Dobbeltklikk for å gi settet ditt eget navn"
+      style={{ cursor: "text" }}
+    >
+      {sett.name} <span className="kode dempet">{String(sett.code).toUpperCase()}</span>
+      {sett.visningsnavn && (
+        <span className="dempet" style={{ fontSize: 12, display: "block" }}>
+          {sett.scryfall_navn}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function SettRad({ sett, standard, endring, valgt, onVelg, onEndre, onVelgSett, onDøpt }) {
   const på = endring?.enabled ?? !!Number(sett.enabled);
   const antall = endring?.wanted_default ?? Number(sett.wanted_default || 0);
   const foil = endring?.wanted_foil ?? Number(sett.wanted_foil || 0);
@@ -260,7 +327,7 @@ function SettRad({ sett, standard, endring, valgt, onVelg, onEndre, onVelgSett }
         />
       </td>
       <td>
-        {sett.name} <span className="kode dempet">{String(sett.code).toUpperCase()}</span>
+        <Navn sett={sett} onDøpt={onDøpt} />
       </td>
       <td className="dempet">{(sett.released_at || "").slice(0, 4) || "—"}</td>
       <td className="h">

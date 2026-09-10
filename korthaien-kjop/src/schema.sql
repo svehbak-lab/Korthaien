@@ -8,6 +8,10 @@ CREATE TABLE IF NOT EXISTS sets (
   name         TEXT NOT NULL,
   released_at  TEXT,
   card_count   INTEGER DEFAULT 0,
+  -- Ditt eget navn på settet, der Scryfalls offisielle er upraktisk. Kundene
+  -- sier «Beta», ikke «Limited Edition Beta». Scryfall-navnet blir stående i
+  -- «name», så importen kan fortsette å oppdatere det uten å røre ditt.
+  visningsnavn TEXT,
   -- Scryfall splitter én utgivelse i flere sett: «The Brothers War» blir bro,
   -- brr (Retro Artifacts), brc (Commander) og abro (Art Series). Butikker
   -- holder dem samlet under hovedsettet, slik kundene tenker om dem.

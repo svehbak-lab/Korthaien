@@ -25,7 +25,7 @@ export async function hvorfor(navn: string, logg: (s: string) => void = console.
   const r = await db().execute({
     sql: `SELECT c.id, c.name, c.set_code, c.collector_number, c.variant, c.rarity,
                  c.usd, c.usd_foil, c.has_nonfoil, c.has_foil,
-                 st.name AS set_name, st.released_at
+                 COALESCE(st.visningsnavn, st.name) AS set_name, st.released_at
             FROM cards c LEFT JOIN sets st ON st.code = c.set_code
            WHERE c.name_norm = ? OR c.front_norm = ? OR c.name_norm LIKE ?
            ORDER BY st.released_at, c.collector_number`,

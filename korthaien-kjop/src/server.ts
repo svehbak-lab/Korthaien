@@ -64,9 +64,10 @@ app.get("/api/config", grense(REGLER.søk), fang(async (_req: any, res: any) => 
 app.get("/api/sets", grense(REGLER.søk), fang(async (_req: any, res: any) => {
   // Bare sett jeg faktisk kjøper fra vises i filteret.
   const r = await db().execute(`
-    SELECT s.code, s.name, s.released_at, r.wanted_default, r.conditions
+    SELECT s.code, COALESCE(s.visningsnavn, s.name) AS name, s.released_at,
+           r.wanted_default, r.conditions
       FROM set_rules r JOIN sets s ON s.code = r.set_code
-     WHERE r.enabled = 1 ORDER BY s.name COLLATE NOCASE`);
+     WHERE r.enabled = 1 ORDER BY name COLLATE NOCASE`);
   res.json(r.rows);
 }));
 
@@ -328,6 +329,16 @@ app.get("/api/admin/orders/:id/logg", krevAdmin, fang(async (req: any, res: any)
 
 // Tom eller manglende verdi betyr «følg den globale satsen». 0 er ikke det
 // samme — det ville betydd at du ikke betaler noe.
+// Ditt eget navn på et sett. Tomt felt betyr at Scryfalls navn gjelder igjen.
+app.put("/api/admin/sets/:code/navn", krevAdmin, fang(async (req: any, res: any) => {
+  const navn = String(req.body?.visningsnavn ?? "").trim();
+  await db().execute({
+    sql: "UPDATE sets SET visningsnavn = ? WHERE code = ?",
+    args: [navn || null, String(req.params.code).toLowerCase()],
+  });
+  res.json({ ok: true, visningsnavn: navn || null });
+}));
+
 function kjøpsandel(v: any): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
@@ -338,10 +349,11 @@ function kjøpsandel(v: any): number | null {
 app.get("/api/admin/sets", krevAdmin, fang(async (_req: any, res: any) => {
   const s = await hentSettings();
   const r = await db().execute(`
-    SELECT s.code, s.name, s.released_at, s.card_count,
+    SELECT s.code, COALESCE(s.visningsnavn, s.name) AS name, s.name AS scryfall_navn,
+           s.visningsnavn, s.released_at, s.card_count,
            r.enabled, r.wanted_default, r.wanted_foil, r.conditions, r.ladder
       FROM sets s LEFT JOIN set_rules r ON r.set_code = s.code
-     ORDER BY s.released_at DESC`);
+     ORDER BY name COLLATE NOCASE`);
   res.json({
     standard: { conditions: s.default_conditions, ladder: s.default_ladder },
     sett: r.rows,

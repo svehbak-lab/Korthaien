@@ -291,7 +291,7 @@ export type Kandidat = {
   released_at: string | null;
 };
 
-const VELG = `SELECT c.id AS card_id, c.name, c.set_code, s.name AS set_name,
+const VELG = `SELECT c.id AS card_id, c.name, c.set_code, COALESCE(s.visningsnavn, s.name) AS set_name,
                      c.collector_number, c.rarity, c.image_uri, c.usd, c.usd_foil,
                      c.has_foil, c.has_nonfoil, c.released_at
                 FROM cards c LEFT JOIN sets s ON s.code = c.set_code`;

@@ -45,6 +45,8 @@ export const api = {
   slettLinje: (id) => kall(`/api/admin/lines/${id}`, { method: "DELETE" }),
 
   sett: () => kall("/api/admin/sets"),
+  døpOmSett: (kode, visningsnavn) =>
+    kall(`/api/admin/sets/${kode}/navn`, { method: "PUT", body: { visningsnavn } }),
   lagreSett: (kode, regel) => kall(`/api/admin/sets/${kode}`, { method: "PUT", body: regel }),
   masseSett: (felt) => kall("/api/admin/sets", { method: "PUT", body: felt }),
 
