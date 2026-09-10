@@ -49,14 +49,20 @@ export function beregnØre(
 // uendret: kurs, buy_pct og trappen for settet gjelder som før, så NM, EX, VG
 // og G følger av det ene tallet du skriver inn.
 export function prisØre(
-  kort: { usd?: number | null; usd_foil?: number | null },
+  kort: { usd?: number | null; usd_foil?: number | null; rarity?: string | null },
   finish: string,
   condition: Condition,
   regel: { ladder: Ladder; buy_pct?: number | null },
-  s: Pick<Settings, "usd_nok" | "buy_pct" | "min_buy_ore">,
+  s: Pick<Settings, "usd_nok" | "buy_pct" | "min_buy_ore"> & { min_usd?: Record<string, number> },
   manuellUsd?: number | null
 ): number {
   const usd = manuellUsd && manuellUsd > 0 ? manuellUsd : prisenFor(kort, finish);
+  // Terskelen gjelder markedsprisen, ikke utbetalingen. Ligger kortet under,
+  // kjøpes det ikke — da slipper du å håndtere bulk du ikke tjener på. Sjekken
+  // ligger her og ikke i søket, slik at den også gjelder for en ordre sendt
+  // rett mot API-et.
+  const terskel = s.min_usd?.[String(kort.rarity || "").toLowerCase()] ?? 0;
+  if (terskel > 0 && usd < terskel) return 0;
   return beregnØre(usd, condition, regel, s);
 }
 

@@ -78,6 +78,33 @@ export default function Innstillinger({ onFeil, onMelding }) {
             for et kort som er verdt sju øre, i stedet for null. Ordrebeløpet er bunnen
             for hele sendingen, og sjekkes på det som faktisk blir godkjent.
           </p>
+
+          <h3 style={{ marginBottom: 2 }}>Minste markedspris per sjeldenhet</h3>
+          <p className="dempet" style={{ margin: "0 0 10px" }}>
+            Kort som ligger under terskelen kjøpes ikke, og vises ikke på kundesiden.
+            Terskelen gjelder Scryfall-prisen i dollar — eller din egen, der du har
+            satt en. Står den på 0, er det ingen grense. Sett common og uncommon til
+            0,5 for å slippe å motta bulk du ikke tjener på å håndtere.
+          </p>
+          <div className="rad-flex">
+            {["common", "uncommon", "rare", "mythic"].map((r) => (
+              <Felt key={r} navn={r}>
+                <span className="dempet">$ </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={s.min_usd?.[r] ?? 0}
+                  onChange={(e) =>
+                    endre("min_usd", {
+                      ...(s.min_usd || {}),
+                      [r]: Number(String(e.target.value).replace(",", ".")) || 0,
+                    })
+                  }
+                  style={{ width: 68, textAlign: "right" }}
+                />
+              </Felt>
+            ))}
+          </div>
         </div>
       </div>
 

@@ -102,6 +102,14 @@ export async function hvorfor(navn: string, logg: (s: string) => void = console.
         .filter((c) => regel.conditions.includes(c))
         .map((c) => `${c} ${(prisØre(x, finish, c, regel, s, manuell) / 100).toFixed(2)}`);
 
+      const terskel = s.min_usd?.[String(x.rarity || "").toLowerCase()] ?? 0;
+      const effektivUsd = manuell || usd;
+      if (terskel > 0 && effektivUsd && effektivUsd < terskel) {
+        grunner.push(
+          `markedsprisen er $${effektivUsd}, under terskelen på $${terskel} for ${x.rarity}. Senk den under Innstillinger hvis du vil ha kortet likevel.`
+        );
+      }
+
       if (manuell) {
         logg(`   ${" ".repeat(7)} manuell pris $${manuell} → ${priser.join(" · ")}`);
         logg(`   ${" ".repeat(7)} (Scryfall sier $${usd || "—"}, men den overstyres)`);
