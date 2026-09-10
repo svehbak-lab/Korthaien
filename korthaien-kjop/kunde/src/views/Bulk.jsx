@@ -7,14 +7,31 @@ const EKSEMPEL = `4 Lightning Bolt
 3 Counterspell foil
 1 Black Lotus (LEA) 232 HP`;
 
+// Tilstanden kunden skrev i linjen går foran. Ellers Near Mint, som er det
+// folk flest sender. Kunden kan endre den i kurven, og du ved mottak.
+function standardCondition(tilbud, condHint) {
+  const har = (c) => tilbud.conditions.some((x) => x.condition === c);
+  if (condHint && har(condHint)) return condHint;
+  if (har("NM")) return "NM";
+  return tilbud.conditions[0]?.condition;
+}
+
 export default function Bulk({ kurv, onLegg, onFeil }) {
   const [tekst, setTekst] = useState("");
   const [svar, setSvar] = useState(null);
   const [laster, setLaster] = useState(false);
+  // Hvilken utgave kunden har valgt på hver linje. Ligger her og ikke i raden,
+  // fordi «Legg til alle» må kjenne valgene for å kunne bruke dem.
+  const [valg, setValg] = useState({});
+  // Linjer som er lagt i kurven forsvinner fra lista. Det som står igjen er
+  // det som gjenstår — ellers må kunden holde orden på det selv.
+  const [lagtInn, setLagtInn] = useState(new Set());
 
   async function sjekk() {
     setLaster(true);
     try {
+      setValg({});
+      setLagtInn(new Set());
       setSvar(await api.bulk(tekst));
     } catch (e) {
       onFeil(e);
@@ -78,16 +95,35 @@ Lightning Bolt x4 foil`}</pre>
         </div>
       )}
 
-      {svar && <LeggAlle resultat={svar.resultat} kurv={kurv} onLegg={onLegg} />}
+      {svar && (
+        <LeggAlle
+          resultat={svar.resultat.filter((r) => !lagtInn.has(r.linje))}
+          valg={valg}
+          onLegg={onLegg}
+          onLagtInn={(linjer) => setLagtInn((s) => new Set([...s, ...linjer]))}
+        />
+      )}
 
-      {svar && <Resultat resultat={svar.resultat} kurv={kurv} onLegg={onLegg} />}
+      {svar && (
+        <Resultat
+          resultat={svar.resultat.filter((r) => !lagtInn.has(r.linje))}
+          totalt={svar.resultat.length}
+          kurv={kurv}
+          valg={valg}
+          onValg={(linje, i) => setValg((v) => ({ ...v, [linje]: i }))}
+          onLegg={(t, c, n, linje) => {
+            onLegg(t, c, n);
+            setLagtInn((s) => new Set([...s, linje]));
+          }}
+        />
+      )}
     </>
   );
 }
 
 // Linjer som ikke gikk gjennom drukner i en lang liste. De skilles ut i en
 // egen fane, så kunden kan rette dem uten å lete.
-function Resultat({ resultat, kurv, onLegg }) {
+function Resultat({ resultat, totalt, kurv, onLegg, valg, onValg }) {
   const fant = resultat.filter((r) => r.status === "løst" || r.status === "velg");
   const ikke = resultat.filter((r) => !["løst", "velg"].includes(r.status));
   const [fane, setFane] = useState("fant");
@@ -98,6 +134,15 @@ function Resultat({ resultat, kurv, onLegg }) {
   }, [resultat]);
 
   const vis = fane === "fant" ? fant : ikke;
+
+  if (!resultat.length) {
+    return (
+      <p className="dempet">
+        Alle {totalt} {totalt === 1 ? "linjen" : "linjene"} er behandlet. Se kurven til
+        høyre, eller lim inn en ny liste.
+      </p>
+    );
+  }
 
   return (
     <>
@@ -122,16 +167,20 @@ function Resultat({ resultat, kurv, onLegg }) {
       )}
 
       {vis.map((r) => (
-        <Linje key={r.linje} rad={r} kurv={kurv} onLegg={onLegg} />
+        <Linje
+          key={r.linje}
+          rad={r}
+          kurv={kurv}
+          onLegg={onLegg}
+          valgt={valg[r.linje] ?? 0}
+          onValg={(i) => onValg(r.linje, i)}
+        />
       ))}
     </>
   );
 }
 
-function Linje({ rad, kurv, onLegg }) {
-  // Skrev kunden en settkode, er valget allerede tatt. Ellers står den på
-  // første utgave, men må bekreftes aktivt — se knappeteksten under.
-  const [valgt, setValgt] = useState(0);
+function Linje({ rad, kurv, onLegg, valgt, onValg }) {
 
   if (rad.status === "ukjent" || rad.status === "feil" || rad.status === "ikke_ønsket") {
     return (
@@ -184,7 +233,7 @@ function Linje({ rad, kurv, onLegg }) {
             <select
               className="utgavevalg"
               value={valgt}
-              onChange={(e) => setValgt(Number(e.target.value))}
+              onChange={(e) => onValg(Number(e.target.value))}
               aria-label="Velg utgave"
             >
               {rad.valg.map((t, i) => (
@@ -198,7 +247,13 @@ function Linje({ rad, kurv, onLegg }) {
           </>
         )}
 
-        <Utgave tilbud={tilbud} qty={rad.qty} kurv={kurv} onLegg={onLegg} condHint={rad.condHint} />
+        <Utgave
+          tilbud={tilbud}
+          qty={rad.qty}
+          kurv={kurv}
+          condHint={rad.condHint}
+          onLegg={(t, c, n) => onLegg(t, c, n, rad.linje)}
+        />
       </div>
     </div>
   );
@@ -257,59 +312,41 @@ function Utgave({ tilbud, qty, kurv, onLegg, condHint }) {
 // Stemmer lista, skal den kunne legges inn i én operasjon. Men bare linjene
 // som har ett mulig trykk — der det finnes flere utgaver, ville dette vært å
 // gjette på kundens vegne, og det er nettopp det hele velge-steget finnes for.
-function LeggAlle({ resultat, kurv, onLegg }) {
-  const løste = resultat.filter((r) => r.status === "løst");
-  const måVelges = resultat.filter((r) => r.status === "velg");
-  const [lagtTil, setLagtTil] = useState(false);
+function LeggAlle({ resultat, valg, onLegg, onLagtInn }) {
+  const funnet = resultat.filter((r) => r.status === "løst" || r.status === "velg");
+  const uvalgte = resultat.filter((r) => r.status === "velg" && valg[r.linje] === undefined);
+  if (!funnet.length) return null;
 
-  useEffect(() => setLagtTil(false), [resultat]);
-  if (!løste.length) return null;
-
-  const antall = løste.reduce((n, r) => n + r.qty, 0);
+  const antall = funnet.reduce((n, r) => n + r.qty, 0);
 
   function leggInn() {
-    for (const r of løste) {
-      const t = r.valg[0];
-      // Tilstanden kunden skrev, hvis settet tar imot den. Ellers den beste.
-      const cond = t.conditions.some((c) => c.condition === r.condHint)
-        ? r.condHint
-        : t.conditions[0]?.condition;
+    for (const r of funnet) {
+      const t = r.valg[Math.min(valg[r.linje] ?? 0, r.valg.length - 1)];
+      if (!t) continue;
+      const cond = standardCondition(t, r.condHint);
       if (cond) onLegg(t, cond, r.qty);
     }
-    setLagtTil(true);
-  }
-
-  if (lagtTil) {
-    return (
-      <div className="varsel info">
-        {antall} {antall === 1 ? "kort er" : "kort er"} lagt i kurven.
-        {måVelges.length > 0 && (
-          <>
-            {" "}
-            {måVelges.length} {måVelges.length === 1 ? "linje" : "linjer"} står igjen —
-            de finnes i flere utgaver, så du må peke ut hvilken du har.
-          </>
-        )}
-      </div>
-    );
+    onLagtInn(funnet.map((r) => r.linje));
   }
 
   return (
-    <div className="varsel info rad-flex" style={{ justifyContent: "space-between" }}>
-      <span>
-        {løste.length} {løste.length === 1 ? "linje finnes" : "linjer finnes"} bare i én
-        utgave og kan legges inn med én gang — til sammen {antall} kort.
-        {måVelges.length > 0 && (
-          <>
-            {" "}
-            De øvrige {måVelges.length} må du velge utgave på selv, og de blir{" "}
-            <b>ikke</b> med her.
-          </>
-        )}
-      </span>
-      <button className="knapp primar" onClick={leggInn} style={{ flex: "none" }}>
-        Legg til {antall} kort
-      </button>
+    <div className="varsel info">
+      <div className="rad-flex" style={{ justifyContent: "space-between" }}>
+        <span>
+          {funnet.length} {funnet.length === 1 ? "linje" : "linjer"} ble funnet — til
+          sammen {antall} kort, i Near Mint.
+          {uvalgte.length > 0 && (
+            <>
+              {" "}
+              {uvalgte.length} av dem finnes i flere utgaver og står på den som vises i
+              nedtrekksmenyen. Gå gjennom dem først hvis du har et annet trykk.
+            </>
+          )}
+        </span>
+        <button className="knapp primar" onClick={leggInn} style={{ flex: "none" }}>
+          Legg til alle {antall}
+        </button>
+      </div>
     </div>
   );
 }
