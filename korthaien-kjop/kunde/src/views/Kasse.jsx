@@ -199,7 +199,7 @@ export function Gjennomgang({ kurv, onAntall, onCondition, onTilbake, onVidere, 
 }
 
 // ── kontaktskjema ────────────────────────────────────────────────────────────
-export function Skjema({ kurv, sender, config, onTilbake, onSend }) {
+export function Skjema({ kurv, sender, config, onTilbake, onSend, onVilkår }) {
   const [f, setF] = useState({ customer_name: "", email: "", phone: "", note: "" });
   const gyldig =
     f.customer_name.trim().length >= 2 &&
@@ -284,6 +284,13 @@ export function Skjema({ kurv, sender, config, onTilbake, onSend }) {
         )}
       </div>
 
+      <p className="dempet" style={{ fontSize: 13 }}>
+        Ved å sende inn godtar du{" "}
+        <button className="knapp blank" style={{ padding: 0, fontSize: 13 }} onClick={onVilkår}>
+          vilkårene
+        </button>
+        , og at jeg lagrer navn, e-post og telefon for å behandle salget.
+      </p>
       <div className="rad-flex" style={{ justifyContent: "space-between" }}>
         <button className="knapp" onClick={onTilbake}>Tilbake</button>
         <div className="rad-flex">

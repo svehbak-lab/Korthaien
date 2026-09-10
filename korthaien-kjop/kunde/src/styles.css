@@ -237,3 +237,11 @@ td { padding: 8px 10px; border-bottom: 1px solid var(--papir); }
   tr { page-break-inside: avoid; }
   a[href]::after { content: ""; }
 }
+
+/* Vilkårssiden har underoverskrifter; resten av kundesiden har det ikke. */
+.panel h3 {
+  font-size: 15px;
+  margin: 20px 0 4px;
+}
+.panel h3:first-of-type { margin-top: 8px; }
+.panel p { line-height: 1.65; }
