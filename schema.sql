@@ -169,6 +169,10 @@ CREATE TABLE IF NOT EXISTS order_lines (
   condition_start   TEXT,
   -- 'kunde' er linjer fra innsendingen, 'admin' er linjer du la til ved
   -- mottak fordi kunden sendte noe annet enn hen trodde.
+  -- Kopieres fra kortet ved innsending. Uten den kan ikke lista sorteres på
+  -- sjeldenhet, og en ny Scryfall-import kunne endret den under føttene på
+  -- en ordre som allerede er sendt.
+  rarity            TEXT,
   kilde             TEXT NOT NULL DEFAULT 'kunde',
   -- Linjer slettes ikke. En fjernet linje er en del av forklaringen kunden
   -- skal få, og et slettet rad kan ikke forklare noe.

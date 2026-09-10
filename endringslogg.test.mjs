@@ -166,3 +166,39 @@ test("bekreftelsen om vilkår og alder tidfestes på ordren", async () => {
   });
   assert.ok(med.rows[0].vilkar_godtatt, "med hake lagres tidspunktet");
 });
+
+test("lista sorteres på sett, så sjeldenhet, så navn", async () => {
+  const { raritetsRang } = await import("../src/orders.ts");
+  assert.deepEqual(
+    ["common", "mythic", "uncommon", "rare"].sort((a, b) => raritetsRang(a) - raritetsRang(b)),
+    ["mythic", "rare", "uncommon", "common"]
+  );
+  // Ukjente rariteter havner bakerst i stedet for å velte rekkefølgen.
+  assert.ok(raritetsRang("bonus") > raritetsRang("common"));
+  assert.ok(raritetsRang(null) > raritetsRang("common"));
+
+  await db().execute("UPDATE orders SET status = 'cancelled'");
+  const { lagOrdre: lag } = await import("../src/orders.ts");
+  // To kort i samme sett, ett mythic og ett common.
+  await db().execute({
+    sql: `INSERT INTO cards (id,oracle_id,name,name_norm,front_norm,back_norm,variant,set_code,
+                             collector_number,rarity,usd,usd_foil,has_nonfoil,has_foil,image_uri,released_at)
+          VALUES ('bulk','bulk','Aberrant Researcher',?,NULL,NULL,'vanlig','isd','49','common',10,NULL,1,0,NULL,'2011-09-30')`,
+    args: [normaliser("Aberrant Researcher")],
+  });
+  const o = await lag({
+    customer_name: "Kari",
+    email: "kari@example.com",
+    linjer: [
+      { card_id: "bulk", finish: "nonfoil", condition: "NM", qty: 1 },
+      { card_id: "lil-isd", finish: "nonfoil", condition: "NM", qty: 1 },
+    ],
+  });
+  // Aberrant kommer først alfabetisk, men Liliana er mythic og skal øverst.
+  assert.equal(o.linjer[0].card_name, "Liliana of the Veil");
+  assert.equal(o.linjer[1].card_name, "Aberrant Researcher");
+
+  const lagret = await hentOrdre(o.order_no);
+  assert.equal(lagret.linjer[0].card_name, "Liliana of the Veil", "samme rekkefølge fra basen");
+  assert.equal(lagret.linjer[0].rarity, "mythic", "sjeldenheten fryses på linjen");
+});

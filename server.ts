@@ -7,7 +7,7 @@ import { sendBekreftelse, varsleMeg, varsleStatus, sendOppgjør } from "./epost.
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
   lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal,
-  leggTilLinje, fjernLinje, endringslogg, instruksjoner,
+  leggTilLinje, fjernLinje, endringslogg, instruksjoner, SORTERING,
   settRabattkode, markerKredittSendt, HttpFeil,
 } from "./orders.js";
 import { hentSetRule } from "./pricing.js";
@@ -216,7 +216,7 @@ app.get("/api/admin/orders", krevAdmin, fang(async (req: any, res: any) => {
       // Fjernede linjer blir med hit — admin må kunne se og angre dem.
       // Kundens visning filtrerer dem bort i hentOrdre.
       sql: `SELECT * FROM order_lines WHERE order_id IN (${ider.map(() => "?").join(",")})
-            ORDER BY fjernet_at IS NOT NULL, set_name, card_name`,
+            ORDER BY fjernet_at IS NOT NULL, ${SORTERING}`,
       args: ider,
     });
     linjer = l.rows;
