@@ -26,6 +26,10 @@ export default function Vilkår({ config, onTilbake }) {
         <p className="adresse" style={{ whiteSpace: "pre-line", margin: 0 }}>
           {config?.ship_to || "Korthaien"}
         </p>
+        <p style={{ margin: "14px 0 0" }}>
+          Korthaien Svein-Harald Bakke, enkeltpersonforetak.<br />
+          Organisasjonsnummer 914 503 493.
+        </p>
         <p style={{ marginBottom: 0 }}>
           Kontakt: <a href="mailto:korthaien@gmail.com">korthaien@gmail.com</a>
         </p>
@@ -64,12 +68,14 @@ export default function Vilkår({ config, onTilbake }) {
           Kommer pakken fram etter fristen, tar jeg kontakt før noe avgjøres.
         </p>
 
-        <h3>Kort jeg ikke kan kjøpe</h3>
+        <h3>Hvis noe i pakken avviker</h3>
         <p>
-          Sender du kort som ikke står i ordren, eller kort som viser seg å være i
-          dårligere stand enn jeg kjøper fra det settet, tar jeg kontakt før jeg gjør
-          noe. Du velger da om de skal sendes i retur mot at du dekker returporto,
-          eller om jeg skal kjøpe dem til justert pris.
+          Viser det seg at et kort er en annen utgave enn du trodde, eller at det
+          ligger noen kort i pakken som ikke står i ordren, kjøper jeg dem som regel
+          likevel. De legges til ordren til riktig pris for den utgaven de faktisk er,
+          og du får en e-post som viser hva som ble lagt til og hva det utgjorde.
+          Skulle det være noe jeg ikke kan kjøpe i det hele tatt, tar jeg kontakt før
+          jeg gjør noe.
         </p>
 
         <h3>Sortering</h3>
