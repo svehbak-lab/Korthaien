@@ -115,6 +115,16 @@ export default function App() {
         )}
       </header>
 
+      {/* Soft launch. Kunden skal vite det før hen legger kort i en konvolutt,
+          ikke etterpå — og terskelen for å si fra skal være lav. */}
+      <div className="testfase ingen-print">
+        <div className="inni">
+          Siden er ny og fortsatt under uttesting. Finner du en feil, eller har
+          et forslag, send det gjerne til{" "}
+          <a href="mailto:korthaien@gmail.com">korthaien@gmail.com</a>.
+        </div>
+      </div>
+
       <main className="ark">
         {feil && <div className="varsel feil">{feil}</div>}
 

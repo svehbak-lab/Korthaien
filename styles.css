@@ -105,6 +105,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--sjo); }
 }
 .hero .ingress { color: rgba(244, 250, 248, 0.72); max-width: 56ch; margin: 0; }
 
+/* Under vannbåndet, over arbeidsflaten. Rolig nok til ikke å skremme, tydelig
+   nok til at ingen kan si de ikke visste. */
+.testfase {
+  background: var(--brass-svak);
+  border-bottom: 1px solid #ecdfc4;
+  color: #6f4d11;
+  font-size: 14px;
+}
+.testfase .inni { max-width: 1120px; margin: 0 auto; padding: 11px 22px; }
+.testfase a { color: inherit; font-weight: 600; }
+
 .ark { max-width: 1120px; margin: 0 auto; padding: 26px 22px 80px; }
 .todelt { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; align-items: start; }
 
