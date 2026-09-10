@@ -24,13 +24,39 @@ services:
       - key: SESSION_SECRET
         generateValue: true
       - key: CORS_ORIGIN
-        value: https://kortsalg.korthaien.no
+        # Kommaseparert. Både kundesiden og admin må stå her, ellers laster
+        # siden fint og alle kall feiler.
+        value: https://kortsalg.korthaien.no,https://admin.kortsalg.korthaien.no
       - key: MYSTORE_URL
         sync: false
       - key: MYSTORE_KEY
         sync: false
       - key: RESEND_KEY
         sync: false
+
+  # Kundesiden. Statiske filer — Vite bygger dem, Render serverer dem.
+  # VITE_API_URL bakes inn ved bygging, ikke ved kjøring, så en endring her
+  # krever et nytt bygg.
+  - type: web
+    name: korthaien-kjop-kunde
+    runtime: static
+    rootDir: korthaien-kjop/kunde
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://api.kortsalg.korthaien.no
+
+  # Admin. Samme opplegg, men beskyttet av passord og engangskode.
+  - type: web
+    name: korthaien-kjop-admin
+    runtime: static
+    rootDir: korthaien-kjop/admin
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://api.kortsalg.korthaien.no
 
   # Scryfall oppdaterer bulk-filene daglig. Kjøres nattestid.
   - type: cron
