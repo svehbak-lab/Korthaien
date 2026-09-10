@@ -84,13 +84,16 @@ input:focus, select:focus, textarea:focus { border-color: var(--sjo); }
 
 /* Finnen. Absolutt plassert, bleier ut av høyre kant, og forsvinner på
    smale skjermer der den bare ville stjålet plass. */
+/* Stor nok til å fylle båndet i høyden, og svak nok til å bli et merke og
+   ikke en illustrasjon. Seks prosent forsvant helt; elleve leses. */
 .finne {
   position: absolute; z-index: 0;
-  right: 18px; bottom: -18px;
-  width: 190px; height: auto;
-  color: rgba(255, 255, 255, 0.06);
+  right: 26px; bottom: -36px;
+  width: 310px; height: auto;
+  color: rgba(255, 255, 255, 0.11);
   pointer-events: none;
 }
+@media (max-width: 1000px) { .finne { width: 220px; right: 8px; } }
 @media (max-width: 720px) { .finne { display: none; } }
 
 .hero {
