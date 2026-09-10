@@ -120,6 +120,11 @@ const FORKLARING = {
 
 function Innlogging({ onInn }) {
   const [passord, setPassord] = useState("");
+  const [kode, setKode] = useState("");
+  // Vi spør ikke om koden før serveren sier at den trengs. De fleste vet ikke
+  // om totrinns er slått på, og et tomt kodefelt på første skjerm ser ut som
+  // noe man har glemt.
+  const [trengerKode, setTrengerKode] = useState(false);
   const [feil, setFeil] = useState("");
   const [venter, setVenter] = useState(false);
 
@@ -128,11 +133,20 @@ function Innlogging({ onInn }) {
     setVenter(true);
     setFeil("");
     try {
-      await api.loggInn(passord);
+      await api.loggInn(passord, trengerKode ? kode : undefined);
       onInn();
     } catch (err) {
-      setFeil(err.message);
-      setPassord("");
+      if (err.data?.trengerKode) {
+        setTrengerKode(true);
+        // Passordet beholdes, ellers må du skrive det på nytt for hver kode.
+        setFeil(kode ? err.message : "");
+        setKode("");
+      } else {
+        setFeil(err.message);
+        setPassord("");
+        setKode("");
+        setTrengerKode(false);
+      }
     } finally {
       setVenter(false);
     }
@@ -148,12 +162,32 @@ function Innlogging({ onInn }) {
           value={passord}
           onChange={(e) => setPassord(e.target.value)}
           placeholder="Passord"
-          autoFocus
+          autoFocus={!trengerKode}
           autoComplete="current-password"
+          readOnly={trengerKode}
         />
+        {trengerKode && (
+          <>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={kode}
+              onChange={(e) => setKode(e.target.value.replace(/[^\dA-Za-z-]/g, ""))}
+              placeholder="Engangskode"
+              autoFocus
+              // Gjør at iPhone tilbyr koden fra Nøkkelring rett over tastaturet.
+              autoComplete="one-time-code"
+              style={{ letterSpacing: "0.18em", textAlign: "center" }}
+            />
+            <p className="dempet" style={{ fontSize: 13, margin: "0 0 12px" }}>
+              Sekssifret kode fra telefonen. Har du ikke tilgang til den, kan du
+              bruke en av reservekodene dine.
+            </p>
+          </>
+        )}
         {feil && <div className="varsel feil" style={{ marginBottom: 12 }}>{feil}</div>}
-        <button className="knapp primar" disabled={venter || !passord}>
-          {venter ? "Logger inn…" : "Logg inn"}
+        <button className="knapp primar" disabled={venter || !passord || (trengerKode && !kode)}>
+          {venter ? "Logger inn…" : trengerKode ? "Bekreft" : "Logg inn"}
         </button>
       </form>
     </div>

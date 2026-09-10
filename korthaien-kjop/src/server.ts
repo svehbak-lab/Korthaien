@@ -11,7 +11,10 @@ import {
 import { hentSetRule } from "./pricing.js";
 import { importerScryfall } from "./import-scryfall.js";
 import { synkMystore, gjettKategorier, harMystore } from "./mystore.js";
-import { krevAdmin, sjekkPassord, settCookie, fjernCookie } from "./auth.js";
+import {
+  krevAdmin, sjekkPassord, settCookie, fjernCookie,
+  totpStatus, startTotp, bekreftTotp, slåAvTotp, sjekkAndreTrinn,
+} from "./auth.js";
 import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER } from "./ratelimit.js";
 
@@ -126,13 +129,51 @@ app.get("/api/orders/:orderNo", grense(REGLER.søk), fang(async (req: any, res: 
 // ── admin ────────────────────────────────────────────────────────────────────
 // Innloggingen begrenses hardere enn resten. Ett passord uten brukernavn er
 // en fristende ting å gjette på.
-app.post("/api/admin/login", grense(REGLER.innlogging), (req, res) => {
+app.post("/api/admin/login", grense(REGLER.innlogging), fang(async (req: any, res: any) => {
   if (!sjekkPassord(req.body?.password)) {
     return res.status(401).json({ feil: "Feil passord" });
   }
+  const status = await totpStatus();
+  if (status.påslått) {
+    const kode = String(req.body?.kode || "").trim();
+    // Riktig passord uten kode er ikke en feil — det er halve innloggingen.
+    // Klienten trenger å vite forskjellen for å be om koden.
+    if (!kode) return res.status(401).json({ feil: "Engangskode mangler", trengerKode: true });
+    if (!(await sjekkAndreTrinn(kode))) {
+      return res.status(401).json({ feil: "Engangskoden stemmer ikke", trengerKode: true });
+    }
+  }
   settCookie(res);
   res.json({ ok: true });
-});
+}));
+
+// ── engangskode ──────────────────────────────────────────────────────────────
+// Alle oppsettsrutene krever at du allerede er logget inn. Uten det kunne
+// hvem som helst slått av totrinns for deg.
+app.get("/api/admin/totp", krevAdmin, fang(async (_req: any, res: any) => {
+  res.json(await totpStatus());
+}));
+
+app.post("/api/admin/totp/start", krevAdmin, fang(async (_req: any, res: any) => {
+  res.json(await startTotp());
+}));
+
+app.post("/api/admin/totp/bekreft", krevAdmin, fang(async (req: any, res: any) => {
+  try {
+    // Reservekodene vises her og aldri igjen — bare hashene lagres.
+    res.json({ ok: true, reservekoder: await bekreftTotp(String(req.body?.kode || "")) });
+  } catch (e: any) {
+    throw new HttpFeil(400, e?.message || "Klarte ikke slå på engangskode");
+  }
+}));
+
+app.delete("/api/admin/totp", krevAdmin, fang(async (req: any, res: any) => {
+  // Å slå av krever passordet på nytt. Et åpent admin-vindu skal ikke holde
+  // for å fjerne andre trinn.
+  if (!sjekkPassord(req.body?.password)) throw new HttpFeil(401, "Feil passord");
+  await slåAvTotp();
+  res.json({ ok: true });
+}));
 
 app.post("/api/admin/logout", (_req, res) => {
   fjernCookie(res);

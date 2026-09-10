@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import QRCode from "qrcode";
 import { api, CONDITIONS, CONDITION_NAVN, kroner } from "../api.js";
 
 export default function Innstillinger({ onFeil, onMelding }) {
@@ -173,6 +174,8 @@ export default function Innstillinger({ onFeil, onMelding }) {
           </p>
         </div>
       </div>
+
+      <Sikkerhet onFeil={onFeil} onMelding={onMelding} />
     </>
   );
 }
@@ -183,5 +186,176 @@ function Felt({ navn, children }) {
       <div className="dempet" style={{ marginBottom: 4 }}>{navn}</div>
       {children}
     </label>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOTRINNS INNLOGGING
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin ligger åpent på nettet. Et passord alene er én lekkasje unna at noen
+// kan endre priser og lese kundenes kontaktopplysninger.
+function Sikkerhet({ onFeil, onMelding }) {
+  const [status, setStatus] = useState(null);
+  const [oppsett, setOppsett] = useState(null);   // { hemmelighet, uri, svg }
+  const [kode, setKode] = useState("");
+  const [reservekoder, setReservekoder] = useState(null);
+  const [avPassord, setAvPassord] = useState("");
+  const [viserAv, setViserAv] = useState(false);
+  const [jobber, setJobber] = useState(false);
+
+  const last = () => api.totp().then(setStatus).catch(onFeil);
+  useEffect(() => { last(); }, []);
+
+  async function start() {
+    setJobber(true);
+    try {
+      const r = await api.totpStart();
+      // QR-koden lages i nettleseren. Hemmeligheten skal ikke innom noen
+      // tredjepart for å bli tegnet opp.
+      const svg = await QRCode.toString(r.uri, { type: "svg", margin: 1, width: 200 });
+      setOppsett({ ...r, svg });
+      setReservekoder(null);
+      setKode("");
+    } catch (e) { onFeil(e); } finally { setJobber(false); }
+  }
+
+  async function bekreft() {
+    setJobber(true);
+    try {
+      const r = await api.totpBekreft(kode);
+      setReservekoder(r.reservekoder);
+      setOppsett(null);
+      setKode("");
+      await last();
+    } catch (e) { onFeil(e); } finally { setJobber(false); }
+  }
+
+  async function slåAv() {
+    setJobber(true);
+    try {
+      await api.totpAv(avPassord);
+      setAvPassord("");
+      setViserAv(false);
+      setReservekoder(null);
+      onMelding("Engangskode er slått av");
+      await last();
+    } catch (e) { onFeil(e); } finally { setJobber(false); }
+  }
+
+  if (!status) return null;
+
+  return (
+    <div className="panel">
+      <div className="krop">
+        <h2 style={{ marginTop: 0 }}>Innlogging</h2>
+
+        {reservekoder && (
+          <div className="varsel info">
+            <b>Skriv ut reservekodene nå.</b> De vises bare denne ene gangen, og
+            er eneste vei inn hvis du mister telefonen. Legg dem et sted som ikke
+            er telefonen.
+            <div className="kode" style={{ columns: 2, margin: "10px 0", fontSize: 15, lineHeight: 1.9 }}>
+              {reservekoder.map((k) => <div key={k}>{k}</div>)}
+            </div>
+            <button className="knapp" onClick={() => window.print()}>Skriv ut</button>
+          </div>
+        )}
+
+        {!status.påslått && !oppsett && (
+          <>
+            <p className="dempet">
+              Nå holder passordet alene. Slår du på engangskode, må du i tillegg
+              taste en sekssifret kode fra telefonen. Bruker du iPhone, kan koden
+              ligge i Nøkkelring og fylles inn med Face ID.
+            </p>
+            <button className="knapp primar" onClick={start} disabled={jobber}>
+              Slå på engangskode
+            </button>
+          </>
+        )}
+
+        {oppsett && (
+          <>
+            <p style={{ marginBottom: 12 }}>
+              Skann koden med telefonen. På iPhone: Innstillinger, så Passord, velg
+              oppføringen for korthaien og «Sett opp verifiseringskode».
+            </p>
+            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "flex-start" }}>
+              <div
+                style={{ background: "#fff", padding: 8, borderRadius: 8, lineHeight: 0 }}
+                dangerouslySetInnerHTML={{ __html: oppsett.svg }}
+              />
+              <div style={{ flex: 1, minWidth: 240 }}>
+                <div className="dempet" style={{ fontSize: 13 }}>
+                  Får du ikke skannet, skriv inn denne nøkkelen manuelt:
+                </div>
+                <div className="kode" style={{ wordBreak: "break-all", margin: "4px 0 14px" }}>
+                  {oppsett.hemmelighet}
+                </div>
+                <label style={{ display: "block" }}>
+                  <span className="dempet">Skriv koden appen viser, for å bekrefte</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={kode}
+                    onChange={(e) => setKode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    style={{ width: 120, letterSpacing: "0.2em", textAlign: "center" }}
+                  />
+                </label>
+                <div className="rad-flex" style={{ marginTop: 10 }}>
+                  <button className="knapp primar" onClick={bekreft} disabled={jobber || kode.length !== 6}>
+                    Bekreft og slå på
+                  </button>
+                  <button className="knapp" onClick={() => setOppsett(null)} disabled={jobber}>
+                    Avbryt
+                  </button>
+                </div>
+                <p className="dempet" style={{ fontSize: 13, marginBottom: 0 }}>
+                  Ingenting slås på før koden stemmer. Avbryter du her, logger du
+                  inn med passord som før.
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+
+        {status.påslått && (
+          <>
+            <p>
+              <span className="merkelapp m-ok">På</span>{" "}
+              Innlogging krever passord og engangskode.{" "}
+              {status.reservekoder > 0
+                ? `${status.reservekoder} ubrukte reservekoder igjen.`
+                : "Ingen ubrukte reservekoder igjen — mister du telefonen nå, kommer du ikke inn."}
+            </p>
+            {status.reservekoder <= 2 && (
+              <div className="varsel info">
+                Få reservekoder igjen. Slå av og på igjen for å få ti nye.
+              </div>
+            )}
+            {!viserAv ? (
+              <button className="knapp" onClick={() => setViserAv(true)}>Slå av engangskode</button>
+            ) : (
+              <div className="rad-flex">
+                <input
+                  type="password"
+                  value={avPassord}
+                  onChange={(e) => setAvPassord(e.target.value)}
+                  placeholder="Passordet ditt"
+                  autoComplete="current-password"
+                />
+                <button className="knapp fare" onClick={slåAv} disabled={jobber || !avPassord}>
+                  Slå av
+                </button>
+                <button className="knapp" onClick={() => { setViserAv(false); setAvPassord(""); }}>
+                  Avbryt
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }

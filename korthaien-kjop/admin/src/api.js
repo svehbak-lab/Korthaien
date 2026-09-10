@@ -14,7 +14,13 @@ async function kall(sti, opts = {}) {
   if (r.status === 401 && !sti.endsWith("/login")) throw new UtloggetFeil();
   const tekst = await r.text();
   const data = tekst ? JSON.parse(tekst) : null;
-  if (!r.ok) throw new Error(data?.feil || `Serveren svarte ${r.status}`);
+  if (!r.ok) {
+    // Svarkroppen henges på: innloggingen trenger å vite om serveren ber om
+    // engangskode, ikke bare at det gikk galt.
+    const feil = new Error(data?.feil || `Serveren svarte ${r.status}`);
+    feil.data = data;
+    throw feil;
+  }
   return data;
 }
 
@@ -26,7 +32,11 @@ export class UtloggetFeil extends Error {
 
 export const api = {
   meg: () => kall("/api/admin/me"),
-  loggInn: (password) => kall("/api/admin/login", { method: "POST", body: { password } }),
+  loggInn: (password, kode) => kall("/api/admin/login", { method: "POST", body: { password, kode } }),
+  totp: () => kall("/api/admin/totp"),
+  totpStart: () => kall("/api/admin/totp/start", { method: "POST" }),
+  totpBekreft: (kode) => kall("/api/admin/totp/bekreft", { method: "POST", body: { kode } }),
+  totpAv: (password) => kall("/api/admin/totp", { method: "DELETE", body: { password } }),
   loggUt: () => kall("/api/admin/logout", { method: "POST" }),
 
   ordrer: (arkiv) => kall(`/api/admin/orders?arkiv=${arkiv ? 1 : 0}`),

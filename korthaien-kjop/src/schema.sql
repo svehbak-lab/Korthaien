@@ -74,6 +74,23 @@ CREATE TABLE IF NOT EXISTS set_rules (
 -- akkurat dette kortet og ellers ingenting: kurs, buy_pct og trappen for
 -- settet gjelder som før. For reservelistekort er indeksene for tynne til å
 -- stoles på, og da henter du tallet fra en butikk som faktisk selger dem.
+-- Engangskode for admin. Én rad, id alltid 1. Hemmeligheten er base32 og
+-- deles bare i oppsettsøyeblikket. confirmed_at settes først når du har
+-- bevist at appen virker — ellers kunne en halvferdig skanning låst deg ute.
+CREATE TABLE IF NOT EXISTS admin_totp (
+  id            INTEGER PRIMARY KEY CHECK (id = 1),
+  secret        TEXT NOT NULL,
+  confirmed_at  TEXT,
+  updated_at    TEXT NOT NULL
+);
+
+-- Reservekoder for tapt telefon. Lagres som hash, brukes én gang hver.
+CREATE TABLE IF NOT EXISTS admin_backup_codes (
+  hash       TEXT PRIMARY KEY,
+  used_at    TEXT,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS card_prices (
   card_id     TEXT NOT NULL,
   finish      TEXT NOT NULL CHECK (finish IN ('nonfoil','foil')),
