@@ -260,6 +260,9 @@ function Utgave({ tilbud, qty, kurv, onLegg, condHint }) {
 function LeggAlle({ resultat, kurv, onLegg }) {
   const løste = resultat.filter((r) => r.status === "løst");
   const måVelges = resultat.filter((r) => r.status === "velg");
+  const [lagtTil, setLagtTil] = useState(false);
+
+  useEffect(() => setLagtTil(false), [resultat]);
   if (!løste.length) return null;
 
   const antall = løste.reduce((n, r) => n + r.qty, 0);
@@ -273,17 +276,40 @@ function LeggAlle({ resultat, kurv, onLegg }) {
         : t.conditions[0]?.condition;
       if (cond) onLegg(t, cond, r.qty);
     }
+    setLagtTil(true);
+  }
+
+  if (lagtTil) {
+    return (
+      <div className="varsel info">
+        {antall} {antall === 1 ? "kort er" : "kort er"} lagt i kurven.
+        {måVelges.length > 0 && (
+          <>
+            {" "}
+            {måVelges.length} {måVelges.length === 1 ? "linje" : "linjer"} står igjen —
+            de finnes i flere utgaver, så du må peke ut hvilken du har.
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
     <div className="varsel info rad-flex" style={{ justifyContent: "space-between" }}>
       <span>
-        {løste.length} {løste.length === 1 ? "linje har" : "linjer har"} bare én mulig
-        utgave — til sammen {antall} kort.
-        {måVelges.length > 0 &&
-          ` ${måVelges.length} ${måVelges.length === 1 ? "linje" : "linjer"} må du velge utgave på selv.`}
+        {løste.length} {løste.length === 1 ? "linje finnes" : "linjer finnes"} bare i én
+        utgave og kan legges inn med én gang — til sammen {antall} kort.
+        {måVelges.length > 0 && (
+          <>
+            {" "}
+            De øvrige {måVelges.length} må du velge utgave på selv, og de blir{" "}
+            <b>ikke</b> med her.
+          </>
+        )}
       </span>
-      <button className="knapp primar" onClick={leggInn}>Legg til alle {antall}</button>
+      <button className="knapp primar" onClick={leggInn} style={{ flex: "none" }}>
+        Legg til {antall} kort
+      </button>
     </div>
   );
 }
