@@ -1,0 +1,303 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Korthaien Kjøp — kundesiden
+
+   Navnet er utgangspunktet: Korthaien. Derfor dypt vann øverst, med en
+   ryggfinne som skjærer gjennom båndet og går ut av høyre kant. Den er holdt
+   så lavt i kontrast at den leses som et vannmerke, ikke en illustrasjon.
+
+   All dristighet er brukt i det båndet. Under det er alt rolig og lyst, fordi
+   kortbildene er det viktigste elementet på siden — det er slik kunden ser at
+   hen har valgt riktig trykk. Prisene får messinggult, som gir gjenklang i
+   sjeldenhetsfargene på kortene uten å låne noe fra dem.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --dyp: #04302c;
+  --dyp-lys: #0c554d;
+  --skum: #edf2f0;
+  --flate: #ffffff;
+  --strek: #dee6e3;
+  --strek-sterk: #c3d0cc;
+  --blekk: #0e1f1d;
+  --dempet: #5c6a67;
+  --sjo: #0c6259;
+  --sjo-svak: #e8f2f0;
+  --brass: #9c6b18;
+  --brass-svak: #faf3e4;
+  --ok: #156b3a;
+  --feil: #a52a21;
+  --skygge: 0 1px 2px rgba(4, 48, 44, 0.06), 0 8px 24px -16px rgba(4, 48, 44, 0.5);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--skum);
+  color: var(--blekk);
+  font-family: Archivo, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15.5px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tall, table, input[type="number"], .sum { font-variant-numeric: tabular-nums; }
+.kode { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
+
+button { font-family: inherit; font-size: 14.5px; cursor: pointer; }
+input, select, textarea {
+  font-family: inherit; font-size: 14.5px; color: var(--blekk);
+  border: 1px solid var(--strek-sterk); border-radius: 7px;
+  padding: 8px 10px; background: var(--flate);
+}
+input:focus, select:focus, textarea:focus { border-color: var(--sjo); }
+:focus-visible { outline: 2px solid var(--sjo); outline-offset: 2px; }
+
+/* ── vannbåndet ──────────────────────────────────────────────────────────── */
+.topp {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(168deg, var(--dyp) 0%, var(--dyp-lys) 100%);
+  color: #f4faf8;
+}
+/* Vannlinjer: brede, svake striper på skrå. De gir båndet dybde uten å bli
+   et mønster man legger merke til. */
+.topp::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    100deg, transparent 0 38px, rgba(255, 255, 255, 0.035) 38px 40px
+  );
+  pointer-events: none;
+}
+.topp .inni {
+  position: relative; z-index: 1;
+  max-width: 1120px; margin: 0 auto; padding: 18px 22px 20px;
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+}
+.topp b {
+  font-size: 20px; font-weight: 700; letter-spacing: -0.025em;
+}
+.topp span { color: rgba(244, 250, 248, 0.62); font-size: 13.5px; }
+.topp .knapp.blank { color: rgba(244, 250, 248, 0.86); }
+.topp .knapp.blank:hover { color: #fff; }
+
+/* Finnen. Absolutt plassert, bleier ut av høyre kant, og forsvinner på
+   smale skjermer der den bare ville stjålet plass. */
+.finne {
+  position: absolute; z-index: 0;
+  right: 18px; bottom: -18px;
+  width: 190px; height: auto;
+  color: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+@media (max-width: 720px) { .finne { display: none; } }
+
+.hero {
+  position: relative; z-index: 1;
+  max-width: 1120px; margin: 0 auto; padding: 8px 22px 30px;
+}
+.hero h1 {
+  color: #f6fbfa;
+  font-size: clamp(28px, 4.6vw, 40px);
+  font-weight: 700; letter-spacing: -0.03em; line-height: 1.1;
+  margin: 0 0 10px; max-width: 17ch;
+}
+.hero .ingress { color: rgba(244, 250, 248, 0.72); max-width: 56ch; margin: 0; }
+
+.ark { max-width: 1120px; margin: 0 auto; padding: 26px 22px 80px; }
+.todelt { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; align-items: start; }
+
+h1 { font-size: 27px; line-height: 1.2; letter-spacing: -0.025em; margin: 0 0 10px; }
+h2 { font-size: 17.5px; letter-spacing: -0.01em; margin: 0 0 10px; }
+h3 { font-size: 15.5px; margin: 20px 0 4px; }
+.panel h3:first-of-type { margin-top: 6px; }
+.ingress { color: var(--dempet); max-width: 64ch; margin: 0 0 22px; }
+
+/* ── faner ───────────────────────────────────────────────────────────────── */
+/* Store nok til å leses som det valget de er. De ligger rett under vannbåndet
+   og markerer hvor arbeidsflaten begynner. */
+.faner {
+  display: flex; gap: 26px;
+  border-bottom: 1px solid var(--strek);
+  margin: 0 0 22px;
+}
+.faner button {
+  border: none; background: none; color: var(--dempet);
+  font-size: 17px; font-weight: 500; letter-spacing: -0.01em;
+  padding: 0 0 12px; margin-bottom: -1px;
+  border-bottom: 2.5px solid transparent;
+}
+.faner button:hover { color: var(--blekk); }
+.faner button[aria-selected="true"] {
+  color: var(--dyp); font-weight: 650; border-bottom-color: var(--sjo);
+}
+
+/* ── knapper ─────────────────────────────────────────────────────────────── */
+.knapp {
+  border: 1px solid var(--strek-sterk); background: var(--flate); color: var(--blekk);
+  border-radius: 8px; padding: 9px 15px; font-weight: 500;
+}
+.knapp:hover { border-color: var(--sjo); }
+.knapp.primar {
+  background: var(--dyp); border-color: var(--dyp); color: #f4faf8; font-weight: 600;
+}
+.knapp.primar:hover { background: var(--dyp-lys); border-color: var(--dyp-lys); }
+.knapp.blank { border: none; background: none; color: var(--sjo); padding: 6px 2px; }
+.knapp.blank:hover { text-decoration: underline; }
+.knapp:disabled { opacity: 0.45; cursor: default; }
+.knapp:disabled:hover { border-color: var(--strek-sterk); }
+
+.rad-flex { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ── paneler og treff ────────────────────────────────────────────────────── */
+.panel {
+  background: var(--flate); border: 1px solid var(--strek);
+  border-radius: 12px; padding: 18px 20px; margin-bottom: 18px;
+}
+
+.treff {
+  background: var(--flate); border: 1px solid var(--strek);
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 10px;
+}
+.treff .rad { display: flex; gap: 14px; }
+.treff .navn { font-weight: 600; letter-spacing: -0.01em; }
+.treff .sett { color: var(--dempet); font-size: 13.5px; }
+
+.bilde, .bilde-tom {
+  width: 82px; flex: none; aspect-ratio: 5 / 7;
+  border-radius: 6px; object-fit: cover;
+  background: var(--skum);
+  box-shadow: var(--skygge);
+}
+
+.utgave-rad { display: flex; gap: 14px; align-items: flex-start; width: 100%; }
+.utgave-rad img, .utgave-rad .bilde-tom {
+  width: 78px; flex: none; aspect-ratio: 5 / 7;
+  border-radius: 6px; object-fit: cover; background: var(--skum);
+  box-shadow: var(--skygge);
+}
+.utgavevalg { width: 100%; max-width: 460px; }
+
+/* ── priser ──────────────────────────────────────────────────────────────── */
+/* Ikke en versal etikett over prisen — det leses som skjemafelt. En rolig
+   linje som hører til beløpet, i samme messing som tallene. */
+.kreditt-merk {
+  font-size: 13px; color: var(--brass); margin-top: 10px; font-weight: 500;
+}
+
+.priser { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 8px; }
+.pris-knapp {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  border: 1px solid var(--strek-sterk); background: var(--flate);
+  border-radius: 9px; padding: 7px 13px 8px; min-width: 96px;
+}
+.pris-knapp .cond { font-size: 11.5px; color: var(--dempet); }
+.pris-knapp b { font-size: 15.5px; color: var(--brass); letter-spacing: -0.01em; }
+.pris-knapp:hover:not(:disabled) { border-color: var(--brass); background: var(--brass-svak); }
+.pris-knapp:disabled { opacity: 0.4; cursor: default; }
+
+/* ── merkelapper ─────────────────────────────────────────────────────────── */
+.merkelapp {
+  display: inline-block; font-size: 11.5px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+}
+.m-ledig { background: var(--sjo-svak); color: var(--sjo); }
+.m-ok { background: #e6f3ea; color: var(--ok); }
+.m-velg { background: var(--brass-svak); color: var(--brass); }
+.m-nei { background: #f2f0ef; color: var(--dempet); }
+.m-foil { background: #efe9f7; color: #6b4ba8; }
+
+/* ── kurv ────────────────────────────────────────────────────────────────── */
+.kurv {
+  background: var(--flate); border: 1px solid var(--strek);
+  border-radius: 12px; position: sticky; top: 20px; overflow: hidden;
+}
+.kurv header {
+  padding: 15px 17px 12px; border-bottom: 1px solid var(--strek);
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+.kurv h2 { margin: 0; }
+.kurv .liste { max-height: 46vh; overflow-y: auto; }
+.kurv .linje {
+  display: flex; gap: 10px; padding: 12px 17px; border-bottom: 1px solid var(--strek);
+}
+.kurv .bunn { padding: 15px 17px; }
+
+.antall { display: inline-flex; align-items: center; gap: 8px; }
+.antall button {
+  width: 26px; height: 26px; border-radius: 6px;
+  border: 1px solid var(--strek-sterk); background: var(--flate);
+  font-size: 15px; line-height: 1;
+}
+.antall button:hover { border-color: var(--sjo); }
+
+.sum-rad { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.sum { font-size: 21px; font-weight: 700; color: var(--brass); letter-spacing: -0.02em; }
+
+/* ── tabeller ────────────────────────────────────────────────────────────── */
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+th {
+  text-align: left; font-weight: 500; font-size: 12.5px; color: var(--dempet);
+  padding: 0 8px 8px; border-bottom: 1px solid var(--strek);
+}
+td { padding: 9px 8px; border-bottom: 1px solid var(--strek); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+.h { text-align: right; }
+
+/* ── skjema ──────────────────────────────────────────────────────────────── */
+.feltrad { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.feltrad label, label .navn { display: block; }
+label .navn { font-size: 13.5px; color: var(--dempet); margin-bottom: 4px; }
+.feltrad input, textarea { width: 100%; }
+textarea { width: 100%; resize: vertical; line-height: 1.5; }
+
+/* ── varsler ─────────────────────────────────────────────────────────────── */
+.varsel { border-radius: 10px; padding: 13px 16px; margin-bottom: 16px; font-size: 14.5px; }
+.varsel.info { background: var(--sjo-svak); color: #0a4d46; }
+.varsel.feil { background: #fbeceb; color: var(--feil); }
+
+/* ── øvrig ───────────────────────────────────────────────────────────────── */
+.dempet { color: var(--dempet); }
+.tom { text-align: center; color: var(--dempet); padding: 26px 16px; }
+.steg { margin: 0; padding-left: 20px; line-height: 1.75; }
+.steg li { margin-bottom: 9px; }
+.ordrenr { font-size: 17px; letter-spacing: 0.02em; }
+.fotnote { font-size: 13.5px; margin-top: 26px; }
+
+.adresse {
+  font-size: 15px; line-height: 1.55;
+  background: var(--skum); padding: 13px 15px; border-radius: 9px;
+}
+
+.hjelp { margin: 0 0 14px; font-size: 14.5px; }
+.hjelp summary { cursor: pointer; color: var(--sjo); }
+.hjelp pre {
+  background: var(--skum); padding: 11px 13px; border-radius: 8px;
+  overflow-x: auto; font-size: 12.5px; line-height: 1.65;
+}
+
+/* ── mobil ───────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .todelt { grid-template-columns: 1fr; }
+  .kurv { position: static; }
+  .kurv .liste { max-height: none; }
+  .feltrad { grid-template-columns: 1fr; }
+  .hero { padding-bottom: 24px; }
+}
+
+/* Kvitteringen er også pakkseddelen. Alt som ikke hører hjemme i en konvolutt
+   forsvinner ved utskrift. */
+@media print {
+  .ingen-print, .topp, .hero, .faner, .kurv { display: none !important; }
+  .ark { padding: 0; max-width: none; }
+  .panel { border: none; box-shadow: none; padding: 0; page-break-inside: auto; }
+  body { background: #fff; }
+  table { font-size: 12px; }
+  tr { page-break-inside: avoid; }
+  a[href]::after { content: ""; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
