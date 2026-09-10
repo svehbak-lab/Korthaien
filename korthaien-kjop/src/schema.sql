@@ -140,6 +140,9 @@ CREATE TABLE IF NOT EXISTS orders (
   total_nok      INTEGER NOT NULL DEFAULT 0,
   total_ore      INTEGER NOT NULL DEFAULT 0,
   quoted_ore     INTEGER NOT NULL DEFAULT 0,
+  -- Tidspunktet kunden krysset av for vilkår og alder. Selve haken er verdiløs
+  -- som bevis; det som betyr noe er at spørsmålet ble stilt, og når.
+  vilkar_godtatt TEXT,
   note           TEXT,
   admin_note     TEXT,
   discount_code  TEXT,

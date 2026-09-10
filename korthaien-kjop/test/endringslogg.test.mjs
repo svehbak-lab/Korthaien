@@ -145,3 +145,24 @@ test("det kunden ble forespeilet endres aldri av justeringene", async () => {
   assert.equal(Number(r.rows[0].quoted_ore), 14000);
   assert.equal(Number(r.rows[0].total_ore), 5600);
 });
+
+test("bekreftelsen om vilkår og alder tidfestes på ordren", async () => {
+  const o = await nyOrdre();
+  const uten = await db().execute({ sql: "SELECT vilkar_godtatt FROM orders WHERE id = ?", args: [o.oid] });
+  assert.equal(uten.rows[0].vilkar_godtatt, null, "uten hake lagres ingenting");
+
+  const { lagOrdre: lag } = await import("../src/orders.ts");
+  await db().execute("UPDATE orders SET status = 'cancelled'");
+  const m = await lag({
+    customer_name: "Ola Nordmann",
+    email: "ola@example.com",
+    phone: "91234567",
+    vilkar_godtatt: true,
+    linjer: [{ card_id: "lil-isd", finish: "nonfoil", condition: "NM", qty: 1 }],
+  });
+  const med = await db().execute({
+    sql: "SELECT vilkar_godtatt FROM orders WHERE order_no = ?",
+    args: [m.order_no],
+  });
+  assert.ok(med.rows[0].vilkar_godtatt, "med hake lagres tidspunktet");
+});

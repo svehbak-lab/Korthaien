@@ -78,6 +78,13 @@ export default function Vilkår({ config, onTilbake }) {
           jeg gjør noe.
         </p>
 
+        <h3>Alder</h3>
+        <p>
+          Er du under 18, bør du snakke med en foresatt før du sender kort. Ved
+          større beløp kan jeg be om en bekreftelse fra en foresatt før oppgjøret
+          gjøres opp. Det er sjelden aktuelt, men det er greit å vite på forhånd.
+        </p>
+
         <h3>Sortering</h3>
         <p>
           Bekreftelsen viser kortene sortert på sett og deretter alfabetisk. Legg

@@ -23,6 +23,7 @@ export async function lagOrdre(input: {
   email: string;
   phone?: string;
   note?: string;
+  vilkar_godtatt?: boolean;
   linjer: InnLinje[];
 }) {
   const s = await hentSettings();
@@ -137,9 +138,12 @@ export async function lagOrdre(input: {
   const ordreNr = await nyttOrdrenummer(nå);
 
   const res = await db().execute({
-    sql: `INSERT INTO orders (order_no, customer_name, email, phone, status, total_nok, total_ore, quoted_ore, note, created_at, expires_at)
-          VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
-    args: [ordreNr, navn, epost, input.phone || null, Math.round(total / 100), total, total, input.note || null, nå.toISOString(), utløp.toISOString()],
+    sql: `INSERT INTO orders (order_no, customer_name, email, phone, status, total_nok, total_ore, quoted_ore,
+                              vilkar_godtatt, note, created_at, expires_at)
+          VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
+    args: [ordreNr, navn, epost, input.phone || null, Math.round(total / 100), total, total,
+           input.vilkar_godtatt ? nå.toISOString() : null,
+           input.note || null, nå.toISOString(), utløp.toISOString()],
   });
   const ordreId = Number(res.lastInsertRowid);
 

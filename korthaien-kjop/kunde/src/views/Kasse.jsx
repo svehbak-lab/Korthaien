@@ -201,7 +201,9 @@ export function Gjennomgang({ kurv, onAntall, onCondition, onTilbake, onVidere, 
 // ── kontaktskjema ────────────────────────────────────────────────────────────
 export function Skjema({ kurv, sender, config, onTilbake, onSend, onVilkår }) {
   const [f, setF] = useState({ customer_name: "", email: "", phone: "", note: "" });
+  const [godtatt, setGodtatt] = useState(false);
   const gyldig =
+    godtatt &&
     f.customer_name.trim().length >= 2 &&
     /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.email) &&
     f.phone.replace(/\D/g, "").length >= 8;
@@ -284,18 +286,24 @@ export function Skjema({ kurv, sender, config, onTilbake, onSend, onVilkår }) {
         )}
       </div>
 
-      <p className="dempet" style={{ fontSize: 13 }}>
-        Ved å sende inn godtar du{" "}
-        <button className="knapp blank" style={{ padding: 0, fontSize: 13 }} onClick={onVilkår}>
-          vilkårene
-        </button>
-        , og at jeg lagrer navn, e-post og telefon for å behandle salget.
-      </p>
+      {/* Haken er ikke et bevis i seg selv. Verdien ligger i at spørsmålet ble
+          stilt, og at tidspunktet lagres med ordren. */}
+      <label className="godta">
+        <input type="checkbox" checked={godtatt} onChange={(e) => setGodtatt(e.target.checked)} />
+        <span>
+          Jeg er over 18, eller har snakket med en foresatt om dette salget. Jeg
+          godtar{" "}
+          <button className="knapp blank" style={{ padding: 0, fontSize: "inherit" }} onClick={onVilkår}>
+            vilkårene
+          </button>
+          , og at navn, e-post og telefon lagres for å behandle salget.
+        </span>
+      </label>
       <div className="rad-flex" style={{ justifyContent: "space-between" }}>
         <button className="knapp" onClick={onTilbake}>Tilbake</button>
         <div className="rad-flex">
           <span className="sum tall">{kroner(total(kurv))}</span>
-          <button className="knapp primar" onClick={() => onSend(f)} disabled={!gyldig || sender}>
+          <button className="knapp primar" onClick={() => onSend({ ...f, vilkar_godtatt: true })} disabled={!gyldig || sender}>
             {sender ? "Sender…" : "Send inn salget"}
           </button>
         </div>

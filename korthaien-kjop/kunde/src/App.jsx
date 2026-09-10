@@ -85,14 +85,45 @@ export default function App() {
   return (
     <>
       <header className="topp">
+        {/* Ryggfinnen. Navnet er Korthaien, så finnen er merket — ikke en
+            illustrasjon. Derfor så lav kontrast at den så vidt anes, og
+            skjult på mobil der den bare ville tatt plass. */}
+        <svg className="finne" viewBox="88 22 128 136" fill="currentColor" aria-hidden="true">
+          <path d="M95 150C125 132 172 88 208 30 186 76 182 118 196 150Z" />
+        </svg>
         <div className="inni">
           <b>Korthaien</b>
-          <span>Selg kortene dine</span>
-          <button className="knapp blank ingen-print" onClick={() => setSteg("oppslag")}>
+          <span>Innkjøp av Magic-kort</span>
+          <button
+            className="knapp blank ingen-print"
+            style={{ marginLeft: "auto" }}
+            onClick={() => setSteg("oppslag")}
+          >
             Finn ordren min
           </button>
         </div>
+
+        {steg === "velg" && (
+          <div className="hero">
+            <h1>Kortene dine er verdt noe her</h1>
+            <p className="ingress">
+              Søk opp kortene eller lim inn hele lista. Du ser prisen med én gang,
+              og hvor mange jeg har plass til. Oppgjøret er butikkreditt på
+              korthaien.no.
+            </p>
+          </div>
+        )}
       </header>
+
+      {/* Soft launch. Kunden skal vite det før hen legger kort i en konvolutt,
+          ikke etterpå — og terskelen for å si fra skal være lav. */}
+      <div className="testfase ingen-print">
+        <div className="inni">
+          Siden er ny og fortsatt under uttesting. Finner du en feil, eller har
+          et forslag, send det gjerne til{" "}
+          <a href="mailto:korthaien@gmail.com">korthaien@gmail.com</a>.
+        </div>
+      </div>
 
       <main className="ark">
         {feil && <div className="varsel feil">{feil}</div>}
@@ -112,13 +143,6 @@ export default function App() {
         {steg === "velg" && (
           <div className="todelt">
             <div>
-              <h1>Selg Magic-kort til Korthaien</h1>
-              <p className="ingress">
-                Søk opp kortene dine eller lim inn hele lista. Du ser med én gang hva
-                du får i butikkreditt, og hvor mange jeg har plass til. Oppgjøret er
-                en rabattkode på korthaien.no — ikke kontanter.
-              </p>
-
               <div className="faner" role="tablist">
                 <button role="tab" aria-selected={fane === "sok"} onClick={() => setFane("sok")}>
                   Søk etter kort

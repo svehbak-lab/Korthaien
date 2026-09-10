@@ -143,6 +143,9 @@ async function leggTilNyeKolonner(): Promise<void> {
     await db().execute("ALTER TABLE orders ADD COLUMN quoted_ore INTEGER NOT NULL DEFAULT 0");
     await db().execute("UPDATE orders SET quoted_ore = total_ore");
   }
+  if (ordre.size && !ordre.has("vilkar_godtatt")) {
+    await db().execute("ALTER TABLE orders ADD COLUMN vilkar_godtatt TEXT");
+  }
   // Rabattkoden lages manuelt i Mystore og limes inn her. Når den er sendt,
   // er credit_sent_at satt — det er dét som skiller «mottatt» fra «gjort opp».
   if (ordre.size && !ordre.has("discount_code")) {

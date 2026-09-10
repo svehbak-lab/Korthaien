@@ -112,6 +112,7 @@ app.post("/api/orders", grense(REGLER.ordre), fang(async (req: any, res: any) =>
     email: req.body?.email,
     phone: req.body?.phone,
     note: req.body?.note,
+    vilkar_godtatt: req.body?.vilkar_godtatt === true,
     linjer: req.body?.linjer || [],
   });
 
