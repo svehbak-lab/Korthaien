@@ -178,19 +178,24 @@ h3 { font-size: 15.5px; margin: 20px 0 4px; }
 .treff .navn { font-weight: 600; letter-spacing: -0.01em; }
 .treff .sett { color: var(--dempet); font-size: 13.5px; }
 
+/* align-self er det som betyr noe her. Uten den strekker flex-raden bildet
+   til full radhøyde, bredden blir stående, og object-fit skjærer bort sidene
+   av kortet — tittelen forsvinner. Med naturlig høyde vises hele kortet. */
 .bilde, .bilde-tom {
-  width: 82px; flex: none; aspect-ratio: 5 / 7;
-  border-radius: 6px; object-fit: cover;
-  background: var(--skum);
+  width: 82px; flex: none; align-self: flex-start;
+  border-radius: 6px; background: var(--skum);
   box-shadow: var(--skygge);
 }
+.bilde { height: auto; }
+.bilde-tom { aspect-ratio: 5 / 7; }
 
 .utgave-rad { display: flex; gap: 14px; align-items: flex-start; width: 100%; }
 .utgave-rad img, .utgave-rad .bilde-tom {
-  width: 78px; flex: none; aspect-ratio: 5 / 7;
-  border-radius: 6px; object-fit: cover; background: var(--skum);
+  width: 78px; flex: none; align-self: flex-start; height: auto;
+  border-radius: 6px; background: var(--skum);
   box-shadow: var(--skygge);
 }
+.utgave-rad .bilde-tom { aspect-ratio: 5 / 7; }
 .utgavevalg { width: 100%; max-width: 460px; }
 
 /* ── priser ──────────────────────────────────────────────────────────────── */
