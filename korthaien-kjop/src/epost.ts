@@ -1,5 +1,5 @@
 import { db, hentSettings } from "./db.js";
-import { endringslogg } from "./orders.js";
+import { endringslogg, SORTERING } from "./orders.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // E-POST
@@ -92,7 +92,7 @@ function linjetabell(linjer: any[]): string {
       <td style="padding:6px 8px">${trygg(l.card_name)}</td>
       <td style="padding:6px 8px;color:#7a746c;font-size:13px">${trygg(l.set_name)}${
         l.finish === "foil" ? " (foil)" : ""
-      }</td>
+      }${l.rarity ? `<br><span style="font-size:11px">${trygg(l.rarity)}</span>` : ""}</td>
       <td style="padding:6px 8px">${trygg(l.condition)}</td>
       <td style="padding:6px 8px;text-align:right">${l.qty_received ?? l.qty}</td>
       <td style="padding:6px 8px;text-align:right;white-space:nowrap">${kr(
@@ -114,9 +114,9 @@ const linjetekst = (linjer: any[]) =>
   linjer
     .map(
       (l, i) =>
-        `${i + 1}. ${l.card_name} — ${l.set_name}${l.finish === "foil" ? " (foil)" : ""}, ${
-          l.condition
-        }, ${l.qty_received ?? l.qty} stk.`
+        `${i + 1}. ${l.card_name} — ${l.set_name}${l.finish === "foil" ? " (foil)" : ""}${
+          l.rarity ? ` [${l.rarity}]` : ""
+        }, ${l.condition}, ${l.qty_received ?? l.qty} stk.`
     )
     .join("\n");
 
@@ -254,7 +254,7 @@ export async function sendOppgjør(orderId: number): Promise<Utfall> {
 
   const l = await db().execute({
     sql: `SELECT * FROM order_lines WHERE order_id = ? AND fjernet_at IS NULL
-           ORDER BY set_name, card_name`,
+           ORDER BY ${SORTERING}`,
     args: [orderId],
   });
   const logg = await endringslogg(orderId);

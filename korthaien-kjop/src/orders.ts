@@ -1,4 +1,19 @@
 import { db, hentSettings, CONDITIONS, type Condition } from "./db.js";
+
+// Bunken sorteres slik du faktisk går gjennom den: sett for sett, og innenfor
+// hvert sett de dyre kortene først. Da ligger det som må vurderes nøye øverst,
+// og bulken nederst.
+const RARITET = ["mythic", "rare", "uncommon", "common"];
+export const raritetsRang = (r: unknown) => {
+  const i = RARITET.indexOf(String(r || "").toLowerCase());
+  return i === -1 ? RARITET.length : i;
+};
+// Samme rekkefølge i SQL, slik at lista er lik uansett hvor den hentes fra.
+export const SORTERING = `set_name,
+  CASE lower(COALESCE(rarity, ''))
+    WHEN 'mythic' THEN 0 WHEN 'rare' THEN 1
+    WHEN 'uncommon' THEN 2 WHEN 'common' THEN 3 ELSE 4 END,
+  card_name`;
 import { prisØre, hentSetRule, hentManuellPris } from "./pricing.js";
 import { hentKvote } from "./quota.js";
 
@@ -103,6 +118,7 @@ export async function lagOrdre(input: {
       condition: l.condition,
       qty,
       unit_ore: pris,
+      rarity: kort.rarity ? String(kort.rarity) : null,
       card_name: String(kort.name),
       set_code: String(kort.set_code),
       set_name: String(kort.set_name || kort.set_code),
@@ -112,11 +128,12 @@ export async function lagOrdre(input: {
 
   if (!godkjent.length) throw new HttpFeil(409, "Ingen av kortene kunne tas imot", { avvist });
 
-  // Sortert på settnavn og deretter kortnavn. Kunden får beskjed om å legge
-  // bunken i samme rekkefølge, så mottakskontrollen går rett gjennom lista.
+  // Sett, så sjeldenhet, så kortnavn. Kunden får beskjed om å legge bunken i
+  // samme rekkefølge, så mottakskontrollen går rett gjennom lista.
   godkjent.sort(
     (a, b) =>
       a.set_name.localeCompare(b.set_name, "nb") ||
+      raritetsRang(a.rarity) - raritetsRang(b.rarity) ||
       a.card_name.localeCompare(b.card_name, "nb") ||
       a.finish.localeCompare(b.finish) ||
       CONDITIONS.indexOf(a.condition) - CONDITIONS.indexOf(b.condition)
@@ -151,10 +168,10 @@ export async function lagOrdre(input: {
     await db().execute({
       sql: `INSERT INTO order_lines
               (order_id, card_id, finish, condition, condition_start, qty, unit_nok, unit_ore, unit_ore_start,
-               card_name, set_code, set_name, collector_number)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               card_name, set_code, set_name, collector_number, rarity)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [ordreId, l.card_id, l.finish, l.condition, l.condition, l.qty, Math.round(l.unit_ore / 100), l.unit_ore, l.unit_ore,
-             l.card_name, l.set_code, l.set_name, l.collector_number],
+             l.card_name, l.set_code, l.set_name, l.collector_number, l.rarity],
     });
   }
 
@@ -170,7 +187,7 @@ export async function lagOrdre(input: {
 
 export function instruksjoner(ordreNr: string, adresse: string, utløp: Date) {
   return [
-    "Sorter kortene i nøyaktig samme rekkefølge som kortlista under. Lista er sortert på sett, så kortnavn. Gjør du dette, går mottaket raskere og du får oppgjøret fortere.",
+    "Sorter kortene i nøyaktig samme rekkefølge som kortlista under. Lista går sett for sett, og innenfor hvert sett fra de sjeldneste kortene til de vanligste. Gjør du dette, går mottaket raskere og du får oppgjøret fortere.",
     "Legg en lapp i pakken med ordrenummer " + ordreNr + ".",
     "Send til:\n" + adresse,
     "Du betaler portoen inn. Pakken må være sendt innen " + utløp.toLocaleDateString("nb-NO") + " — etter det frigjøres kortene til andre selgere.",
@@ -206,7 +223,7 @@ export async function hentOrdre(orderNo: string) {
   if (!o.rows[0]) return null;
   const l = await db().execute({
     sql: `SELECT * FROM order_lines WHERE order_id = ? AND fjernet_at IS NULL
-           ORDER BY set_name, card_name`,
+           ORDER BY ${SORTERING}`,
     args: [o.rows[0].id],
   });
   return { ...o.rows[0], linjer: l.rows };
@@ -297,13 +314,14 @@ export async function leggTilLinje(
     sql: `INSERT INTO order_lines
             (order_id, card_id, finish, condition, condition_start, qty, qty_received,
              unit_nok, unit_ore, unit_ore_start, card_name, set_code, set_name,
-             collector_number, kilde)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'admin')`,
+             collector_number, rarity, kilde)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'admin')`,
     args: [
       orderId, input.card_id, input.finish, input.condition, input.condition,
       qty, qty, Math.round(ore / 100), ore, ore,
       String(kort.name), String(kort.set_code), String(sett.rows[0]?.name || kort.set_code),
       kort.collector_number ? String(kort.collector_number) : null,
+      kort.rarity ? String(kort.rarity) : null,
     ],
   });
   return oppdaterTotal(orderId);
@@ -328,7 +346,7 @@ export type Endring = { hva: string; tekst: string };
 
 export async function endringslogg(orderId: number): Promise<Endring[]> {
   const r = await db().execute({
-    sql: "SELECT * FROM order_lines WHERE order_id = ? ORDER BY set_name, card_name",
+    sql: `SELECT * FROM order_lines WHERE order_id = ? ORDER BY ${SORTERING}`,
     args: [orderId],
   });
   const ut: Endring[] = [];

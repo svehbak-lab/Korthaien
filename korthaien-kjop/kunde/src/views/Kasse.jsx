@@ -366,6 +366,7 @@ export function Kvittering({ ordre, onNy }) {
                 <td className="dempet">
                   {l.set_name}
                   {l.finish === "foil" ? " (foil)" : ""}
+                  {l.rarity ? <div style={{ fontSize: 12 }}>{l.rarity}</div> : null}
                 </td>
                 <td>{l.condition}</td>
                 <td className="h tall">{l.qty}</td>
