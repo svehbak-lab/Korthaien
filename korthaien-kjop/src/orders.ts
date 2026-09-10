@@ -201,7 +201,8 @@ export async function hentOrdre(orderNo: string) {
   const o = await db().execute({ sql: "SELECT * FROM orders WHERE order_no = ?", args: [orderNo] });
   if (!o.rows[0]) return null;
   const l = await db().execute({
-    sql: "SELECT * FROM order_lines WHERE order_id = ? ORDER BY set_name, card_name",
+    sql: `SELECT * FROM order_lines WHERE order_id = ? AND fjernet_at IS NULL
+           ORDER BY set_name, card_name`,
     args: [o.rows[0].id],
   });
   return { ...o.rows[0], linjer: l.rows };
@@ -257,7 +258,7 @@ export async function regnOmLinje(
 export async function oppdaterTotal(orderId: number): Promise<number> {
   const r = await db().execute({
     sql: `SELECT COALESCE(SUM(unit_ore * COALESCE(qty_received, qty)), 0) AS n
-            FROM order_lines WHERE order_id = ?`,
+            FROM order_lines WHERE order_id = ? AND fjernet_at IS NULL`,
     args: [orderId],
   });
   const ore = Number(r.rows[0]?.n || 0);
@@ -266,6 +267,86 @@ export async function oppdaterTotal(orderId: number): Promise<number> {
     args: [ore, Math.round(ore / 100), orderId],
   });
   return ore;
+}
+
+// ── linjer lagt til ved mottak ───────────────────────────────────────────────
+// Kunden sендte et annet trykk enn hen trodde. Det er helt vanlig, og skal
+// kunne rettes uten at ordren må gjøres om.
+export async function leggTilLinje(
+  orderId: number,
+  input: { card_id: string; finish: string; condition: Condition; qty: number }
+) {
+  const s = await hentSettings();
+  const k = await db().execute({ sql: "SELECT * FROM cards WHERE id = ?", args: [input.card_id] });
+  const kort: any = k.rows[0];
+  if (!kort) throw new HttpFeil(404, "Fant ikke kortet");
+  if (!CONDITIONS.includes(input.condition)) throw new HttpFeil(400, "Ukjent condition");
+  const qty = Math.floor(Number(input.qty));
+  if (!Number.isFinite(qty) || qty < 1) throw new HttpFeil(400, "Antall må være minst 1");
+
+  const regel = await hentSetRule(String(kort.set_code), s);
+  const manuell = await hentManuellPris(input.card_id, input.finish);
+  const ore = prisØre(kort, input.finish, input.condition, regel, s, manuell);
+
+  const sett = await db().execute({ sql: "SELECT name FROM sets WHERE code = ?", args: [String(kort.set_code)] });
+  await db().execute({
+    sql: `INSERT INTO order_lines
+            (order_id, card_id, finish, condition, condition_start, qty, qty_received,
+             unit_nok, unit_ore, unit_ore_start, card_name, set_code, set_name,
+             collector_number, kilde)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'admin')`,
+    args: [
+      orderId, input.card_id, input.finish, input.condition, input.condition,
+      qty, qty, Math.round(ore / 100), ore, ore,
+      String(kort.name), String(kort.set_code), String(sett.rows[0]?.name || kort.set_code),
+      kort.collector_number ? String(kort.collector_number) : null,
+    ],
+  });
+  return oppdaterTotal(orderId);
+}
+
+// Fjerning er en merking, ikke en sletting. Kunden skal kunne få vite at
+// kortet ikke kom fram — og en slettet rad forklarer ingenting.
+export async function fjernLinje(linjeId: number, angre = false): Promise<number> {
+  const r = await db().execute({ sql: "SELECT order_id FROM order_lines WHERE id = ?", args: [linjeId] });
+  if (!r.rows[0]) throw new HttpFeil(404, "Fant ikke linjen");
+  await db().execute({
+    sql: "UPDATE order_lines SET fjernet_at = ? WHERE id = ?",
+    args: [angre ? null : new Date().toISOString(), linjeId],
+  });
+  return oppdaterTotal(Number(r.rows[0].order_id));
+}
+
+// ── endringslogg ─────────────────────────────────────────────────────────────
+// Utledet, ikke lagret. Alt som trengs ligger allerede frosset på linjene, og
+// en egen loggtabell ville før eller siden kommet i utakt med virkeligheten.
+export type Endring = { hva: string; tekst: string };
+
+export async function endringslogg(orderId: number): Promise<Endring[]> {
+  const r = await db().execute({
+    sql: "SELECT * FROM order_lines WHERE order_id = ? ORDER BY set_name, card_name",
+    args: [orderId],
+  });
+  const ut: Endring[] = [];
+  for (const l of r.rows as any[]) {
+    const navn = `${l.card_name} (${l.set_name}${l.finish === "foil" ? ", foil" : ""})`;
+    if (l.fjernet_at) {
+      ut.push({ hva: "fjernet", tekst: `${navn}: kom ikke fram, tatt ut av ordren` });
+      continue;
+    }
+    if (String(l.kilde) === "admin") {
+      ut.push({ hva: "lagt_til", tekst: `${navn}: lagt til ved mottak, ${l.qty} stk. i ${l.condition}` });
+      continue;
+    }
+    if (l.condition_start && l.condition_start !== l.condition) {
+      ut.push({ hva: "condition", tekst: `${navn}: oppgitt ${l.condition_start}, vurdert til ${l.condition}` });
+    }
+    const mottatt = l.qty_received === null || l.qty_received === undefined ? null : Number(l.qty_received);
+    if (mottatt !== null && mottatt !== Number(l.qty)) {
+      ut.push({ hva: "antall", tekst: `${navn}: oppgitt ${l.qty} stk., mottatt ${mottatt}` });
+    }
+  }
+  return ut;
 }
 
 // ── rabattkode ───────────────────────────────────────────────────────────────

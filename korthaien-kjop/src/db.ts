@@ -124,6 +124,13 @@ async function leggTilNyeKolonner(): Promise<void> {
     await db().execute("UPDATE order_lines SET condition_start = condition");
   }
 
+  if (linjer2.size && !linjer2.has("kilde")) {
+    await db().execute("ALTER TABLE order_lines ADD COLUMN kilde TEXT NOT NULL DEFAULT 'kunde'");
+  }
+  if (linjer2.size && !linjer2.has("fjernet_at")) {
+    await db().execute("ALTER TABLE order_lines ADD COLUMN fjernet_at TEXT");
+  }
+
   const ordre = await kolonner("orders");
   if (ordre.size && !ordre.has("total_ore")) {
     await db().execute("ALTER TABLE orders ADD COLUMN total_ore INTEGER NOT NULL DEFAULT 0");

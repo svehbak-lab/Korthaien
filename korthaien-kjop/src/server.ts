@@ -6,6 +6,7 @@ import { søk, løsBulk, tilbudFor } from "./catalog.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
   lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal,
+  leggTilLinje, fjernLinje, endringslogg,
   settRabattkode, markerKredittSendt, HttpFeil,
 } from "./orders.js";
 import { hentSetRule } from "./pricing.js";
@@ -196,8 +197,10 @@ app.get("/api/admin/orders", krevAdmin, fang(async (req: any, res: any) => {
   let linjer: any[] = [];
   if (ider.length) {
     const l = await db().execute({
+      // Fjernede linjer blir med hit — admin må kunne se og angre dem.
+      // Kundens visning filtrerer dem bort i hentOrdre.
       sql: `SELECT * FROM order_lines WHERE order_id IN (${ider.map(() => "?").join(",")})
-            ORDER BY set_name, card_name`,
+            ORDER BY fjernet_at IS NOT NULL, set_name, card_name`,
       args: ider,
     });
     linjer = l.rows;
@@ -240,12 +243,27 @@ app.patch("/api/admin/lines/:id", krevAdmin, fang(async (req: any, res: any) => 
   res.json({ ok: true, ...ut, total_ore: total });
 }));
 
+// Fjerning merker linjen i stedet for å slette den, slik at endringsloggen
+// fortsatt kan fortelle kunden at kortet ikke kom fram.
 app.delete("/api/admin/lines/:id", krevAdmin, fang(async (req: any, res: any) => {
-  const id = Number(req.params.id);
-  const l = await db().execute({ sql: "SELECT order_id FROM order_lines WHERE id = ?", args: [id] });
-  await db().execute({ sql: "DELETE FROM order_lines WHERE id = ?", args: [id] });
-  if (l.rows[0]) await oppdaterTotal(Number(l.rows[0].order_id));
-  res.json({ ok: true });
+  const total = await fjernLinje(Number(req.params.id), String(req.query.angre || "") === "1");
+  res.json({ ok: true, total_ore: total });
+}));
+
+// Kunden sendte et annet trykk enn hen trodde — legg til riktig linje her.
+app.post("/api/admin/orders/:id/lines", krevAdmin, fang(async (req: any, res: any) => {
+  const { card_id, finish, condition, qty } = req.body || {};
+  const total = await leggTilLinje(Number(req.params.id), {
+    card_id: String(card_id || ""),
+    finish: finish === "foil" ? "foil" : "nonfoil",
+    condition,
+    qty: Number(qty || 1),
+  });
+  res.json({ ok: true, total_ore: total });
+}));
+
+app.get("/api/admin/orders/:id/logg", krevAdmin, fang(async (req: any, res: any) => {
+  res.json(await endringslogg(Number(req.params.id)));
 }));
 
 // Tom eller manglende verdi betyr «følg den globale satsen». 0 er ikke det

@@ -66,6 +66,10 @@ export const api = {
   koblKategori: (id, set_code) =>
     kall(`/api/admin/mystore/categories/${id}`, { method: "PUT", body: { set_code } }),
   søkKort: (q) => kall(`/api/admin/cards/search?q=${encodeURIComponent(q)}`),
+  leggTilLinje: (ordreId, linje) =>
+    kall(`/api/admin/orders/${ordreId}/lines`, { method: "POST", body: linje }),
+  ordreLogg: (id) => kall(`/api/admin/orders/${id}/logg`),
+  angreFjerning: (id) => kall(`/api/admin/lines/${id}?angre=1`, { method: "DELETE" }),
   lagreKreditt: (id, felt) => kall(`/api/admin/orders/${id}/kreditt`, { method: "PUT", body: felt }),
   lagrePris: (id, finish, usd) =>
     kall(`/api/admin/cards/${id}/pris`, { method: "PUT", body: { finish, usd } }),

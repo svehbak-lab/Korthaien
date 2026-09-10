@@ -164,6 +164,12 @@ CREATE TABLE IF NOT EXISTS order_lines (
   unit_ore          INTEGER NOT NULL DEFAULT 0,
   unit_ore_start    INTEGER NOT NULL DEFAULT 0,
   condition_start   TEXT,
+  -- 'kunde' er linjer fra innsendingen, 'admin' er linjer du la til ved
+  -- mottak fordi kunden sendte noe annet enn hen trodde.
+  kilde             TEXT NOT NULL DEFAULT 'kunde',
+  -- Linjer slettes ikke. En fjernet linje er en del av forklaringen kunden
+  -- skal få, og et slettet rad kan ikke forklare noe.
+  fjernet_at        TEXT,
   card_name         TEXT NOT NULL,
   set_code          TEXT NOT NULL,
   set_name          TEXT NOT NULL,

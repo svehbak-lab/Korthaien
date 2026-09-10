@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { api, kroner, dato, dagerTil, CONDITIONS } from "../api.js";
+import { api, kroner, dato, dagerTil, CONDITIONS, CONDITION_NAVN } from "../api.js";
 
 const STATUS = {
   pending: { navn: "Venter i posten", klasse: "m-vent" },
@@ -116,7 +116,11 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
 
           <Linjer linjer={ordre.linjer} onEndret={onEndret} onFeil={onFeil} />
 
-          <Avvik ordre={ordre} />
+          {["received", "pending"].includes(ordre.status) && (
+            <NyLinje ordre={ordre} onEndret={onEndret} onFeil={onFeil} />
+          )}
+
+          <Logg ordre={ordre} />
 
           {["received", "stocked"].includes(ordre.status) && (
             <Oppgjør ordre={ordre} onEndret={onEndret} onFeil={onFeil} />
@@ -209,10 +213,44 @@ function Linje({ linje, onEndret, onFeil }) {
     }
   }
 
+  // Fjernede linjer slettes ikke. De blir stående nedtonet, slik at du ser
+  // hva som ble tatt ut og kan angre.
+  if (linje.fjernet_at) {
+    return (
+      <tr style={{ opacity: 0.5 }}>
+        <td style={{ textDecoration: "line-through" }}>
+          <div>{linje.card_name}</div>
+          <div className="sett">{linje.set_name}</div>
+        </td>
+        <td colSpan={4} className="dempet">Fjernet — kom ikke fram</td>
+        <td className="h">
+          <button
+            className="knapp liten"
+            onClick={async () => {
+              try {
+                await api.angreFjerning(linje.id);
+                onEndret();
+              } catch (e) {
+                onFeil(e);
+              }
+            }}
+          >
+            Angre
+          </button>
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr data-avvik={avvik ? "true" : "false"}>
       <td>
-        <div>{linje.card_name}</div>
+        <div>
+          {linje.card_name}
+          {linje.kilde === "admin" && (
+            <span className="merkelapp m-ok" style={{ marginLeft: 6 }}>Lagt til</span>
+          )}
+        </div>
         <div className="sett">{linje.set_name}</div>
       </td>
       <td>
@@ -259,29 +297,160 @@ function Linje({ linje, onEndret, onFeil }) {
 
 // Bestilt mot mottatt. Endrer du tilstand eller antall, er dette forskjellen
 // kunden må få vite om — og det er tallet som skal stå på rabattkoden.
-function Avvik({ ordre }) {
+// Utledet av det som ble frosset ved innsending. Dette er teksten kunden
+// skal få — forskjellen mellom det hen sendte inn og det som ble godkjent.
+function Logg({ ordre }) {
   const lovet = Number(ordre.quoted_ore || 0);
   const nå = Number(ordre.total_ore || 0);
-  const antall = ordre.linjer.filter((l) => l.qty_received != null && l.qty_received !== l.qty);
-  const cond = ordre.linjer.filter((l) => l.condition_start && l.condition_start !== l.condition);
-  if (lovet === nå && !antall.length && !cond.length) return null;
+  const [logg, setLogg] = useState(null);
+
+  useEffect(() => {
+    api.ordreLogg(ordre.id).then(setLogg).catch(() => setLogg([]));
+  }, [ordre.id, ordre.total_ore, ordre.linjer.length]);
+
+  if (!logg?.length && lovet === nå) return null;
 
   return (
     <div className="varsel info" style={{ marginTop: 12 }}>
-      <b>Ordren er justert.</b> Kunden ble forespeilet {kroner(lovet)} og får nå{" "}
-      {kroner(nå)}.
-      <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>
-        {cond.map((l) => (
-          <li key={"c" + l.id}>
-            {l.card_name} ({l.set_name}): {l.condition_start} → {l.condition}
-          </li>
-        ))}
-        {antall.map((l) => (
-          <li key={"a" + l.id}>
-            {l.card_name} ({l.set_name}): {l.qty} oppgitt, {l.qty_received} mottatt
-          </li>
-        ))}
-      </ul>
+      <b>Endringer siden innsending.</b> Kunden ble forespeilet {kroner(lovet)} og
+      får nå {kroner(nå)}.
+      {logg?.length > 0 && (
+        <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>
+          {logg.map((e, i) => <li key={i}>{e.tekst}</li>)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Kunden sendte et annet trykk enn hen trodde. Da søker du opp riktig kort og
+// legger det til — prisen regnes ut på server, som alle andre priser.
+function NyLinje({ ordre, onEndret, onFeil }) {
+  const [åpen, setÅpen] = useState(false);
+  const [søk, setSøk] = useState("");
+  const [treff, setTreff] = useState([]);
+  const [valgt, setValgt] = useState(null);
+  const [cond, setCond] = useState("NM");
+  const [antall, setAntall] = useState(1);
+  const [jobber, setJobber] = useState(false);
+
+  useEffect(() => {
+    if (søk.trim().length < 3) return setTreff([]);
+    const t = setTimeout(() => {
+      api.søkKort(søk.trim()).then(setTreff).catch(() => setTreff([]));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [søk]);
+
+  async function legg(finish) {
+    setJobber(true);
+    try {
+      await api.leggTilLinje(ordre.id, {
+        card_id: valgt.id,
+        finish,
+        condition: cond,
+        qty: Math.max(1, parseInt(antall) || 1),
+      });
+      setÅpen(false);
+      setValgt(null);
+      setSøk("");
+      onEndret();
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setJobber(false);
+    }
+  }
+
+  if (!åpen) {
+    return (
+      <button className="knapp liten" style={{ marginTop: 10 }} onClick={() => setÅpen(true)}>
+        Legg til kort
+      </button>
+    );
+  }
+
+  return (
+    <div className="panel" style={{ marginTop: 12, background: "var(--papir)" }}>
+      <div className="krop">
+        <strong>Legg til et kort kunden sendte</strong>
+        <p className="dempet" style={{ margin: "4px 0 10px" }}>
+          Brukes når kortet i pakken er et annet trykk enn det som ble bestilt.
+          Fjern den opprinnelige linjen etterpå, så forklarer loggen begge deler.
+        </p>
+
+        {!valgt ? (
+          <>
+            <input
+              type="text"
+              value={søk}
+              onChange={(e) => setSøk(e.target.value)}
+              placeholder="Søk etter kortnavn"
+              autoFocus
+              style={{ width: "100%", maxWidth: 380 }}
+            />
+            <div style={{ maxHeight: 220, overflowY: "auto", marginTop: 8 }}>
+              {treff.slice(0, 25).map((k) => (
+                <button
+                  key={k.id}
+                  className="knapp liten"
+                  style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 4 }}
+                  onClick={() => setValgt(k)}
+                >
+                  {k.name} <span className="dempet">{k.set_name} #{k.collector_number}</span>
+                </button>
+              ))}
+              {søk.trim().length >= 3 && !treff.length && (
+                <div className="dempet">Ingen treff.</div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ marginBottom: 10 }}>
+              <strong>{valgt.name}</strong>{" "}
+              <span className="dempet">{valgt.set_name} #{valgt.collector_number}</span>
+            </div>
+            <div className="rad-flex" style={{ marginBottom: 10 }}>
+              <label>
+                <span className="navn">Tilstand</span>
+                <select value={cond} onChange={(e) => setCond(e.target.value)}>
+                  {CONDITIONS.map((c) => (
+                    <option key={c} value={c}>{c} — {CONDITION_NAVN[c]}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="navn">Antall</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={antall}
+                  onChange={(e) => setAntall(e.target.value)}
+                  style={{ width: 70 }}
+                />
+              </label>
+            </div>
+            <div className="rad-flex">
+              <button className="knapp primar" onClick={() => legg("nonfoil")} disabled={jobber}>
+                Legg til vanlig
+              </button>
+              {valgt.has_foil ? (
+                <button className="knapp" onClick={() => legg("foil")} disabled={jobber}>
+                  Legg til foil
+                </button>
+              ) : null}
+              <button className="knapp blank" onClick={() => setValgt(null)}>Velg et annet</button>
+            </div>
+          </>
+        )}
+
+        <div style={{ marginTop: 10 }}>
+          <button className="knapp blank" onClick={() => { setÅpen(false); setValgt(null); }}>
+            Lukk
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
