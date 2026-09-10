@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api, kroner, ledig } from "../api.js";
 
 const EKSEMPEL = `4 Lightning Bolt
@@ -80,7 +80,48 @@ Lightning Bolt x4 foil`}</pre>
 
       {svar && <LeggAlle resultat={svar.resultat} kurv={kurv} onLegg={onLegg} />}
 
-      {svar?.resultat.map((r) => (
+      {svar && <Resultat resultat={svar.resultat} kurv={kurv} onLegg={onLegg} />}
+    </>
+  );
+}
+
+// Linjer som ikke gikk gjennom drukner i en lang liste. De skilles ut i en
+// egen fane, så kunden kan rette dem uten å lete.
+function Resultat({ resultat, kurv, onLegg }) {
+  const fant = resultat.filter((r) => r.status === "løst" || r.status === "velg");
+  const ikke = resultat.filter((r) => !["løst", "velg"].includes(r.status));
+  const [fane, setFane] = useState("fant");
+
+  // Gikk ingenting gjennom, er det den andre fanen som er interessant.
+  useEffect(() => {
+    setFane(fant.length ? "fant" : "ikke");
+  }, [resultat]);
+
+  const vis = fane === "fant" ? fant : ikke;
+
+  return (
+    <>
+      {ikke.length > 0 && (
+        <div className="faner" role="tablist" style={{ marginTop: 18, marginBottom: 16 }}>
+          <button role="tab" aria-selected={fane === "fant"} onClick={() => setFane("fant")}>
+            Fant {fant.length}
+          </button>
+          <button role="tab" aria-selected={fane === "ikke"} onClick={() => setFane("ikke")}>
+            Ikke lagt til {ikke.length}
+          </button>
+        </div>
+      )}
+
+      {fane === "ikke" && (
+        <p className="ingress" style={{ marginBottom: 14 }}>
+          Disse ble ikke lagt til. Står det at kortet ikke ble funnet, er det som
+          regel stavemåten — prøv det engelske navnet, eller søk det opp i den andre
+          fanen. Står det at jeg ikke kjøper kortet, er enten kvoten full eller
+          settet ikke aktivt akkurat nå.
+        </p>
+      )}
+
+      {vis.map((r) => (
         <Linje key={r.linje} rad={r} kurv={kurv} onLegg={onLegg} />
       ))}
     </>
@@ -99,6 +140,11 @@ function Linje({ rad, kurv, onLegg }) {
           <div style={{ flex: 1 }}>
             <span className="navn">{rad.navn || rad.rå}</span>
             <div className="sett">{rad.melding}</div>
+            {/* Den opprinnelige linjen, så kunden ser hva som ble tolket feil.
+                Uten den er det vanskelig å finne skrivefeilen. */}
+            {rad.navn && rad.navn !== rad.rå && (
+              <div className="kode dempet" style={{ marginTop: 3 }}>{rad.rå}</div>
+            )}
           </div>
           <span className="merkelapp m-nei">Ikke lagt til</span>
         </div>
