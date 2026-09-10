@@ -164,7 +164,7 @@ export async function lagOrdre(input: {
   };
 }
 
-function instruksjoner(ordreNr: string, adresse: string, utløp: Date) {
+export function instruksjoner(ordreNr: string, adresse: string, utløp: Date) {
   return [
     "Sorter kortene i nøyaktig samme rekkefølge som kortlista under. Lista er sortert på sett, så kortnavn. Gjør du dette, går mottaket raskere og du får oppgjøret fortere.",
     "Legg en lapp i pakken med ordrenummer " + ordreNr + ".",

@@ -33,6 +33,16 @@ services:
         sync: false
       - key: RESEND_KEY
         sync: false
+      # Avsender må ligge på et domene som er verifisert i Resend.
+      - key: EPOST_FRA
+        value: Korthaien <ordre@korthaien.no>
+      # korthaien.no mottar ikke e-post, så svar må styres til Gmail.
+      - key: EPOST_SVAR
+        value: korthaien@gmail.com
+      - key: EPOST_TIL_MEG
+        value: korthaien@gmail.com
+      - key: ADMIN_URL
+        value: https://admin.kortsalg.korthaien.no
 
   # Kundesiden. Statiske filer — Vite bygger dem, Render serverer dem.
   # VITE_API_URL bakes inn ved bygging, ikke ved kjøring, så en endring her

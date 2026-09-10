@@ -68,6 +68,8 @@ export const api = {
   søkKort: (q) => kall(`/api/admin/cards/search?q=${encodeURIComponent(q)}`),
   leggTilLinje: (ordreId, linje) =>
     kall(`/api/admin/orders/${ordreId}/lines`, { method: "POST", body: linje }),
+  testEpost: (id, hvilken) =>
+    kall(`/api/admin/orders/${id}/testepost`, { method: "POST", body: { hvilken } }),
   ordreLogg: (id) => kall(`/api/admin/orders/${id}/logg`),
   angreFjerning: (id) => kall(`/api/admin/lines/${id}?angre=1`, { method: "DELETE" }),
   lagreKreditt: (id, felt) => kall(`/api/admin/orders/${id}/kreditt`, { method: "PUT", body: felt }),

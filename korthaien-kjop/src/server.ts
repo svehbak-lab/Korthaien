@@ -3,10 +3,11 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { db, migrate, hentSettings, settSetting, normaliser, CONDITIONS, type Settings } from "./db.js";
 import { søk, løsBulk, tilbudFor } from "./catalog.js";
+import { sendBekreftelse, varsleMeg, varsleStatus, sendOppgjør } from "./epost.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
   lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal,
-  leggTilLinje, fjernLinje, endringslogg,
+  leggTilLinje, fjernLinje, endringslogg, instruksjoner,
   settRabattkode, markerKredittSendt, HttpFeil,
 } from "./orders.js";
 import { hentSetRule } from "./pricing.js";
@@ -96,6 +97,14 @@ app.post("/api/quote", grense(REGLER.bulk), fang(async (req: any, res: any) => {
   res.json(await tilbudFor(linjer));
 }));
 
+// Sendingen ventes ikke på. At ordren er lagret er det som betyr noe — en
+// treg e-posttjeneste skal ikke gjøre at kunden tror innsendingen feilet.
+function iBakgrunnen(navn: string, p: Promise<{ sendt: boolean; grunn?: string }>) {
+  p.then((r) => {
+    if (!r.sendt) console.error(`E-post «${navn}» ble ikke sendt: ${r.grunn}`);
+  }).catch((e) => console.error(`E-post «${navn}» kastet:`, e?.message));
+}
+
 app.post("/api/orders", grense(REGLER.ordre), fang(async (req: any, res: any) => {
   await utløpGamleOrdrer();
   const ordre = await lagOrdre({
@@ -105,6 +114,12 @@ app.post("/api/orders", grense(REGLER.ordre), fang(async (req: any, res: any) =>
     note: req.body?.note,
     linjer: req.body?.linjer || [],
   });
+
+  const medKunde = { ...ordre, email: req.body?.email, customer_name: req.body?.customer_name,
+                     phone: req.body?.phone, note: req.body?.note };
+  iBakgrunnen("bekreftelse", sendBekreftelse(medKunde));
+  iBakgrunnen("varsel", varsleMeg(medKunde));
+
   res.status(201).json(ordre);
 }));
 
@@ -221,6 +236,12 @@ app.patch("/api/admin/orders/:id", krevAdmin, fang(async (req: any, res: any) =>
       sql: "UPDATE orders SET status = ?, received_at = ? WHERE id = ?",
       args: [status, ["received", "stocked"].includes(status) ? new Date().toISOString() : null, id],
     });
+    // Kunden varsles som standard. «varsle: false» er for endringer hen ikke
+    // trenger å vite om — en status du rettet fordi du klikket feil.
+    // «stocked» varsles ikke herfra: den e-posten er oppgjøret, med koden.
+    if (req.body?.varsle !== false && status !== "stocked") {
+      iBakgrunnen(`status ${status}`, varsleStatus(id, status));
+    }
   }
   if (admin_note !== undefined) {
     await db().execute({ sql: "UPDATE orders SET admin_note = ? WHERE id = ?", args: [admin_note, id] });
@@ -260,6 +281,44 @@ app.post("/api/admin/orders/:id/lines", krevAdmin, fang(async (req: any, res: an
     qty: Number(qty || 1),
   });
   res.json({ ok: true, total_ore: total });
+}));
+
+// Sender en av e-postene til deg selv, med ekte innhold fra en ordre. Bedre
+// enn å oppdage at oppsettet er feil på den første kunden.
+app.post("/api/admin/orders/:id/testepost", krevAdmin, fang(async (req: any, res: any) => {
+  const id = Number(req.params.id);
+  const hvilken = String(req.body?.hvilken || "bekreftelse");
+  const o = await db().execute({ sql: "SELECT * FROM orders WHERE id = ?", args: [id] });
+  if (!o.rows[0]) throw new HttpFeil(404, "Fant ikke ordren");
+
+  // Kundens adresse byttes ut med din, så en test aldri når en kunde.
+  const min = process.env.EPOST_TIL_MEG || "korthaien@gmail.com";
+  await db().execute({ sql: "UPDATE orders SET email = ? WHERE id = ?", args: [min, id] });
+  try {
+    let r;
+    if (hvilken === "oppgjor") r = await sendOppgjør(id);
+    else if (hvilken === "mottatt") r = await varsleStatus(id, "received");
+    else {
+      const full = await hentOrdre(String(o.rows[0].order_no));
+      const s = await hentSettings();
+      r = await sendBekreftelse({
+        ...full,
+        email: min,
+        instruksjoner: instruksjoner(
+          String(o.rows[0].order_no),
+          s.ship_to,
+          new Date(String(o.rows[0].expires_at))
+        ),
+      });
+    }
+    res.json(r);
+  } finally {
+    // Adressen settes alltid tilbake, også hvis sendingen feilet.
+    await db().execute({
+      sql: "UPDATE orders SET email = ? WHERE id = ?",
+      args: [String(o.rows[0].email), id],
+    });
+  }
 }));
 
 app.get("/api/admin/orders/:id/logg", krevAdmin, fang(async (req: any, res: any) => {
@@ -676,7 +735,10 @@ app.delete("/api/admin/mystore/stock/:cardId", krevAdmin, fang(async (req: any, 
 app.put("/api/admin/orders/:id/kreditt", krevAdmin, fang(async (req: any, res: any) => {
   const id = Number(req.params.id);
   await settRabattkode(id, req.body?.discount_code ?? null, req.body?.credit_note ?? null);
-  if (req.body?.sendt) await markerKredittSendt(id);
+  if (req.body?.sendt) {
+    await markerKredittSendt(id);
+    if (req.body?.varsle !== false) iBakgrunnen("oppgjør", sendOppgjør(id));
+  }
   const r = await db().execute({ sql: "SELECT * FROM orders WHERE id = ?", args: [id] });
   if (!r.rows[0]) throw new HttpFeil(404, "Fant ikke ordren");
   res.json(r.rows[0]);

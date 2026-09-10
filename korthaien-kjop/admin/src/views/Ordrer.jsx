@@ -74,9 +74,13 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
   const dager = dagerTil(ordre.expires_at);
   const antallKort = ordre.linjer.reduce((n, l) => n + l.qty, 0);
 
+  // Kunden varsles som standard. Hakes den av, gjøres endringen stille — for
+  // rettinger hen ikke trenger å vite om.
+  const [varsle, setVarsle] = useState(true);
+
   async function sett(status) {
     try {
-      await api.endreOrdre(ordre.id, { status });
+      await api.endreOrdre(ordre.id, { status, varsle });
       onEndret();
     } catch (e) {
       onFeil(e);
@@ -135,6 +139,10 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
                 : ""}
             </span>
             <div className="rad-flex">
+              <label className="dempet" style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 4 }}>
+                <input type="checkbox" checked={varsle} onChange={(e) => setVarsle(e.target.checked)} />
+                Varsle kunden
+              </label>
               {ordre.status === "pending" && (
                 <>
                   <button className="knapp fare" onClick={() => sett("cancelled")}>Kanseller</button>
@@ -465,7 +473,21 @@ function Oppgjør({ ordre, onEndret, onFeil }) {
   const [kode, setKode] = useState(ordre.discount_code || "");
   const [notat, setNotat] = useState(ordre.credit_note || "");
   const [jobber, setJobber] = useState(false);
+  const [sendEpost, setSendEpost] = useState(true);
+  const [tester, setTester] = useState(false);
   const ferdig = ordre.status === "stocked";
+
+  async function test() {
+    setTester(true);
+    try {
+      const r = await api.testEpost(ordre.id, "oppgjor");
+      onFeil(new Error(r.sendt ? "Testen er sendt til deg selv." : `Ikke sendt: ${r.grunn}`));
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setTester(false);
+    }
+  }
 
   async function lagre(gjørOpp) {
     setJobber(true);
@@ -474,10 +496,11 @@ function Oppgjør({ ordre, onEndret, onFeil }) {
         discount_code: kode.trim() || null,
         credit_note: notat.trim() || null,
         sendt: gjørOpp,
+        varsle: sendEpost,
       });
       // Kvoten holdes helt til ordren er gjort opp. Da overtar beholdningen i
       // Mystore tellingen, og derfor må kortene være lagt inn der først.
-      if (gjørOpp) await api.endreOrdre(ordre.id, { status: "stocked" });
+      if (gjørOpp) await api.endreOrdre(ordre.id, { status: "stocked", varsle: false });
       onEndret();
     } catch (e) {
       onFeil(e);
@@ -533,9 +556,16 @@ function Oppgjør({ ordre, onEndret, onFeil }) {
             />
           </label>
         </div>
+        <label className="dempet" style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+          <input type="checkbox" checked={sendEpost} onChange={(e) => setSendEpost(e.target.checked)} />
+          Send oppgjørsepost med koden til kunden
+        </label>
         <div className="rad-flex">
           <button className="knapp" onClick={() => lagre(false)} disabled={jobber}>
             Lagre uten å gjøre opp
+          </button>
+          <button className="knapp blank" onClick={test} disabled={tester || !kode.trim()}>
+            {tester ? "Sender…" : "Send test til meg"}
           </button>
           <button
             className="knapp primar"
