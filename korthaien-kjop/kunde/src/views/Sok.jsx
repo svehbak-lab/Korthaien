@@ -81,6 +81,16 @@ export default function Søk({ kurv, onLegg, onFeil }) {
         </div>
       )}
 
+      {/* Prisknappene ser ut som prislapper. Uten denne linjen er det ikke
+          opplagt at de er noe man trykker på, eller at ett klikk er ett kort. */}
+      {treff?.length > 0 && (
+        <p className="dempet" style={{ marginTop: 0, marginBottom: 14 }}>
+          Klikk på prisen for den tilstanden kortet ditt er i. Hvert klikk legger til
+          ett kort — har du fire, klikker du fire ganger. Du kan justere antallet i
+          lista til høyre etterpå.
+        </p>
+      )}
+
       {treff?.map((t) => (
         <Treff key={`${t.card_id}:${t.finish}`} tilbud={t} kurv={kurv} onLegg={onLegg} />
       ))}

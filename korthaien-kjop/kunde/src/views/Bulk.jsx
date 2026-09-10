@@ -301,7 +301,7 @@ function Utgave({ tilbud, qty, kurv, onLegg, condHint }) {
         </div>
         <span className="dempet" style={{ fontSize: 12 }}>
           {plass > 0
-            ? `Legger til ${antall} — inntil ${plass} stk. av denne`
+            ? `Klikk prisen for å legge til ${antall} — jeg tar inntil ${plass} stk. av denne`
             : "kvoten er full"}
         </span>
       </div>

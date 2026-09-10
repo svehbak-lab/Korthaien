@@ -212,11 +212,20 @@ h3 { font-size: 15.5px; margin: 20px 0 4px; }
 }
 
 .priser { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 8px; }
+/* Et lite plusstegn i hjørnet gjør at knappen leses som en handling og ikke
+   som en prislapp. */
 .pris-knapp {
+  position: relative;
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
   border: 1px solid var(--strek-sterk); background: var(--flate);
-  border-radius: 9px; padding: 6px 11px 7px; min-width: 88px;
+  border-radius: 9px; padding: 6px 22px 7px 11px; min-width: 92px;
 }
+.pris-knapp::after {
+  content: "+";
+  position: absolute; top: 50%; right: 9px; transform: translateY(-50%);
+  font-size: 15px; line-height: 1; color: var(--strek-sterk);
+}
+.pris-knapp:hover:not(:disabled)::after { color: var(--brass); }
 .pris-knapp .cond { font-size: 11.5px; color: var(--dempet); }
 .pris-knapp b { font-size: 15.5px; color: var(--brass); letter-spacing: -0.01em; }
 .pris-knapp:hover:not(:disabled) { border-color: var(--brass); background: var(--brass-svak); }
