@@ -66,7 +66,7 @@ app.get("/api/sets", grense(REGLER.søk), fang(async (_req: any, res: any) => {
   const r = await db().execute(`
     SELECT s.code, s.name, s.released_at, r.wanted_default, r.conditions
       FROM set_rules r JOIN sets s ON s.code = r.set_code
-     WHERE r.enabled = 1 ORDER BY s.released_at DESC`);
+     WHERE r.enabled = 1 ORDER BY s.name COLLATE NOCASE`);
   res.json(r.rows);
 }));
 
