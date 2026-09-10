@@ -161,8 +161,9 @@ async function settIndeks() {
 export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").parseBulk>): Promise<BulkResultat[]> {
   const s = await hentSettings();
   const regler = await hentAlleSetRules(s);
-  const trengerIndeks = linjer.some((l) => l.settNavnHint);
-  const indeks = trengerIndeks ? await settIndeks() : null;
+  // Indeksen bygges først når en linje trenger den, og bare én gang.
+  let indeks: Awaited<ReturnType<typeof settIndeks>> | null = null;
+  const hentIndeks = async () => (indeks ??= await settIndeks());
   const ut: BulkResultat[] = [];
 
   for (const l of linjer) {
@@ -175,21 +176,43 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
     let settHint = l.settHint;
     // «[Magic 2010]» er et settnavn, ikke en kode. Vi godtar bare entydige
     // treff — to mulige sett er verre enn ingen, for da gjetter vi feil pris.
-    if (!settHint && l.settNavnHint && indeks) {
-      const t = finnSett(l.settNavnHint, indeks);
+    if (!settHint && l.settNavnHint) {
+      const t = finnSett(l.settNavnHint, await hentIndeks());
       if (t) settHint = t.code;
     }
 
     let kandidater = await finnKandidater(l.navn, settHint, l.nummerHint);
 
-    // «4 Lightning Bolt M10» — settkoden står uten parentes, så den henger
-    // fortsatt igjen bakerst i navnet. Fant vi ingenting med hele navnet,
-    // prøver vi å tolke det siste ordet som settkode i stedet.
-    if (!kandidater.length && l.settGjett) {
-      const kortere = l.navn.slice(0, l.navn.length - l.settGjett.length).trim();
-      if (kortere.length >= 2) {
-        kandidater = await finnKandidater(kortere, l.settGjett, l.nummerHint);
-        if (kandidater.length) grunn.navn = kortere;
+    // «Liliana of the Veil Innistrad» — settnavnet står bakerst uten
+    // parentes. Fant vi ingenting med hele navnet, prøver vi å skille av de
+    // siste ordene og slå dem opp som sett. Vi begynner med det lengste
+    // halet: «Modern Horizons 3» må prøves før «3».
+    if (!kandidater.length) {
+      // «Modern Horizons 3» slutter på et tall, og tallet ble tolket som
+      // samlernummer lenger opp. Derfor prøver vi også varianten der det
+      // settes tilbake på navnet.
+      const varianter: [string, string | null][] = [[l.navn, l.nummerHint]];
+      if (l.nummerHint) varianter.push([`${l.navn} ${l.nummerHint}`, null]);
+
+      for (const [helt, nummer] of varianter) {
+        if (kandidater.length) break;
+        const ord = helt.split(/\s+/).filter(Boolean);
+        for (let n = Math.min(5, ord.length - 1); n >= 1 && !kandidater.length; n--) {
+          const start = ord.slice(0, ord.length - n).join(" ");
+          if (start.length < 2) continue;
+          const t = finnSett(ord.slice(ord.length - n).join(" "), await hentIndeks());
+          if (!t) continue;
+          // Uten settet ville dette blitt et treff på alle trykk. Vi krever
+          // at kortet faktisk finnes i settet, ellers var ikke halet et
+          // settnavn — bare noen ord som tilfeldigvis lignet.
+          const medSett = await finnKandidater(start, t.code, nummer);
+          const iSettet = medSett.filter((k) => k.set_code === t.code);
+          if (iSettet.length) {
+            kandidater = iSettet;
+            grunn.navn = start;
+            settHint = t.code;
+          }
+        }
       }
     }
 
