@@ -82,3 +82,16 @@ test("terskelen gjelder også en ordre sendt rett mot API-et", async () => {
     /Ingen av kortene/
   );
 });
+
+test("terskelen tåler at den lagres som komma-tall fra grensesnittet", async () => {
+  // Grensesnittet sender tall, men verdien går gjennom JSON og tilbake.
+  // 0.4 skal overleve turen og virke som terskel.
+  await settSetting("min_usd", { common: 0.4, uncommon: 0, rare: 0, mythic: 0 });
+  const s2 = await (await import("../src/db.ts")).hentSettings();
+  assert.equal(s2.min_usd.common, 0.4);
+
+  const trapp2 = { ladder: { NM: 100 } };
+  assert.equal(prisØre({ usd: 0.35, rarity: "common" }, "nonfoil", "NM", trapp2, s2), 0);
+  assert.ok(prisØre({ usd: 0.45, rarity: "common" }, "nonfoil", "NM", trapp2, s2) > 0);
+  await settSetting("min_usd", { common: 0, uncommon: 0, rare: 0, mythic: 0 });
+});

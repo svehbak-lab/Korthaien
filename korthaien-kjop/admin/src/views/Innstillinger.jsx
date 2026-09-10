@@ -90,17 +90,9 @@ export default function Innstillinger({ onFeil, onMelding }) {
             {["common", "uncommon", "rare", "mythic"].map((r) => (
               <Felt key={r} navn={r}>
                 <span className="dempet">$ </span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={s.min_usd?.[r] ?? 0}
-                  onChange={(e) =>
-                    endre("min_usd", {
-                      ...(s.min_usd || {}),
-                      [r]: Number(String(e.target.value).replace(",", ".")) || 0,
-                    })
-                  }
-                  style={{ width: 68, textAlign: "right" }}
+                <UsdFelt
+                  verdi={s.min_usd?.[r] ?? 0}
+                  onEndret={(v) => endre("min_usd", { ...(s.min_usd || {}), [r]: v })}
                 />
               </Felt>
             ))}
@@ -204,6 +196,33 @@ export default function Innstillinger({ onFeil, onMelding }) {
 
       <Sikkerhet onFeil={onFeil} onMelding={onMelding} />
     </>
+  );
+}
+
+// Feltet holder teksten som tekst mens du skriver. Gjøres den om til tall ved
+// hvert tastetrykk, blir «0,» til 0, og kommaet forsvinner før du rekker å
+// skrive sifferet etter. Tallet lagres når du forlater feltet.
+function UsdFelt({ verdi, onEndret }) {
+  const [tekst, setTekst] = useState(String(verdi ?? 0));
+  useEffect(() => setTekst(String(verdi ?? 0)), [verdi]);
+
+  function lagre() {
+    const n = Number(tekst.replace(",", "."));
+    const gyldig = Number.isFinite(n) && n >= 0 ? n : 0;
+    setTekst(String(gyldig));
+    if (gyldig !== verdi) onEndret(gyldig);
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={tekst}
+      onChange={(e) => setTekst(e.target.value.replace(/[^\d.,]/g, ""))}
+      onBlur={lagre}
+      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+      style={{ width: 68, textAlign: "right" }}
+    />
   );
 }
 
