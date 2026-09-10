@@ -177,6 +177,9 @@ CREATE TABLE IF NOT EXISTS order_lines (
   -- sjeldenhet, og en ny Scryfall-import kunne endret den under føttene på
   -- en ordre som allerede er sendt.
   rarity            TEXT,
+  -- Utgaven kunden oppga, hvis du har byttet den ved mottak. Uten den kan
+  -- ikke endringsloggen fortelle hva som ble byttet fra.
+  set_name_start    TEXT,
   kilde             TEXT NOT NULL DEFAULT 'kunde',
   -- Linjer slettes ikke. En fjernet linje er en del av forklaringen kunden
   -- skal få, og et slettet rad kan ikke forklare noe.

@@ -339,6 +339,47 @@ export async function fjernLinje(linjeId: number, angre = false): Promise<number
   return oppdaterTotal(Number(r.rows[0].order_id));
 }
 
+// Kunden trodde det var Innistrad, men sendte Ultimate Masters. Da byttes
+// kortet på linjen, ikke hele ordren — antall og tilstand står, og prisen
+// regnes om etter det nye settet.
+export async function byttKort(linjeId: number, cardId: string, finish?: string) {
+  const s = await hentSettings();
+  const l = await db().execute({ sql: "SELECT * FROM order_lines WHERE id = ?", args: [linjeId] });
+  const linje: any = l.rows[0];
+  if (!linje) throw new HttpFeil(404, "Fant ikke linjen");
+
+  const k = await db().execute({
+    sql: `SELECT c.*, COALESCE(s.visningsnavn, s.name) AS set_name FROM cards c
+            LEFT JOIN sets s ON s.code = c.set_code WHERE c.id = ?`,
+    args: [cardId],
+  });
+  const kort: any = k.rows[0];
+  if (!kort) throw new HttpFeil(404, "Fant ikke kortet");
+
+  const nyFinish = finish === "foil" ? "foil" : finish === "nonfoil" ? finish : String(linje.finish);
+  const condition = String(linje.condition) as Condition;
+  const regel = await hentSetRule(String(kort.set_code), s);
+  const manuell = await hentManuellPris(cardId, nyFinish);
+  const ore = prisØre(kort, nyFinish, condition, regel, s, manuell);
+
+  await db().execute({
+    sql: `UPDATE order_lines
+             SET card_id = ?, finish = ?, card_name = ?, set_code = ?, set_name = ?,
+                 collector_number = ?, rarity = ?, unit_ore = ?, unit_nok = ?,
+                 set_name_start = COALESCE(set_name_start, ?)
+           WHERE id = ?`,
+    args: [
+      cardId, nyFinish, String(kort.name), String(kort.set_code), String(kort.set_name),
+      kort.collector_number ? String(kort.collector_number) : null,
+      kort.rarity ? String(kort.rarity) : null,
+      ore, Math.round(ore / 100),
+      String(linje.set_name),
+      linjeId,
+    ],
+  });
+  return oppdaterTotal(Number(linje.order_id));
+}
+
 // ── endringslogg ─────────────────────────────────────────────────────────────
 // Utledet, ikke lagret. Alt som trengs ligger allerede frosset på linjene, og
 // en egen loggtabell ville før eller siden kommet i utakt med virkeligheten.
@@ -359,6 +400,12 @@ export async function endringslogg(orderId: number): Promise<Endring[]> {
     if (String(l.kilde) === "admin") {
       ut.push({ hva: "lagt_til", tekst: `${navn}: lagt til ved mottak, ${l.qty} stk. i ${l.condition}` });
       continue;
+    }
+    if (l.set_name_start && l.set_name_start !== l.set_name) {
+      ut.push({
+        hva: "utgave",
+        tekst: `${l.card_name}: oppgitt som ${l.set_name_start}, var ${l.set_name}`,
+      });
     }
     if (l.condition_start && l.condition_start !== l.condition) {
       ut.push({ hva: "condition", tekst: `${navn}: oppgitt ${l.condition_start}, vurdert til ${l.condition}` });

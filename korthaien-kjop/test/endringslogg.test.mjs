@@ -202,3 +202,31 @@ test("lista sorteres på sett, så sjeldenhet, så navn", async () => {
   assert.equal(lagret.linjer[0].card_name, "Liliana of the Veil", "samme rekkefølge fra basen");
   assert.equal(lagret.linjer[0].rarity, "mythic", "sjeldenheten fryses på linjen");
 });
+
+test("admin kan bytte trykk på en linje uten å røre antall", async () => {
+  const { byttKort } = await import("../src/orders.ts");
+  const o = await nyOrdre();
+  await regnOmLinje(o.lid, { condition: "EX" });
+
+  const total = await byttKort(o.lid, "lil-uma");
+  const l = await db().execute({ sql: "SELECT * FROM order_lines WHERE id = ?", args: [o.lid] });
+  assert.equal(l.rows[0].set_name, "Ultimate Masters");
+  assert.equal(l.rows[0].card_id, "lil-uma");
+  assert.equal(l.rows[0].qty, 2, "antallet står");
+  assert.equal(l.rows[0].condition, "EX", "tilstanden står");
+  // $10 × 10 × 70 % × 80 % = 56 kr per kort, to kort
+  assert.equal(Number(l.rows[0].unit_ore), 5600);
+  assert.equal(total, 11200);
+
+  const logg = await endringslogg(o.oid);
+  assert.ok(logg.some((e) => e.hva === "utgave" && /oppgitt som Innistrad, var Ultimate Masters/.test(e.tekst)));
+});
+
+test("bytter du tilbake, forsvinner utgaven fra loggen", async () => {
+  const { byttKort } = await import("../src/orders.ts");
+  const o = await nyOrdre();
+  await byttKort(o.lid, "lil-uma");
+  await byttKort(o.lid, "lil-isd");
+  const logg = await endringslogg(o.oid);
+  assert.ok(!logg.some((e) => e.hva === "utgave"), "ingen endring å forklare");
+});

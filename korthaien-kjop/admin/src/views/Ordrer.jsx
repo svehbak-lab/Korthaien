@@ -115,8 +115,15 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
           <div className="rad-flex" style={{ marginBottom: 14 }}>
             <a href={`mailto:${ordre.email}`}>{ordre.email}</a>
             {ordre.phone && <span className="dempet">{ordre.phone}</span>}
-            {ordre.note && <span className="dempet">Melding: {ordre.note}</span>}
+
           </div>
+
+          {ordre.note && (
+            <div className="varsel info" style={{ marginBottom: 14 }}>
+              <b>Melding fra {ordre.customer_name}</b>
+              <div style={{ whiteSpace: "pre-line", marginTop: 4 }}>{ordre.note}</div>
+            </div>
+          )}
 
           <Linjer linjer={ordre.linjer} onEndret={onEndret} onFeil={onFeil} />
 
@@ -186,6 +193,89 @@ function Linjer({ linjer, onEndret, onFeil }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+// Kunden sendte et annet trykk enn hen valgte. Da byttes kortet på linjen —
+// antall og tilstand står, prisen regnes om etter det nye settet, og
+// endringsloggen forteller kunden hva som ble byttet fra.
+function Utgave({ linje, onEndret, onFeil }) {
+  const [åpen, setÅpen] = useState(false);
+  const [treff, setTreff] = useState(null);
+  const [jobber, setJobber] = useState(false);
+
+  useEffect(() => {
+    if (!åpen || treff) return;
+    api
+      .søkKort(linje.card_name)
+      .then((r) => setTreff(r.filter((k) => k.name === linje.card_name)))
+      .catch(() => setTreff([]));
+  }, [åpen, treff, linje.card_name]);
+
+  async function bytt(kort, finish) {
+    setJobber(true);
+    try {
+      await api.byttKort(linje.id, kort.id, finish);
+      setÅpen(false);
+      onEndret();
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setJobber(false);
+    }
+  }
+
+  if (!åpen) {
+    return (
+      <>
+        <span className="kode">{linje.set_code.toUpperCase()}</span>{" "}
+        {linje.collector_number && <span className="kode dempet">#{linje.collector_number}</span>}
+        {linje.finish === "foil" && <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>Foil</span>}
+        <button
+          className="knapp blank"
+          style={{ display: "block", padding: 0, fontSize: 12 }}
+          onClick={() => setÅpen(true)}
+        >
+          Bytt
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <div>
+      {!treff && <span className="dempet">Henter…</span>}
+      {treff && (
+        <select
+          value={`${linje.card_id}:${linje.finish}`}
+          disabled={jobber}
+          onChange={(e) => {
+            const [id, finish] = e.target.value.split(":");
+            const k = treff.find((x) => x.id === id);
+            if (k) bytt(k, finish);
+          }}
+          style={{ maxWidth: 230 }}
+        >
+          {treff.flatMap((k) =>
+            [
+              Number(k.has_nonfoil) !== 0 ? "nonfoil" : null,
+              Number(k.has_foil) ? "foil" : null,
+            ]
+              .filter(Boolean)
+              .map((f) => (
+                <option key={`${k.id}:${f}`} value={`${k.id}:${f}`}>
+                  {k.set_name} #{k.collector_number}
+                  {f === "foil" ? " (foil)" : ""}
+                </option>
+              ))
+          )}
+        </select>
+      )}
+      {treff && !treff.length && <span className="dempet">Fant ingen andre trykk.</span>}
+      <button className="knapp blank" style={{ padding: 0, fontSize: 12 }} onClick={() => setÅpen(false)}>
+        Avbryt
+      </button>
+    </div>
   );
 }
 
@@ -262,9 +352,7 @@ function Linje({ linje, onEndret, onFeil }) {
         <div className="sett">{linje.set_name}</div>
       </td>
       <td>
-        <span className="kode">{linje.set_code.toUpperCase()}</span>{" "}
-        {linje.collector_number && <span className="kode dempet">#{linje.collector_number}</span>}
-        {linje.finish === "foil" && <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>Foil</span>}
+        <Utgave linje={linje} onEndret={onEndret} onFeil={onFeil} />
       </td>
       <td>
         <select value={cond} onChange={(e) => setCond(e.target.value)}>

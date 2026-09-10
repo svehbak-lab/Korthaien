@@ -133,6 +133,9 @@ async function leggTilNyeKolonner(): Promise<void> {
     await db().execute(`UPDATE order_lines SET rarity =
       (SELECT c.rarity FROM cards c WHERE c.id = order_lines.card_id)`);
   }
+  if (linjer2.size && !linjer2.has("set_name_start")) {
+    await db().execute("ALTER TABLE order_lines ADD COLUMN set_name_start TEXT");
+  }
   if (linjer2.size && !linjer2.has("kilde")) {
     await db().execute("ALTER TABLE order_lines ADD COLUMN kilde TEXT NOT NULL DEFAULT 'kunde'");
   }

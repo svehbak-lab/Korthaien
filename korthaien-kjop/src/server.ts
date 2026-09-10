@@ -7,7 +7,7 @@ import { sendBekreftelse, varsleMeg, varsleStatus, sendOppgjør } from "./epost.
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
   lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal,
-  leggTilLinje, fjernLinje, endringslogg, instruksjoner, SORTERING,
+  leggTilLinje, fjernLinje, byttKort, endringslogg, instruksjoner, SORTERING,
   settRabattkode, markerKredittSendt, HttpFeil,
 } from "./orders.js";
 import { hentSetRule } from "./pricing.js";
@@ -257,8 +257,13 @@ app.patch("/api/admin/orders/:id", krevAdmin, fang(async (req: any, res: any) =>
 app.patch("/api/admin/lines/:id", krevAdmin, fang(async (req: any, res: any) => {
   const id = Number(req.params.id);
   const { qty, qty_received, condition } = req.body || {};
-  if (condition === undefined && qty === undefined && qty_received === undefined) {
+  if (condition === undefined && qty === undefined && qty_received === undefined && !req.body?.card_id) {
     throw new HttpFeil(400, "Ingenting å endre");
+  }
+  if (req.body?.card_id) {
+    // Bytte av trykk: antall og tilstand står, prisen regnes om etter settet.
+    const total = await byttKort(id, String(req.body.card_id), req.body?.finish);
+    return res.json({ ok: true, total_ore: total });
   }
   const ut = await regnOmLinje(id, { condition, qty, qty_received });
   const l = await db().execute({ sql: "SELECT order_id FROM order_lines WHERE id = ?", args: [id] });
@@ -659,8 +664,9 @@ app.get("/api/admin/cards/search", krevAdmin, fang(async (req: any, res: any) =>
   const rent = q.replace(/\([^)]*\)/g, "").replace(/\bfoil\b/gi, "").trim();
   const norm = normaliser(rent);
   const r = await db().execute({
-    sql: `SELECT c.id, c.name, c.set_code, s.name AS set_name, c.collector_number,
-                 c.rarity, c.image_uri, c.has_foil, c.released_at
+    sql: `SELECT c.id, c.name, c.set_code,
+                 COALESCE(s.visningsnavn, s.name) AS set_name, c.collector_number,
+                 c.rarity, c.image_uri, c.has_foil, c.has_nonfoil, c.released_at
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
            WHERE c.name_norm = ? OR c.name_norm LIKE ?
               OR c.front_norm = ? OR c.front_norm LIKE ?

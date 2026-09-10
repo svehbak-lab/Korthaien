@@ -72,6 +72,8 @@ export const api = {
     kall(`/api/admin/orders/${ordreId}/lines`, { method: "POST", body: linje }),
   testEpost: (id, hvilken) =>
     kall(`/api/admin/orders/${id}/testepost`, { method: "POST", body: { hvilken } }),
+  byttKort: (linjeId, card_id, finish) =>
+    kall(`/api/admin/lines/${linjeId}`, { method: "PATCH", body: { card_id, finish } }),
   ordreLogg: (id) => kall(`/api/admin/orders/${id}/logg`),
   angreFjerning: (id) => kall(`/api/admin/lines/${id}?angre=1`, { method: "DELETE" }),
   lagreKreditt: (id, felt) => kall(`/api/admin/orders/${id}/kreditt`, { method: "PUT", body: felt }),
