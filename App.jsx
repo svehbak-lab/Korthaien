@@ -105,7 +105,7 @@ export default function App() {
 
         {steg === "velg" && (
           <div className="hero">
-            <h1>Kortene dine er verdt noe her</h1>
+            <h1>Selg kort til Korthaien</h1>
             <p className="ingress">
               Søk opp kortene eller lim inn hele lista. Du ser prisen med én gang,
               og hvor mange jeg har plass til. Oppgjøret er butikkreditt på
