@@ -98,7 +98,7 @@ export function Treff({ tilbud, kurv, onLegg }) {
         ) : (
           <div className="bilde" />
         )}
-        <div style={{ minWidth: 0, flex: 1 }}>
+        <div className="midt">
           <div className="rad-flex" style={{ gap: 8 }}>
             <span className="navn">{tilbud.name}</span>
             {tilbud.finish === "foil" && <span className="merkelapp m-foil">Foil</span>}
@@ -107,7 +107,18 @@ export function Treff({ tilbud, kurv, onLegg }) {
             {tilbud.set_name}
             {tilbud.collector_number ? <span className="kode dempet"> #{tilbud.collector_number}</span> : null}
           </div>
+          <div style={{ marginTop: 7 }}>
+            {plass > 0 ? (
+              <span className="merkelapp m-ledig">Inntil {plass} stk.</span>
+            ) : (
+              <span className="merkelapp m-nei">Kvoten er full</span>
+            )}
+          </div>
+        </div>
 
+        {/* Prisene til høyre. Der er det plass til alle fire tilstandene på
+            én linje, og raden blir ikke høyere enn kortbildet. */}
+        <div className="hoyre">
           <div className="kreditt-merk">Store credit</div>
           <div className="priser">
             {tilbud.conditions.map((c) => (
@@ -122,14 +133,6 @@ export function Treff({ tilbud, kurv, onLegg }) {
                 <b>{kroner(c.ore)}</b>
               </button>
             ))}
-          </div>
-
-          <div style={{ marginTop: 7 }}>
-            {plass > 0 ? (
-              <span className="merkelapp m-ledig">Inntil {plass} stk.</span>
-            ) : (
-              <span className="merkelapp m-nei">Kvoten er full</span>
-            )}
           </div>
         </div>
       </div>

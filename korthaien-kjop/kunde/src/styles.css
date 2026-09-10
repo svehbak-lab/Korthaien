@@ -172,9 +172,15 @@ h3 { font-size: 15.5px; margin: 20px 0 4px; }
 
 .treff {
   background: var(--flate); border: 1px solid var(--strek);
-  border-radius: 12px; padding: 14px 16px; margin-bottom: 10px;
+  border-radius: 12px; padding: 13px 16px; margin-bottom: 9px;
 }
-.treff .rad { display: flex; gap: 14px; }
+.treff .rad { display: flex; gap: 14px; align-items: flex-start; }
+.treff .midt { min-width: 0; flex: 1; }
+/* Prisene ligger til høyre, der det er plass til alle fire tilstandene. Da
+   blir raden ikke høyere enn kortbildet, og lista lar seg skumme. */
+.treff .hoyre { flex: none; text-align: right; }
+.treff .hoyre .kreditt-merk { margin-top: 0; margin-bottom: 5px; }
+.treff .hoyre .priser { justify-content: flex-end; margin: 0; }
 .treff .navn { font-weight: 600; letter-spacing: -0.01em; }
 .treff .sett { color: var(--dempet); font-size: 13.5px; }
 
@@ -209,7 +215,7 @@ h3 { font-size: 15.5px; margin: 20px 0 4px; }
 .pris-knapp {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
   border: 1px solid var(--strek-sterk); background: var(--flate);
-  border-radius: 9px; padding: 7px 13px 8px; min-width: 96px;
+  border-radius: 9px; padding: 6px 11px 7px; min-width: 88px;
 }
 .pris-knapp .cond { font-size: 11.5px; color: var(--dempet); }
 .pris-knapp b { font-size: 15.5px; color: var(--brass); letter-spacing: -0.01em; }
@@ -304,6 +310,14 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
 }
 
 /* ── mobil ───────────────────────────────────────────────────────────────── */
+@media (max-width: 620px) {
+  /* På telefon er det ikke plass til to kolonner ved siden av kortet.
+     Prisene faller ned under, men raden er kort nok til å tåle det. */
+  .treff .rad { flex-wrap: wrap; }
+  .treff .hoyre { flex-basis: 100%; text-align: left; }
+  .treff .hoyre .priser { justify-content: flex-start; }
+}
+
 @media (max-width: 900px) {
   .todelt { grid-template-columns: 1fr; }
   .kurv { position: static; }
