@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import { db, migrate, hentSettings, settSetting, normaliser, CONDITIONS, type Settings } from "./db.js";
 import { søk, løsBulk, tilbudFor } from "./catalog.js";
 import { sendBekreftelse, varsleMeg, varsleStatus, sendOppgjør } from "./epost.js";
+import { bokførOrdre, reverserOrdre, beholdning, historikk, settBeholdning, avvikMotMystore } from "./lager.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
   lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal,
@@ -234,6 +235,13 @@ app.patch("/api/admin/orders/:id", krevAdmin, fang(async (req: any, res: any) =>
     throw new HttpFeil(400, "Ukjent status");
   }
   if (status) {
+    const før = await db().execute({ sql: "SELECT status FROM orders WHERE id = ?", args: [id] });
+    // Går ordren ut av «gjort opp», skal kortene ut av lageret igjen. Ellers
+    // står det kort der som aldri kom inn, og den feilen er vanskelig å finne
+    // et halvår senere.
+    if (String(før.rows[0]?.status) === "stocked" && status !== "stocked") {
+      await reverserOrdre(id);
+    }
     await db().execute({
       sql: "UPDATE orders SET status = ?, received_at = ? WHERE id = ?",
       args: [status, ["received", "stocked"].includes(status) ? new Date().toISOString() : null, id],
@@ -779,6 +787,9 @@ app.put("/api/admin/orders/:id/kreditt", krevAdmin, fang(async (req: any, res: a
   await settRabattkode(id, req.body?.discount_code ?? null, req.body?.credit_note ?? null);
   if (req.body?.sendt) {
     await markerKredittSendt(id);
+    // Kortene går inn på lager her. Bokføringen er idempotent, så to klikk
+    // gir dem ikke to ganger.
+    await bokførOrdre(id);
     if (req.body?.varsle !== false) iBakgrunnen("oppgjør", sendOppgjør(id));
   }
   const r = await db().execute({ sql: "SELECT * FROM orders WHERE id = ?", args: [id] });

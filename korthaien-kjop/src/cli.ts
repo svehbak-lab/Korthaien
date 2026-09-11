@@ -8,6 +8,7 @@ import { analyserGruppe, skrivAnalyse } from "./analyser.js";
 import { helsesjekk } from "./helse.js";
 import { utløpGamleOrdrer } from "./orders.js";
 import { hvorfor } from "./hvorfor.js";
+import { åpningsbeholdningFraMystore, avvikMotMystore } from "./lager.js";
 
 // Kommandolinje for jobbene. Render kjører disse som cron.
 
@@ -118,6 +119,17 @@ switch (kommando) {
     console.log(n ? `${n} dobbeltsidige kort oppdatert.` : "Alt er allerede indeksert.");
     break;
   }
+  case "lager-fra-mystore":
+    await åpningsbeholdningFraMystore();
+    break;
+  case "lageravvik": {
+    const rader = await avvikMotMystore(40);
+    if (!rader.length) console.log("Ingen avvik. Eget lager og Mystore er i takt.");
+    for (const r of rader as any[]) {
+      console.log(`${String(r.name || r.card_id).padEnd(34)} ${String(r.set_code || "").padEnd(6)} ${String(r.finish).padEnd(8)} Mystore ${r.mystore}  eget ${r.eget}`);
+    }
+    break;
+  }
   case "hvorfor":
     await hvorfor(process.argv.slice(3).join(" "));
     break;
@@ -132,6 +144,6 @@ switch (kommando) {
     break;
   }
   default:
-    console.log("Bruk: import | sett | mystore | gjett | helse | hvorfor <kortnavn> | analyser [settkode…] | skrivefeil | rydd | reindeks | seed | expire | sett-kurs <tall>");
+    console.log("Bruk: import | sett | mystore | gjett | helse | hvorfor <kortnavn> | lager-fra-mystore | lageravvik | analyser [settkode…] | skrivefeil | rydd | reindeks | seed | expire | sett-kurs <tall>");
 }
 process.exit(0);

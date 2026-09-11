@@ -122,6 +122,23 @@ CREATE TABLE IF NOT EXISTS card_prices (
 
 -- Tilstander du tar imot for ett bestemt kort, når settets regel er for grov.
 -- Noen kort i et sett er verdt å ta i dårlig stand selv om resten ikke er det.
+-- Varelageret føres som bevegelser. Beholdningen er summen av dem. Se
+-- kommentaren øverst i lager.ts for hvorfor.
+CREATE TABLE IF NOT EXISTS lager_bevegelser (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_id     TEXT NOT NULL,
+  finish      TEXT NOT NULL CHECK (finish IN ('nonfoil','foil')),
+  condition   TEXT NOT NULL,
+  -- Fortegn: positivt inn, negativt ut.
+  antall      INTEGER NOT NULL,
+  grunn       TEXT NOT NULL,
+  order_id    INTEGER,
+  notat       TEXT,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_lager_kort  ON lager_bevegelser (card_id, finish, condition);
+CREATE INDEX IF NOT EXISTS idx_lager_ordre ON lager_bevegelser (order_id);
+
 CREATE TABLE IF NOT EXISTS card_conditions (
   card_id     TEXT PRIMARY KEY,
   conditions  TEXT NOT NULL,
