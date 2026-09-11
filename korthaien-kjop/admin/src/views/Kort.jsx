@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { api, kroner } from "../api.js";
+import { api, kroner, CONDITIONS } from "../api.js";
 
 const KOLONNER = [
   { id: "collector_number", navn: "Nr.", bredde: 50 },
   { id: "name", navn: "Kort" },
   { id: "rarity", navn: "Raritet", bredde: 90 },
   { id: "usd", navn: "USD", h: true, bredde: 70 },
+  { id: "egne_conditions", navn: "Tar imot", bredde: 150 },
   { id: "prod_nonfoil", navn: "Hos Korthaien", bredde: 230 },
   { id: "stock_nonfoil", navn: "På lager", h: true, bredde: 80 },
   { id: "ledig_nonfoil", navn: "Kan selges", h: true, bredde: 90 },
@@ -225,7 +226,7 @@ export default function Kort({ sett, onFeil, onByttSett }) {
           </thead>
           <tbody>
             {synlige.slice(0, 500).map((k) => (
-              <KortRad key={k.id} kort={k} onFeil={onFeil} onEndret={last} sett={sett} />
+              <KortRad key={k.id} kort={k} regel={regel} onFeil={onFeil} onEndret={last} sett={sett} />
             ))}
           </tbody>
         </table>
@@ -280,7 +281,54 @@ function Massefelt({ antall, raritet, harFoil, jobber, onSett }) {
   );
 }
 
-function KortRad({ kort, onFeil, onEndret, sett }) {
+// Settregelen er grov. Noen kort i et sett er verdt å ta i dårligere stand
+// enn resten, og da settes tilstandene her. Tomt valg betyr at settets regel
+// gjelder — og det er tilstanden man vil tilbake til, ikke en tom liste.
+function Tilstander({ kort, regel, onFeil }) {
+  const fra = kort.egne_conditions ? JSON.parse(kort.egne_conditions) : null;
+  const [egne, setEgne] = useState(fra);
+  const [jobber, setJobber] = useState(false);
+  const gjeldende = egne ?? regel.conditions ?? [];
+
+  async function veksle(c) {
+    const ny = gjeldende.includes(c)
+      ? gjeldende.filter((x) => x !== c)
+      : CONDITIONS.filter((x) => gjeldende.includes(x) || x === c);
+    // Er lista lik settets igjen, fjernes overstyringen i stedet for å
+    // dupliseres — da følger kortet settet automatisk hvis du endrer det.
+    const likSettet =
+      ny.length === (regel.conditions || []).length &&
+      ny.every((x) => (regel.conditions || []).includes(x));
+    setJobber(true);
+    try {
+      await api.lagreKortConditions(kort.id, likSettet ? [] : ny);
+      setEgne(likSettet ? null : ny);
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setJobber(false);
+    }
+  }
+
+  return (
+    <div className="rad-flex" style={{ gap: 3 }} title={egne ? "Egen regel for dette kortet" : "Følger settet"}>
+      {CONDITIONS.map((c) => (
+        <button
+          key={c}
+          className={`knapp liten ${gjeldende.includes(c) ? "primar" : ""}`}
+          disabled={jobber}
+          style={{ padding: "2px 7px", fontSize: 12 }}
+          onClick={() => veksle(c)}
+        >
+          {c}
+        </button>
+      ))}
+      {egne && <span className="merkelapp m-vent" style={{ marginLeft: 2 }}>egen</span>}
+    </div>
+  );
+}
+
+function KortRad({ kort, regel, onFeil, onEndret, sett }) {
   return (
     <tr>
       <td className="kode dempet">
@@ -306,6 +354,9 @@ function KortRad({ kort, onFeil, onEndret, sett }) {
         )}
       </td>
       <td className="dempet">{kort.rarity || "\u2014"}</td>
+      <td>
+        <Tilstander kort={kort} regel={regel} onFeil={onFeil} />
+      </td>
       <td className="h tall dempet">
         {kort.pris_nonfoil
           ? <span title="Manuell pris">${Number(kort.pris_nonfoil).toFixed(2)}<span style={{ color: "var(--aksent)" }}>*</span></span>

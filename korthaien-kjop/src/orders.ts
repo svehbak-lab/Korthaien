@@ -14,7 +14,7 @@ export const SORTERING = `set_name,
     WHEN 'mythic' THEN 0 WHEN 'rare' THEN 1
     WHEN 'uncommon' THEN 2 WHEN 'common' THEN 3 ELSE 4 END,
   card_name`;
-import { prisØre, hentSetRule, hentManuellPris } from "./pricing.js";
+import { prisØre, hentSetRule, hentManuellPris, hentEgneConditionsFor } from "./pricing.js";
 import { hentKvote } from "./quota.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -86,8 +86,12 @@ export async function lagOrdre(input: {
     }
 
     const regel = await hentSetRule(String(kort.set_code), s);
-    if (!regel.conditions.includes(l.condition)) {
-      avvist.push({ ...l, grunn: `${l.condition} tas ikke imot for dette settet` });
+    // Kortets egen liste må leses før sjekken, ellers avvises en tilstand du
+    // har åpnet for akkurat dette kortet.
+    const egne = await hentEgneConditionsFor(l.card_id);
+    const godtatt = egne?.length ? egne : regel.conditions;
+    if (!godtatt.includes(l.condition)) {
+      avvist.push({ ...l, grunn: `${l.condition} tas ikke imot for dette kortet` });
       continue;
     }
 
@@ -102,7 +106,7 @@ export async function lagOrdre(input: {
 
     const qty = Math.min(l.qty, ledig);
     const manuell = await hentManuellPris(l.card_id, l.finish);
-    const pris = prisØre(kort, l.finish, l.condition, regel, s, manuell);
+    const pris = prisØre(kort, l.finish, l.condition, regel, s, manuell, egne);
     if (pris <= 0) {
       avvist.push({ ...l, grunn: "Ingen gyldig pris for dette kortet" });
       continue;
@@ -253,7 +257,8 @@ export async function regnOmLinje(
   if (kort) {
     const regel = await hentSetRule(String(kort.set_code), s);
     const manuell = await hentManuellPris(String(linje.card_id), String(linje.finish));
-    const ny = prisØre(kort, String(linje.finish), condition, regel, s, manuell);
+    const egne = await hentEgneConditionsFor(String(linje.card_id));
+    const ny = prisØre(kort, String(linje.finish), condition, regel, s, manuell, egne);
     // Tar jeg ikke imot tilstanden fra dette settet, blir prisen 0. Det er et
     // gyldig utfall — linjen betales ikke — men den skal ikke stilltiende
     // beholde gammel pris.
@@ -307,7 +312,8 @@ export async function leggTilLinje(
 
   const regel = await hentSetRule(String(kort.set_code), s);
   const manuell = await hentManuellPris(input.card_id, input.finish);
-  const ore = prisØre(kort, input.finish, input.condition, regel, s, manuell);
+  const egne = await hentEgneConditionsFor(input.card_id);
+  const ore = prisØre(kort, input.finish, input.condition, regel, s, manuell, egne);
 
   const sett = await db().execute({ sql: "SELECT COALESCE(visningsnavn, name) AS name FROM sets WHERE code = ?", args: [String(kort.set_code)] });
   await db().execute({
@@ -360,7 +366,8 @@ export async function byttKort(linjeId: number, cardId: string, finish?: string)
   const condition = String(linje.condition) as Condition;
   const regel = await hentSetRule(String(kort.set_code), s);
   const manuell = await hentManuellPris(cardId, nyFinish);
-  const ore = prisØre(kort, nyFinish, condition, regel, s, manuell);
+  const egne = await hentEgneConditionsFor(cardId);
+  const ore = prisØre(kort, nyFinish, condition, regel, s, manuell, egne);
 
   await db().execute({
     sql: `UPDATE order_lines

@@ -1,5 +1,5 @@
 import { db, hentSettings, normaliser, CONDITION_NAVN, type Condition, type Settings } from "./db.js";
-import { prisØre, hentAlleSetRules, hentManuellePriser, standardRegel, type SetRule } from "./pricing.js";
+import { prisØre, hentAlleSetRules, hentManuellePriser, hentEgneConditions, standardRegel, type SetRule } from "./pricing.js";
 import { hentKvoterBulk, regnLedig } from "./quota.js";
 import { finnKandidater, type Kandidat } from "./bulk.js";
 import { byggIndeks, finnSett } from "./settnavn.js";
@@ -37,6 +37,7 @@ async function byggTilbud(
   }
   const kvoter = await hentKvoterBulk(nøkler);
   const manuelle = await hentManuellePriser(kandidater.map((k) => k.card_id));
+  const egne = await hentEgneConditions(kandidater.map((k) => k.card_id));
 
   const ut: Tilbud[] = [];
   for (const k of kandidater) {
@@ -49,8 +50,14 @@ async function byggTilbud(
       if (kvote.available <= 0) continue;
 
       const manuell = manuelle.get(`${k.card_id}:${finish}`) ?? null;
-      const conditions = regel.conditions
-        .map((c) => ({ condition: c, navn: CONDITION_NAVN[c], ore: prisØre(k, finish, c, regel, s, manuell) }))
+      // Kortets egen liste slår settets, der du har satt en.
+      const mine = egne.get(k.card_id) ?? null;
+      const conditions = (mine ?? regel.conditions)
+        .map((c) => ({
+          condition: c,
+          navn: CONDITION_NAVN[c],
+          ore: prisØre(k, finish, c, regel, s, manuell, mine),
+        }))
         .filter((c) => c.ore > 0);
       if (!conditions.length) continue;
 

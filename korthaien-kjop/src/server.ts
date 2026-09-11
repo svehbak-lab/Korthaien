@@ -463,6 +463,7 @@ app.get("/api/admin/cards", krevAdmin, fang(async (req: any, res: any) => {
                  c.has_foil, c.image_uri, c.variant, c.set_code,
                  (SELECT wanted FROM card_wants w WHERE w.card_id = c.id AND w.finish='nonfoil') AS want_nonfoil,
                  (SELECT wanted FROM card_wants w WHERE w.card_id = c.id AND w.finish='foil')    AS want_foil,
+                 (SELECT conditions FROM card_conditions cc WHERE cc.card_id = c.id) AS egne_conditions,
                  (SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='nonfoil') AS pris_nonfoil,
                  (SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='foil')    AS pris_foil,
                  (SELECT qty        FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS stock_nonfoil,
@@ -572,6 +573,24 @@ app.put("/api/admin/cards/:id/pris", krevAdmin, fang(async (req: any, res: any) 
     args: [String(req.params.id), finish, usd, req.body?.kilde || null, new Date().toISOString()],
   });
   res.json({ ok: true, usd });
+}));
+
+// Tilstander for ett bestemt kort. Tom liste betyr at settets regel gjelder.
+app.put("/api/admin/cards/:id/conditions", krevAdmin, fang(async (req: any, res: any) => {
+  const inn = Array.isArray(req.body?.conditions) ? req.body.conditions : [];
+  const rene = CONDITIONS.filter((c) => inn.includes(c));
+  const id = String(req.params.id);
+  if (!rene.length) {
+    await db().execute({ sql: "DELETE FROM card_conditions WHERE card_id = ?", args: [id] });
+    return res.json({ ok: true, conditions: null });
+  }
+  await db().execute({
+    sql: `INSERT INTO card_conditions (card_id, conditions, updated_at) VALUES (?, ?, ?)
+          ON CONFLICT(card_id) DO UPDATE SET conditions = excluded.conditions,
+                                             updated_at = excluded.updated_at`,
+    args: [id, JSON.stringify(rene), new Date().toISOString()],
+  });
+  res.json({ ok: true, conditions: rene });
 }));
 
 app.delete("/api/admin/cards/:id/pris", krevAdmin, fang(async (req: any, res: any) => {

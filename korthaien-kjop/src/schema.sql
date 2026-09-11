@@ -104,6 +104,14 @@ CREATE TABLE IF NOT EXISTS card_prices (
   PRIMARY KEY (card_id, finish)
 );
 
+-- Tilstander du tar imot for ett bestemt kort, når settets regel er for grov.
+-- Noen kort i et sett er verdt å ta i dårlig stand selv om resten ikke er det.
+CREATE TABLE IF NOT EXISTS card_conditions (
+  card_id     TEXT PRIMARY KEY,
+  conditions  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS card_wants (
   card_id     TEXT NOT NULL,
   finish      TEXT NOT NULL CHECK (finish IN ('nonfoil','foil')),

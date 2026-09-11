@@ -77,6 +77,8 @@ export const api = {
   ordreLogg: (id) => kall(`/api/admin/orders/${id}/logg`),
   angreFjerning: (id) => kall(`/api/admin/lines/${id}?angre=1`, { method: "DELETE" }),
   lagreKreditt: (id, felt) => kall(`/api/admin/orders/${id}/kreditt`, { method: "PUT", body: felt }),
+  lagreKortConditions: (id, conditions) =>
+    kall(`/api/admin/cards/${id}/conditions`, { method: "PUT", body: { conditions } }),
   lagrePris: (id, finish, usd) =>
     kall(`/api/admin/cards/${id}/pris`, { method: "PUT", body: { finish, usd } }),
   nullstillPris: (id, finish) =>

@@ -52,10 +52,16 @@ export function prisØre(
   kort: { usd?: number | null; usd_foil?: number | null; rarity?: string | null },
   finish: string,
   condition: Condition,
-  regel: { ladder: Ladder; buy_pct?: number | null },
+  regel: { ladder: Ladder; buy_pct?: number | null; conditions?: Condition[] },
   s: Pick<Settings, "usd_nok" | "buy_pct" | "min_buy_ore"> & { min_usd?: Record<string, number> },
-  manuellUsd?: number | null
+  manuellUsd?: number | null,
+  egneConditions?: Condition[] | null
 ): number {
+  // Hvilke tilstander som godtas avgjøres her, ikke bare i grensesnittet.
+  // Ellers kunne en ordre sendt rett mot API-et be om en tilstand du ikke
+  // tar imot, og få pris på den fordi trappen tilfeldigvis har en sats.
+  const godtatt = egneConditions?.length ? egneConditions : regel.conditions;
+  if (godtatt && !godtatt.includes(condition)) return 0;
   const usd = manuellUsd && manuellUsd > 0 ? manuellUsd : prisenFor(kort, finish);
   // Terskelen gjelder markedsprisen, ikke utbetalingen. Ligger kortet under,
   // kjøpes det ikke — da slipper du å håndtere bulk du ikke tjener på. Sjekken
@@ -81,6 +87,35 @@ export async function hentManuellePriser(cardIds: string[]): Promise<Map<string,
     for (const x of r.rows as any[]) kart.set(`${x.card_id}:${x.finish}`, Number(x.usd));
   }
   return kart;
+}
+
+export async function hentEgneConditions(cardIds: string[]): Promise<Map<string, Condition[]>> {
+  const kart = new Map<string, Condition[]>();
+  const ider = [...new Set(cardIds)].filter(Boolean);
+  if (!ider.length) return kart;
+  for (let i = 0; i < ider.length; i += 400) {
+    const del = ider.slice(i, i + 400);
+    const r = await db().execute({
+      sql: `SELECT card_id, conditions FROM card_conditions
+             WHERE card_id IN (${del.map(() => "?").join(",")})`,
+      args: del,
+    });
+    for (const x of r.rows as any[]) {
+      const c = trygtJson<Condition[]>(x.conditions, []);
+      if (c.length) kart.set(String(x.card_id), c);
+    }
+  }
+  return kart;
+}
+
+export async function hentEgneConditionsFor(cardId: string): Promise<Condition[] | null> {
+  const r = await db().execute({
+    sql: "SELECT conditions FROM card_conditions WHERE card_id = ?",
+    args: [cardId],
+  });
+  if (!r.rows[0]) return null;
+  const c = trygtJson<Condition[]>(r.rows[0].conditions, []);
+  return c.length ? c : null;
 }
 
 export async function hentManuellPris(cardId: string, finish: string): Promise<number | null> {
