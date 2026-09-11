@@ -185,3 +185,29 @@ textarea { width: 100%; font-family: inherit; }
   text-underline-offset: 2px;
 }
 .knapp.handling:hover { color: var(--blekk); }
+
+/* Faner som sidenavigasjon. Brukes i butikkvisningen til å veksle mellom
+   enkeltkort og foils — de leses som to sider, ikke som to knapper. */
+.faner {
+  display: flex;
+  align-items: flex-end;
+  gap: 22px;
+  border-bottom: 1px solid var(--strek);
+}
+.faner button {
+  border: none;
+  background: none;
+  color: var(--dempet);
+  font-size: 16px;
+  font-weight: 500;
+  padding: 0 0 9px;
+  margin-bottom: -1px;
+  border-bottom: 2.5px solid transparent;
+  cursor: pointer;
+}
+.faner button:hover { color: var(--blekk); }
+.faner button[aria-selected="true"] {
+  color: var(--blekk);
+  font-weight: 650;
+  border-bottom-color: var(--aksent);
+}

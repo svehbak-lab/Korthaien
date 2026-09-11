@@ -41,7 +41,7 @@ export default function Butikk({ onFeil }) {
   const [alle, setAlle] = useState([]);
   const [data, setData] = useState(null);
   const [laster, setLaster] = useState(false);
-  const [visning, setVisning] = useState("tekst");
+  const [visning, setVisning] = useState("detalj");
   const [finish, setFinish] = useState("nonfoil");
   const [sortering, setSortering] = useState("navn");
   const [perSide, setPerSide] = useState(25);
@@ -164,39 +164,64 @@ export default function Butikk({ onFeil }) {
 
           {sett && (
             <>
-              <div className="panel">
-                <div className="krop rad-flex" style={{ gap: 14 }}>
-                  {["nonfoil", "foil"].map((x) => (
-                    <button
-                      key={x}
-                      className={`knapp liten ${finish === x ? "primar" : ""}`}
-                      onClick={() => setFinish(x)}
-                    >
-                      {x === "foil" ? "Foils" : "Vanlige"}
-                    </button>
-                  ))}
+              <div className="panel" style={{ paddingBottom: 0 }}>
+                <div className="krop" style={{ paddingBottom: 0 }}>
+                  {/* Fanene er sidenavigasjon, ikke knapper. Antallet i
+                      parentes er det som gjør dem verdt å ha. */}
+                  <div className="faner" role="tablist">
+                    {[
+                      { id: "nonfoil", navn: "Enkeltkort" },
+                      { id: "foil", navn: "Foils" },
+                    ].map((x) => (
+                      <button
+                        key={x.id}
+                        role="tab"
+                        aria-selected={finish === x.id}
+                        onClick={() => setFinish(x.id)}
+                      >
+                        {x.navn}
+                        {data && <span className="dempet"> ({data.antall?.[x.id] ?? 0})</span>}
+                      </button>
+                    ))}
 
-                  <label className="dempet" style={{ marginLeft: "auto" }}>
-                    Sorter{" "}
-                    <select value={sortering} onChange={(e) => setSortering(e.target.value)}>
-                      {SORTERING.map((s) => <option key={s.id} value={s.id}>{s.navn}</option>)}
-                    </select>
-                  </label>
-                  <label className="dempet">
-                    Vis{" "}
-                    <select value={perSide} onChange={(e) => setPerSide(Number(e.target.value))}>
-                      {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                  </label>
-                  {["tekst", "detalj"].map((v) => (
-                    <button
-                      key={v}
-                      className={`knapp liten ${visning === v ? "primar" : ""}`}
-                      onClick={() => setVisning(v)}
-                    >
-                      {v === "tekst" ? "Tekst" : "Detalj"}
-                    </button>
-                  ))}
+                    <div style={{ marginLeft: "auto", display: "flex", gap: 2, paddingBottom: 8 }}>
+                      <VisningsIkon
+                        aktiv={visning === "tekst"}
+                        tittel="Tekstvisning"
+                        onClick={() => setVisning("tekst")}
+                        strek
+                      />
+                      <VisningsIkon
+                        aktiv={visning === "detalj"}
+                        tittel="Detaljvisning"
+                        onClick={() => setVisning("detalj")}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rad-flex" style={{ padding: "10px 0", justifyContent: "space-between" }}>
+                    <span className="dempet">
+                      {data
+                        ? data.totalt === 0
+                          ? "Ingen treff"
+                          : `${(data.side - 1) * data.perSide + 1}–${Math.min(data.side * data.perSide, data.totalt)} av ${data.totalt}`
+                        : ""}
+                    </span>
+                    <div className="rad-flex">
+                      <label className="dempet">
+                        Sorter{" "}
+                        <select value={sortering} onChange={(e) => setSortering(e.target.value)}>
+                          {SORTERING.map((x) => <option key={x.id} value={x.id}>{x.navn}</option>)}
+                        </select>
+                      </label>
+                      <label className="dempet">
+                        Vis{" "}
+                        <select value={perSide} onChange={(e) => setPerSide(Number(e.target.value))}>
+                          {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -205,7 +230,6 @@ export default function Butikk({ onFeil }) {
               {!laster && data && (
                 <>
                   <p className="dempet">
-                    {data.totalt} treff i {finish === "foil" ? "foil" : "vanlig utgave"}.
                     {data.utenPris > 0 && (
                       <>
                         {" "}
@@ -266,6 +290,44 @@ function FoilMerke() {
     >
       FOIL
     </span>
+  );
+}
+
+// To ikoner i stedet for ordene «Tekst» og «Detalj». Symbolene er kjente fra
+// enhver nettbutikk, og de tar mindre plass enn teksten de erstatter.
+function VisningsIkon({ aktiv, tittel, onClick, strek }) {
+  return (
+    <button
+      title={tittel}
+      aria-label={tittel}
+      aria-pressed={aktiv}
+      onClick={onClick}
+      style={{
+        border: "1px solid var(--strek)",
+        background: aktiv ? "var(--aksent-svak)" : "var(--flate)",
+        color: aktiv ? "var(--aksent)" : "var(--dempet)",
+        borderRadius: 6,
+        padding: "5px 8px",
+        lineHeight: 0,
+      }}
+    >
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        {strek ? (
+          <>
+            <rect x="1" y="2" width="14" height="2" rx="1" />
+            <rect x="1" y="7" width="14" height="2" rx="1" />
+            <rect x="1" y="12" width="14" height="2" rx="1" />
+          </>
+        ) : (
+          <>
+            <rect x="1" y="2" width="5" height="12" rx="1" />
+            <rect x="8" y="3" width="7" height="2" rx="1" />
+            <rect x="8" y="7" width="7" height="2" rx="1" />
+            <rect x="8" y="11" width="5" height="2" rx="1" />
+          </>
+        )}
+      </svg>
+    </button>
   );
 }
 

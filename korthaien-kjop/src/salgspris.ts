@@ -389,6 +389,13 @@ export async function butikkvisning(opts: ButikkFilter) {
     if (varianter.length) ut.push({ ...k, varianter });
   }
 
+  // Fanene viser antall per finish. De telles før finish velges, ellers
+  // kunne ikke den andre fanen vise sitt eget tall.
+  const antall = {
+    nonfoil: ut.filter((k) => k.varianter.some((v: any) => v.finish === "nonfoil" && v.tilstander.length)).length,
+    foil: ut.filter((k) => k.varianter.some((v: any) => v.finish === "foil" && v.tilstander.length)).length,
+  };
+
   // Sorteringen må skje over hele settet, ikke over siden. Sorterer man bare
   // det man allerede har hentet, får man den dyreste av de 25 første.
   const finish = opts.finish === "foil" ? "foil" : "nonfoil";
@@ -421,6 +428,7 @@ export async function butikkvisning(opts: ButikkFilter) {
     oppsett: opp,
     kort: filtrert.slice((side - 1) * perSide, side * perSide),
     totalt: filtrert.length,
+    antall,
     side: Math.min(side, sider),
     sider,
     perSide,
