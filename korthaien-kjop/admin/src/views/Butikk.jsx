@@ -25,15 +25,14 @@ const FARGER = [
 const TYPER = ["Creature", "Instant", "Sorcery", "Artifact", "Enchantment", "Planeswalker", "Land"];
 
 const SORTERING = [
-  { id: "nummer", navn: "Samlernummer" },
-  { id: "pris_ned", navn: "Pris, høy til lav" },
-  { id: "pris_opp", navn: "Pris, lav til høy" },
   { id: "navn", navn: "Navn, A til Å" },
   { id: "navn_ned", navn: "Navn, Å til A" },
+  { id: "pris_ned", navn: "Pris, høy til lav" },
+  { id: "pris_opp", navn: "Pris, lav til høy" },
 ];
 
 const TOMT = {
-  q: "", tekst: "", rarity: "", farge: "", type: "",
+  q: "", rarity: "", farge: "", type: "",
   baresalg: false, prisFra: "", prisTil: "",
 };
 
@@ -44,7 +43,7 @@ export default function Butikk({ onFeil }) {
   const [laster, setLaster] = useState(false);
   const [visning, setVisning] = useState("tekst");
   const [finish, setFinish] = useState("nonfoil");
-  const [sortering, setSortering] = useState("nummer");
+  const [sortering, setSortering] = useState("navn");
   const [perSide, setPerSide] = useState(25);
   const [side, setSide] = useState(1);
   const [f, setF] = useState(TOMT);
@@ -89,6 +88,10 @@ export default function Butikk({ onFeil }) {
       <div style={{ display: "grid", gridTemplateColumns: "220px minmax(0, 1fr)", gap: 20, alignItems: "start" }}>
         <div className="panel" style={{ position: "sticky", top: 16 }}>
           <div className="krop">
+            <Gruppe navn="Kortnavn">
+              <input type="text" value={f.q} onChange={(e) => endre("q", e.target.value)} style={{ width: "100%" }} />
+            </Gruppe>
+
             <Gruppe navn="Sett">
               <select value={sett || ""} onChange={(e) => setSett(e.target.value || null)} style={{ width: "100%" }}>
                 <option value="">Velg sett…</option>
@@ -96,19 +99,6 @@ export default function Butikk({ onFeil }) {
                   <option key={s.code} value={s.code}>{s.name}</option>
                 ))}
               </select>
-            </Gruppe>
-
-            <Gruppe navn="Kortnavn">
-              <input type="text" value={f.q} onChange={(e) => endre("q", e.target.value)} style={{ width: "100%" }} />
-            </Gruppe>
-
-            <Gruppe navn="Regeltekst">
-              <input
-                type="text" value={f.tekst}
-                placeholder="f.eks. flying"
-                onChange={(e) => endre("tekst", e.target.value)}
-                style={{ width: "100%" }}
-              />
             </Gruppe>
 
             <Gruppe navn="Raritet">
@@ -160,7 +150,7 @@ export default function Butikk({ onFeil }) {
 
             <label className="dempet" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
               <input type="checkbox" checked={f.baresalg} onChange={(e) => endre("baresalg", e.target.checked)} />
-              Bare det jeg har på lager
+              Vis kun kort på lager
             </label>
 
             <button className="knapp liten" style={{ marginTop: 12 }} onClick={() => setF(TOMT)}>
@@ -311,8 +301,9 @@ function Tekstrad({ kort }) {
   );
 }
 
-// Bilde og faner per tilstand. Trykker du på en fane, er det den prisen som
-// vises — slik Card Kingdom gjør det.
+// Bilde til venstre, kortopplysninger i midten, og en prisboks til høyre med
+// tilstandene som faner — slik Card Kingdom gjør det. Trykker du på en fane,
+// bytter både prisen og antallet over og under.
 function Detaljrad({ kort }) {
   const første = kort.valgt.tilstander.find((t) => t.lager > 0) || kort.valgt.tilstander[0];
   const [valgt, setValgt] = useState(første.condition);
@@ -333,48 +324,72 @@ function Detaljrad({ kort }) {
         )}
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="rad-flex" style={{ justifyContent: "space-between" }}>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 16 }}>{kort.name}</div>
-              <div className="dempet" style={{ fontSize: 13 }}>
-                {kort.set_name} · Nr. {kort.collector_number}
-              </div>
-            </div>
-            <div className="tall" style={{ fontSize: 20, fontWeight: 700 }}>{kroner(t.ore)}</div>
+          <div style={{ fontWeight: 600, fontSize: 16 }}>{kort.name}</div>
+          <div style={{ fontSize: 13 }}>{kort.set_name}</div>
+          <div className="dempet" style={{ fontSize: 13 }}>
+            Collector #: {kort.collector_number}
           </div>
 
-          <div className="dempet" style={{ fontSize: 13, margin: "6px 0" }}>
+          <div className="dempet" style={{ fontSize: 13, margin: "8px 0 0" }}>
             {kort.mana_cost} {kort.type_line}
             {kort.power ? ` · ${kort.power}/${kort.toughness}` : ""}
             {kort.loyalty ? ` · ${kort.loyalty}` : ""}
           </div>
 
           {kort.oracle_text && (
-            <p style={{ whiteSpace: "pre-line", fontSize: 13.5, margin: "0 0 10px", maxWidth: "60ch" }}>
+            <p style={{ whiteSpace: "pre-line", fontSize: 13.5, margin: "6px 0 0", maxWidth: "56ch" }}>
               {kort.oracle_text}
             </p>
           )}
+        </div>
 
-          <div className="rad-flex" style={{ gap: 4 }}>
+        <div style={{ width: 200, flex: "none", textAlign: "center" }}>
+          <div className="tall" style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>
+            {kroner(t.ore)}
+          </div>
+
+          <div style={{ display: "flex", gap: 0 }}>
             {CONDITIONS.map((c) => {
               const x = kort.valgt.tilstander.find((y) => y.condition === c);
               if (!x) return null;
+              const aktiv = valgt === c;
               return (
                 <button
                   key={c}
-                  className={`knapp liten ${valgt === c ? "primar" : ""}`}
+                  onClick={() => x.lager && setValgt(c)}
                   disabled={!x.lager}
-                  onClick={() => setValgt(c)}
                   title={x.lager ? `${x.lager} på lager` : "Utsolgt"}
+                  style={{
+                    flex: 1,
+                    border: "1px solid var(--strek)",
+                    borderRight: c === "G" ? "1px solid var(--strek)" : "none",
+                    background: aktiv ? "var(--aksent-svak)" : "var(--flate)",
+                    color: x.lager ? (aktiv ? "var(--aksent)" : "var(--blekk)") : "var(--strek)",
+                    fontWeight: aktiv ? 600 : 400,
+                    padding: "5px 0",
+                    cursor: x.lager ? "pointer" : "default",
+                  }}
                 >
                   {c}
                 </button>
               );
             })}
-            <span className="dempet" style={{ marginLeft: 8 }}>
-              {t.lager > 0 ? `${t.lager} på lager` : "Utsolgt"}
-            </span>
           </div>
+
+          <div className="dempet" style={{ fontSize: 13, margin: "7px 0 8px" }}>
+            {t.lager > 0 ? `${t.lager} tilgjengelig` : "Utsolgt"}
+          </div>
+
+          {/* Kurven finnes ikke ennå. Knappen står her fordi plasseringen er
+              det som skal vurderes — den kobles opp når kassen bygges. */}
+          <button
+            className="knapp primar"
+            style={{ width: "100%" }}
+            disabled
+            title="Kurven kommer når kassen bygges"
+          >
+            Legg i kurven
+          </button>
         </div>
       </div>
     </div>
