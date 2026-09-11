@@ -88,7 +88,8 @@ export async function søk(opts: {
   const s = await hentSettings();
   const regler = await hentAlleSetRules(s);
   const args: any[] = [];
-  const hvor: string[] = [];
+  // Tokens ligger i katalogen fordi de selges, men de kjøpes aldri inn.
+  const hvor: string[] = ["c.er_token = 0"];
 
   if (opts.q) {
     // Kunden skriver «Bonecrusher Giant», Scryfall kaller det
@@ -112,7 +113,7 @@ export async function søk(opts: {
   const r = await db().execute({
     sql: `SELECT c.id AS card_id, c.name, c.set_code, COALESCE(s.visningsnavn, s.name) AS set_name,
                  c.collector_number, c.rarity, c.image_uri, c.usd, c.usd_foil,
-                 c.has_foil, c.has_nonfoil, c.released_at
+                 c.has_foil, c.has_nonfoil, c.er_token, c.released_at
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
            WHERE ${hvor.join(" AND ")}
            ORDER BY c.name, c.released_at DESC LIMIT 300`,
@@ -136,9 +137,9 @@ export async function tilbudFor(nøkler: { card_id: string }[]): Promise<Tilbud[
   const r = await db().execute({
     sql: `SELECT c.id AS card_id, c.name, c.set_code, COALESCE(s.visningsnavn, s.name) AS set_name,
                  c.collector_number, c.rarity, c.image_uri, c.usd, c.usd_foil,
-                 c.has_foil, c.has_nonfoil, c.released_at
+                 c.has_foil, c.has_nonfoil, c.er_token, c.released_at
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
-           WHERE c.id IN (${ider.map(() => "?").join(",")})`,
+           WHERE c.er_token = 0 AND c.id IN (${ider.map(() => "?").join(",")})`,
     args: ider,
   });
   return byggTilbud(r.rows.map(radTilKandidat), regler, s);
@@ -274,6 +275,7 @@ export function radTilKandidat(x: any): Kandidat {
     usd_foil: x.usd_foil === null ? null : Number(x.usd_foil),
     has_foil: !!Number(x.has_foil),
     has_nonfoil: !!Number(x.has_nonfoil),
+    er_token: !!Number(x.er_token),
     released_at: x.released_at ? String(x.released_at) : null,
   };
 }

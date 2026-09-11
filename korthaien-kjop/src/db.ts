@@ -85,6 +85,7 @@ async function leggTilNyeKolonner(): Promise<void> {
     ["power", "TEXT"], ["toughness", "TEXT"], ["loyalty", "TEXT"],
     ["keywords", "TEXT"], ["artist", "TEXT"], ["legalities", "TEXT"],
     ["reserved", "INTEGER NOT NULL DEFAULT 0"],
+    ["er_token", "INTEGER NOT NULL DEFAULT 0"],
   ] as const) {
     if (kortKol.size && !kortKol.has(navn)) {
       await db().execute(`ALTER TABLE cards ADD COLUMN ${navn} ${type}`);

@@ -269,6 +269,12 @@ export async function synkMystore(
         rent = medBokstav.navn;
       }
 
+      // Tokens heter «Dragon Token» hos deg og bare «Dragon» hos Scryfall.
+      // Uten dette treffer ingen av dem, og de blir liggende i lista over
+      // ukoblede produkter for alltid.
+      const erToken = /\b(token|emblem)\b/i.test(p.navn);
+      if (erToken) rent = rent.replace(/\b(token|emblem)\b/gi, "").replace(/\s{2,}/g, " ").trim();
+
       const n = normaliser(rent);
       // Splittkort listes én gang per halvdel: «Determined (Bound/Determined)».
       const iParentes = utenFoil.match(/\(([^)]*\/[^)]*)\)/);

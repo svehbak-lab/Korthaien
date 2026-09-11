@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS cards (
   artist            TEXT,
   legalities        TEXT,
   reserved          INTEGER NOT NULL DEFAULT 0,
+  -- Tokens og emblemer selges, men kjøpes aldri inn.
+  er_token          INTEGER NOT NULL DEFAULT 0,
   released_at       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_cards_name    ON cards(name_norm);

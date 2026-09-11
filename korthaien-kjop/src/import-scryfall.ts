@@ -36,6 +36,7 @@ type Rå = {
   released_at?: string;
   prices?: { usd?: string | null; usd_foil?: string | null };
   border_color?: string;
+  layout?: string;
   frame_effects?: string[];
   full_art?: boolean;
   image_uris?: { normal?: string; small?: string };
@@ -92,6 +93,14 @@ function farger(k: Rå): string[] {
   for (const f of k.card_faces || []) for (const c of (f.colors || [])) alle.add(c);
   return [...alle];
 }
+
+// Tokens og emblemer er i katalogen fordi du selger dem, men de skal aldri
+// kunne kjøpes inn — Scryfall har ingen pris på dem, og du får dem gratis i
+// pakkene. Merkingen gjør at kjøpssiden kan holde dem utenfor eksplisitt i
+// stedet for at de blir usynlige av feil grunn.
+const TOKEN_LAYOUT = new Set(["token", "double_faced_token", "emblem", "art_series"]);
+const erToken = (k: Rå) =>
+  TOKEN_LAYOUT.has(String(k.layout || "")) || /^Token\b|^Emblem\b/.test(k.type_line || "");
 
 const somJson = (v: unknown) => (v && (Array.isArray(v) ? v.length : true) ? JSON.stringify(v) : null);
 
@@ -204,9 +213,9 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
               (id, oracle_id, name, name_norm, front_norm, back_norm, variant, set_code,
                collector_number, rarity, usd, usd_foil, has_nonfoil, has_foil, image_uri, released_at,
                type_line, oracle_text, mana_cost, cmc, colors, color_identity,
-               power, toughness, loyalty, keywords, artist, legalities, reserved)
+               power, toughness, loyalty, keywords, artist, legalities, reserved, er_token)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               usd = excluded.usd, usd_foil = excluded.usd_foil,
               image_uri = excluded.image_uri, rarity = excluded.rarity,
@@ -217,7 +226,7 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
               power = excluded.power, toughness = excluded.toughness,
               loyalty = excluded.loyalty, keywords = excluded.keywords,
               artist = excluded.artist, legalities = excluded.legalities,
-              reserved = excluded.reserved`,
+              reserved = excluded.reserved, er_token = excluded.er_token`,
       args: [
         k.id,
         k.oracle_id || k.id,
@@ -249,6 +258,7 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
         k.artist || null,
         somJson(k.legalities),
         k.reserved ? 1 : 0,
+        erToken(k) ? 1 : 0,
       ],
     };
   });

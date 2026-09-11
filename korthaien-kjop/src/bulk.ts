@@ -288,13 +288,15 @@ export type Kandidat = {
   usd_foil: number | null;
   has_foil: boolean;
   has_nonfoil: boolean;
+  er_token: boolean;
   released_at: string | null;
 };
 
 const VELG = `SELECT c.id AS card_id, c.name, c.set_code, COALESCE(s.visningsnavn, s.name) AS set_name,
                      c.collector_number, c.rarity, c.image_uri, c.usd, c.usd_foil,
-                     c.has_foil, c.has_nonfoil, c.released_at
-                FROM cards c LEFT JOIN sets s ON s.code = c.set_code`;
+                     c.has_foil, c.has_nonfoil, c.er_token, c.released_at
+                FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+               WHERE c.er_token = 0`;
 
 export async function finnKandidater(
   navn: string,
@@ -305,7 +307,7 @@ export async function finnKandidater(
   if (!norm) return [];
 
   const args: any[] = [norm, norm, norm];
-  let sql = `${VELG} WHERE (c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)`;
+  let sql = `${VELG} AND (c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)`;
   if (settHint) {
     sql += " AND c.set_code = ?";
     args.push(settHint);
@@ -322,7 +324,7 @@ export async function finnKandidater(
   // annet trykk. Settet stemmer som regel, så vi slipper nummeret først.
   if (r.rows.length === 0 && nummerHint && settHint) {
     r = await db().execute({
-      sql: `${VELG} WHERE (c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)
+      sql: `${VELG} AND (c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)
                      AND c.set_code = ? ORDER BY c.released_at DESC LIMIT 60`,
       args: [norm, norm, norm, settHint],
     });
@@ -332,7 +334,7 @@ export async function finnKandidater(
   // for eksempel. Da er navnet mer å stole på enn hintet.
   if (r.rows.length === 0 && settHint) {
     r = await db().execute({
-      sql: `${VELG} WHERE (c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)
+      sql: `${VELG} AND (c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)
              ORDER BY c.released_at DESC LIMIT 60`,
       args: [norm, norm, norm],
     });
@@ -342,7 +344,7 @@ export async function finnKandidater(
   // «Ragavan, Nimble Pilferer» i sin helhet.
   if (r.rows.length === 0 && !settHint) {
     r = await db().execute({
-      sql: `${VELG} WHERE c.name_norm LIKE ? OR c.front_norm LIKE ? OR c.back_norm LIKE ?
+      sql: `${VELG} AND (c.name_norm LIKE ? OR c.front_norm LIKE ? OR c.back_norm LIKE ?)
              ORDER BY c.released_at DESC LIMIT 60`,
       args: [norm + "%", norm + "%", norm + "%"],
     });
@@ -364,6 +366,7 @@ export function radTilKandidat(x: any): Kandidat {
     usd_foil: x.usd_foil === null ? null : Number(x.usd_foil),
     has_foil: !!Number(x.has_foil),
     has_nonfoil: !!Number(x.has_nonfoil),
+    er_token: !!Number(x.er_token),
     released_at: x.released_at ? String(x.released_at) : null,
   };
 }
