@@ -211,3 +211,48 @@ textarea { width: 100%; font-family: inherit; }
   font-weight: 650;
   border-bottom-color: var(--aksent);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   BUTIKKVISNING
+   ─────────────────────────────────────────────────────────────────────────────
+   Denne skjermen skal bli butikken, og bruker derfor kundesidens palett og
+   ikke admins blå. Alt er avgrenset til .butikk, så resten av admin står
+   urørt. Når visningen flyttes ut, følger stilen med.
+   ───────────────────────────────────────────────────────────────────────── */
+.butikk {
+  --dyp: #04302c;
+  --sjo: #0c6259;
+  --sjo-svak: #e8f2f0;
+  --brass: #9c6b18;
+}
+.butikk .faner button[aria-selected="true"] { border-bottom-color: var(--sjo); }
+.butikk .knapp.primar { background: var(--dyp); border-color: var(--dyp); }
+.butikk .knapp.primar:hover:not(:disabled) { background: var(--sjo); border-color: var(--sjo); }
+.butikk .knapp.liten:not(.primar):hover { border-color: var(--sjo); }
+.butikk .handling { color: var(--sjo); }
+.butikk input[type="checkbox"] { accent-color: var(--sjo); }
+.butikk input:focus, .butikk select:focus { border-color: var(--sjo); }
+
+/* Prisene er det øyet skal finne først. Messing, som på kjøpssiden. */
+.butikk .pris { color: var(--brass); font-weight: 600; }
+.butikk .pris-stor { color: var(--brass); font-size: 22px; font-weight: 700; }
+.butikk .utsolgt { color: var(--dempet); }
+
+/* Tilstandsfanene i prisboksen. */
+.butikk .cond-valg { display: flex; }
+.butikk .cond-valg button {
+  flex: 1;
+  border: 1px solid var(--strek);
+  border-right: none;
+  background: var(--flate);
+  color: var(--blekk);
+  padding: 5px 0;
+  cursor: pointer;
+}
+.butikk .cond-valg button:last-child { border-right: 1px solid var(--strek); }
+.butikk .cond-valg button[aria-pressed="true"] {
+  background: var(--sjo-svak);
+  color: var(--sjo);
+  font-weight: 600;
+}
+.butikk .cond-valg button:disabled { color: var(--strek); cursor: default; }

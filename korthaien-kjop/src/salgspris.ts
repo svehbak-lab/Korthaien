@@ -327,26 +327,37 @@ export async function butikkvisning(opts: ButikkFilter) {
     hvor.push("(c.name_norm LIKE ? OR c.oracle_text LIKE ?)");
     args.push(`%${normaliserEnkelt(opts.q)}%`, `%${opts.q}%`);
   }
-  if (opts.rarity) {
-    hvor.push("c.rarity = ?");
-    args.push(opts.rarity);
+  // Flere rariteter om gangen. Ett valg er sjelden nok — man leter gjerne
+  // etter rare og mythic samtidig.
+  const rariteter = String(opts.rarity || "").split(",").filter(Boolean);
+  if (rariteter.length) {
+    hvor.push(`c.rarity IN (${rariteter.map(() => "?").join(",")})`);
+    args.push(...rariteter);
   }
   if (opts.tekst) {
     hvor.push("c.oracle_text LIKE ?");
     args.push(`%${opts.tekst}%`);
   }
-  if (opts.type) {
-    hvor.push("c.type_line LIKE ?");
-    args.push(`%${opts.type}%`);
+  const typer = String(opts.type || "").split(",").filter(Boolean);
+  if (typer.length) {
+    hvor.push(`(${typer.map(() => "c.type_line LIKE ?").join(" OR ")})`);
+    args.push(...typer.map((t) => `%${t}%`));
   }
-  if (opts.farge) {
-    if (opts.farge === "C") {
-      // Fargeløs: enten ingen farger lagret, eller en tom liste.
-      hvor.push("(c.colors IS NULL OR c.colors = '[]')");
-    } else {
-      hvor.push("c.colors LIKE ?");
-      args.push(`%"${opts.farge}"%`);
+  // Flere farger betyr «minst én av dem», ikke «alle sammen». Det er det
+  // folk mener når de huker av hvit og blå.
+  const farger = String(opts.farge || "").split(",").filter(Boolean);
+  if (farger.length) {
+    const deler: string[] = [];
+    for (const f of farger) {
+      if (f === "C") {
+        // Fargeløs: enten ingen farger lagret, eller en tom liste.
+        deler.push("(c.colors IS NULL OR c.colors = '[]')");
+      } else {
+        deler.push("c.colors LIKE ?");
+        args.push(`%"${f}"%`);
+      }
     }
+    hvor.push(`(${deler.join(" OR ")})`);
   }
 
   const r = await db().execute({

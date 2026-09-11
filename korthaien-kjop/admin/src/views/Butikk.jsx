@@ -31,8 +31,10 @@ const SORTERING = [
   { id: "pris_opp", navn: "Pris, lav til høy" },
 ];
 
+const RARITETER = ["common", "uncommon", "rare", "mythic", "special"];
+
 const TOMT = {
-  q: "", rarity: "", farge: "", type: "",
+  q: "", rarity: [], farge: [], type: [],
   baresalg: false, prisFra: "", prisTil: "",
 };
 
@@ -60,7 +62,10 @@ export default function Butikk({ onFeil }) {
     if (!sett) return;
     setLaster(true);
     const t = setTimeout(() => {
-      api.butikk({ sett, finish, sortering, side, perSide, ...f })
+      api.butikk({
+        sett, finish, sortering, side, perSide, ...f,
+        rarity: f.rarity.join(","), farge: f.farge.join(","), type: f.type.join(","),
+      })
         .then(setData)
         .catch(onFeil)
         .finally(() => setLaster(false));
@@ -76,9 +81,16 @@ export default function Butikk({ onFeil }) {
   }, [data, finish]);
 
   const endre = (felt, verdi) => setF((x) => ({ ...x, [felt]: verdi }));
+  // Haker legger til og fjerner fra en liste. Ett valg er sjelden nok — man
+  // leter gjerne etter rare og mythic samtidig.
+  const veksle = (felt, verdi) =>
+    setF((x) => ({
+      ...x,
+      [felt]: x[felt].includes(verdi) ? x[felt].filter((v) => v !== verdi) : [...x[felt], verdi],
+    }));
 
   return (
-    <>
+    <div className="butikk">
       <h1>Butikkvisning</h1>
       <p className="dempet" style={{ marginTop: -6 }}>
         Slik kundene vil se kortene. Ligger her inntil salgssiden bygges — bruk den
@@ -102,35 +114,31 @@ export default function Butikk({ onFeil }) {
             </Gruppe>
 
             <Gruppe navn="Raritet">
-              <select value={f.rarity} onChange={(e) => endre("rarity", e.target.value)} style={{ width: "100%" }}>
-                <option value="">Alle</option>
-                {["common", "uncommon", "rare", "mythic", "special"].map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
+              {RARITETER.map((r) => (
+                <Hake
+                  key={r}
+                  navn={r}
+                  av={f.rarity.includes(r)}
+                  onVeksle={() => veksle("rarity", r)}
+                />
+              ))}
             </Gruppe>
 
             <Gruppe navn="Farge">
-              <div className="rad-flex" style={{ gap: 3 }}>
-                {FARGER.map((x) => (
-                  <button
-                    key={x.kode}
-                    className={`knapp liten ${f.farge === x.kode ? "primar" : ""}`}
-                    title={x.navn}
-                    style={{ padding: "2px 8px" }}
-                    onClick={() => endre("farge", f.farge === x.kode ? "" : x.kode)}
-                  >
-                    {x.kode}
-                  </button>
-                ))}
-              </div>
+              {FARGER.map((x) => (
+                <Hake
+                  key={x.kode}
+                  navn={x.navn}
+                  av={f.farge.includes(x.kode)}
+                  onVeksle={() => veksle("farge", x.kode)}
+                />
+              ))}
             </Gruppe>
 
-            <Gruppe navn="Type">
-              <select value={f.type} onChange={(e) => endre("type", e.target.value)} style={{ width: "100%" }}>
-                <option value="">Alle</option>
-                {TYPER.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
+            <Gruppe navn="Type" lukket>
+              {TYPER.map((t) => (
+                <Hake key={t} navn={t} av={f.type.includes(t)} onVeksle={() => veksle("type", t)} />
+              ))}
             </Gruppe>
 
             <Gruppe navn="Pris">
@@ -267,7 +275,7 @@ export default function Butikk({ onFeil }) {
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -331,12 +339,41 @@ function VisningsIkon({ aktiv, tittel, onClick, strek }) {
   );
 }
 
-function Gruppe({ navn, children }) {
+// Grupper som kan slås sammen. Med haker i stedet for nedtrekk blir menyen
+// lang, og da må den kunne ryddes bort.
+function Gruppe({ navn, children, lukket }) {
+  const [åpen, setÅpen] = useState(!lukket);
   return (
-    <div style={{ marginBottom: 12 }}>
-      <div className="dempet" style={{ fontSize: 12.5, marginBottom: 3 }}>{navn}</div>
-      {children}
+    <div style={{ marginBottom: 10, borderBottom: "1px solid var(--strek)", paddingBottom: 8 }}>
+      <button
+        onClick={() => setÅpen(!åpen)}
+        aria-expanded={åpen}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          width: "100%", border: "none", background: "none", padding: "2px 0",
+          fontSize: 13, fontWeight: 600, color: "var(--blekk)", cursor: "pointer",
+        }}
+      >
+        {navn}
+        <span className="dempet" style={{ fontSize: 11 }}>{åpen ? "\u25b2" : "\u25bc"}</span>
+      </button>
+      {åpen && <div style={{ marginTop: 6 }}>{children}</div>}
     </div>
+  );
+}
+
+function Hake({ navn, av, onVeksle }) {
+  return (
+    <label
+      style={{
+        display: "flex", alignItems: "center", gap: 7,
+        fontSize: 13.5, padding: "2px 0", cursor: "pointer",
+        color: av ? "var(--blekk)" : "var(--dempet)",
+      }}
+    >
+      <input type="checkbox" checked={av} onChange={onVeksle} />
+      {navn}
+    </label>
   );
 }
 
@@ -372,8 +409,8 @@ function Tekstrad({ kort }) {
               <tr key={t.condition}>
                 <td style={{ width: 38, padding: "3px 6px", fontWeight: 500 }}>{t.condition}</td>
                 <td
-                  className="h tall"
-                  style={{ width: 80, padding: "3px 6px", color: t.lager > 0 ? "inherit" : "var(--dempet)" }}
+                  className={`h tall ${t.lager > 0 ? "pris" : "utsolgt"}`}
+                  style={{ width: 80, padding: "3px 6px" }}
                 >
                   {kroner(t.ore)}
                 </td>
@@ -447,11 +484,9 @@ function Detaljrad({ kort }) {
         </div>
 
         <div style={{ width: 200, flex: "none", textAlign: "center" }}>
-          <div className="tall" style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>
-            {kroner(t.ore)}
-          </div>
+          <div className="tall pris-stor" style={{ marginBottom: 6 }}>{kroner(t.ore)}</div>
 
-          <div style={{ display: "flex", gap: 0 }}>
+          <div className="cond-valg">
             {CONDITIONS.map((c) => {
               const x = kort.valgt.tilstander.find((y) => y.condition === c);
               if (!x) return null;
@@ -461,17 +496,8 @@ function Detaljrad({ kort }) {
                   key={c}
                   onClick={() => x.lager && setValgt(c)}
                   disabled={!x.lager}
+                  aria-pressed={aktiv}
                   title={x.lager ? `${x.lager} på lager` : "Utsolgt"}
-                  style={{
-                    flex: 1,
-                    border: "1px solid var(--strek)",
-                    borderRight: c === "G" ? "1px solid var(--strek)" : "none",
-                    background: aktiv ? "var(--aksent-svak)" : "var(--flate)",
-                    color: x.lager ? (aktiv ? "var(--aksent)" : "var(--blekk)") : "var(--strek)",
-                    fontWeight: aktiv ? 600 : 400,
-                    padding: "5px 0",
-                    cursor: x.lager ? "pointer" : "default",
-                  }}
                 >
                   {c}
                 </button>
