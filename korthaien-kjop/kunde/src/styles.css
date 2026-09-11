@@ -149,8 +149,10 @@ h3 { font-size: 15.5px; margin: 20px 0 4px; }
 
 /* ── knapper ─────────────────────────────────────────────────────────────── */
 .knapp {
+  display: inline-block;
   border: 1px solid var(--strek-sterk); background: var(--flate); color: var(--blekk);
   border-radius: 8px; padding: 9px 15px; font-weight: 500;
+  font-size: 14.5px; text-decoration: none; cursor: pointer;
 }
 .knapp:hover { border-color: var(--sjo); }
 .knapp.primar {

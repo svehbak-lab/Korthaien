@@ -94,13 +94,18 @@ export default function App() {
         <div className="inni">
           <b>Korthaien</b>
           <span>Innkjøp av Magic-kort</span>
-          <button
-            className="knapp blank ingen-print"
-            style={{ marginLeft: "auto" }}
-            onClick={() => setSteg("oppslag")}
-          >
+          <button className="knapp blank ingen-print" onClick={() => setSteg("oppslag")}>
             Finn ordren min
           </button>
+          {/* Den som er ferdig med å selge er også den som er mest innstilt
+              på å handle. Veien tilbake bør ikke være nettleserens knapp. */}
+          <a
+            className="knapp blank ingen-print"
+            style={{ marginLeft: "auto" }}
+            href="https://korthaien.no"
+          >
+            Til nettbutikken
+          </a>
         </div>
 
         {steg === "velg" && (

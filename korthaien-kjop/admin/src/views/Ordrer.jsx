@@ -231,12 +231,8 @@ function Utgave({ linje, onEndret, onFeil }) {
         <span className="kode">{linje.set_code.toUpperCase()}</span>{" "}
         {linje.collector_number && <span className="kode dempet">#{linje.collector_number}</span>}
         {linje.finish === "foil" && <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>Foil</span>}
-        <button
-          className="knapp blank"
-          style={{ display: "block", padding: 0, fontSize: 12 }}
-          onClick={() => setÅpen(true)}
-        >
-          Bytt
+        <button className="knapp handling" onClick={() => setÅpen(true)}>
+          Bytt utgave
         </button>
       </>
     );
@@ -461,7 +457,7 @@ function NyLinje({ ordre, onEndret, onFeil }) {
   if (!åpen) {
     return (
       <button className="knapp liten" style={{ marginTop: 10 }} onClick={() => setÅpen(true)}>
-        Legg til kort
+        + Legg til kort
       </button>
     );
   }

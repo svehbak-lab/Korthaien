@@ -169,3 +169,19 @@ textarea { width: 100%; font-family: inherit; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* Handlinger som ligger inne i en tabellrad. De skal kunne finnes uten at
+   noen har fortalt deg at de finnes — derfor farge og understrek, ikke bare
+   en museklikk-flate som ser ut som tekst. */
+.knapp.handling {
+  display: inline-block;
+  border: none;
+  background: none;
+  padding: 0;
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--aksent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.knapp.handling:hover { color: var(--blekk); }

@@ -24,12 +24,21 @@ export default function Sett({ onFeil, onVelgSett }) {
   // Nesten tusen rader med skjemafelter på én gang gjør siden treg. Vi viser
   // en bolk om gangen i stedet, og tilbakestiller når filteret endres.
   const [tak, setTak] = useState(300);
+  // Alfabetisk som utgangspunkt, men kronologisk er ofte det du vil ha når du
+  // setter opp et nytt sett. Derfor sorterbart framfor et fast valg.
+  const [sortering, setSortering] = useState({ kolonne: "name", stigende: true });
+
+  function sorter(kolonne) {
+    setSortering((s) =>
+      s.kolonne === kolonne ? { ...s, stigende: !s.stigende } : { kolonne, stigende: true }
+    );
+  }
   useEffect(() => setTak(300), [søk, filter]);
 
   const synlige = useMemo(() => {
     if (!data) return [];
     const q = søk.trim().toLowerCase();
-    return data.sett.filter((s) => {
+    const ut = data.sett.filter((s) => {
       if (filter === "på" && !Number(s.enabled)) return false;
       if (filter === "av" && Number(s.enabled)) return false;
       if (!q) return true;
@@ -39,7 +48,23 @@ export default function Sett({ onFeil, onVelgSett }) {
         String(s.code).toLowerCase().includes(q)
       );
     });
-  }, [data, søk, filter]);
+
+    const { kolonne, stigende } = sortering;
+    const retning = stigende ? 1 : -1;
+    return ut.sort((a, b) => {
+      if (kolonne === "released_at") {
+        // Sett uten dato havner sist uansett retning — de hører ikke hjemme
+        // øverst når du leter etter det nyeste.
+        const x = a.released_at || "";
+        const y = b.released_at || "";
+        if (!x && !y) return 0;
+        if (!x) return 1;
+        if (!y) return -1;
+        return x.localeCompare(y) * retning;
+      }
+      return String(a.name || "").localeCompare(String(b.name || ""), "nb") * retning;
+    });
+  }, [data, søk, filter, sortering]);
 
   if (!data) return <p className="dempet">Henter sett…</p>;
 
@@ -146,8 +171,8 @@ export default function Sett({ onFeil, onVelgSett }) {
                 <input type="checkbox" checked={alleValgt} onChange={veksleAlle} aria-label="Velg alle synlige" />
               </th>
               <th style={{ width: 34 }}>På</th>
-              <th>Sett</th>
-              <th style={{ width: 54 }}>Utgitt</th>
+              <SortTh id="name" navn="Sett" sortering={sortering} onSorter={sorter} />
+              <SortTh id="released_at" navn="Utgitt" sortering={sortering} onSorter={sorter} bredde={64} />
               <th className="h" style={{ width: 70 }}>Antall</th>
               <th className="h" style={{ width: 70 }}>Foil</th>
               <th style={{ width: 210 }}>Tar imot</th>
@@ -290,19 +315,36 @@ function Navn({ sett, onDøpt }) {
     );
   }
 
+  // Dobbeltklikk er usynlig for alle som ikke har fått det forklart. En
+  // synlig lenke koster én linje og kan finnes uten forkunnskap.
   return (
-    <span
-      onDoubleClick={() => setRedigerer(true)}
-      title="Dobbeltklikk for å gi settet ditt eget navn"
-      style={{ cursor: "text" }}
-    >
+    <span>
       {sett.name} <span className="kode dempet">{String(sett.code).toUpperCase()}</span>
+      <button className="knapp handling" onClick={() => setRedigerer(true)}>
+        {sett.visningsnavn ? "Endre navn" : "Døp om"}
+      </button>
       {sett.visningsnavn && (
         <span className="dempet" style={{ fontSize: 12, display: "block" }}>
           {sett.scryfall_navn}
         </span>
       )}
     </span>
+  );
+}
+
+function SortTh({ id, navn, sortering, onSorter, bredde }) {
+  const aktiv = sortering.kolonne === id;
+  return (
+    <th
+      style={{ width: bredde, cursor: "pointer", userSelect: "none" }}
+      onClick={() => onSorter(id)}
+      aria-sort={aktiv ? (sortering.stigende ? "ascending" : "descending") : "none"}
+    >
+      {navn}
+      <span style={{ color: aktiv ? "var(--aksent)" : "var(--strek)", marginLeft: 3 }}>
+        {aktiv ? (sortering.stigende ? "\u25b2" : "\u25bc") : "\u25b4"}
+      </span>
+    </th>
   );
 }
 

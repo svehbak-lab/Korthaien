@@ -449,6 +449,7 @@ export function Kvittering({ ordre, onNy }) {
       <div className="rad-flex ingen-print">
         <button className="knapp" onClick={() => window.print()}>Skriv ut</button>
         <button className="knapp primar" onClick={onNy}>Selg flere kort</button>
+        <a className="knapp" href="https://korthaien.no">Til nettbutikken</a>
       </div>
     </>
   );
