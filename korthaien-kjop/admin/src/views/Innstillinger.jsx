@@ -488,6 +488,11 @@ export function Salgspriser({ onFeil, onMelding }) {
         usd_til:
           r.usd_til === "" || r.usd_til === null ? null : Number(String(r.usd_til).replace(",", ".")),
         pris_ore: Math.round((Number(String(r.pris_kr).replace(",", ".")) || 0) * 100),
+        faktor:
+          r.faktor === "" || r.faktor === null || r.faktor === undefined
+            ? null
+            : Number(String(r.faktor).replace(",", ".")) || null,
+        avrunding: r.avrunding === "ingen" ? null : r.avrunding || null,
       }));
       const svar = await api.lagreSalgspriser(rene);
       setAdvarsler(svar.advarsler);
@@ -507,10 +512,15 @@ export function Salgspriser({ onFeil, onMelding }) {
       <div className="krop">
         <h2 style={{ marginTop: 0 }}>Utsalgspriser</h2>
         <p className="dempet">
-          Prisen er flat innenfor hvert intervall: et rare til 0,20 og et til 0,80
-          koster det samme. En egen regel for en raritet slår regelen for «alle».
-          Kort som er dyrere enn alle intervallene prises av markedet, ganget med
-          faktoren under.
+          Hvert intervall har enten en <b>fast pris</b>, eller en <b>faktor</b> som
+          er kroner per dollar med påslaget innbakt. Faktoren går foran fast pris.
+          Faste priser er praktiske i den nedre enden; over et par dollar bør prisen
+          følge markedet. En egen regel for en raritet slår regelen for «alle».
+        </p>
+        <p className="dempet">
+          Opprundingen gjelder prisen for Near Mint, som er ankerprisen. De andre
+          tilstandene regnes av den — ellers ville 85 % av 15 kroner blitt 15 igjen,
+          og trappen ville forsvunnet for billige kort.
         </p>
 
         {advarsler.length > 0 && (
@@ -528,7 +538,9 @@ export function Salgspriser({ onFeil, onMelding }) {
               <th style={{ width: 120 }}>Raritet</th>
               <th className="h" style={{ width: 90 }}>Fra $</th>
               <th className="h" style={{ width: 90 }}>Til $</th>
-              <th className="h" style={{ width: 100 }}>Pris kr</th>
+              <th className="h" style={{ width: 90 }}>Fast kr</th>
+              <th className="h" style={{ width: 80 }}>Faktor</th>
+              <th style={{ width: 130 }}>Oppruning</th>
               <th style={{ width: 50 }}></th>
             </tr>
           </thead>
@@ -561,9 +573,31 @@ export function Salgspriser({ onFeil, onMelding }) {
                 <td className="h">
                   <input
                     type="text" inputMode="decimal" value={r.pris_kr}
+                    placeholder="—"
                     onChange={(e) => endre(i, "pris_kr", e.target.value.replace(/[^\d.,]/g, ""))}
-                    style={{ width: 80, textAlign: "right" }}
+                    style={{ width: 70, textAlign: "right" }}
                   />
+                </td>
+                <td className="h">
+                  <input
+                    type="text" inputMode="decimal"
+                    value={r.faktor ?? ""}
+                    placeholder="—"
+                    title="Kroner per dollar. Går foran fast pris."
+                    onChange={(e) => endre(i, "faktor", e.target.value.replace(/[^\d.,]/g, ""))}
+                    style={{ width: 60, textAlign: "right" }}
+                  />
+                </td>
+                <td>
+                  <select
+                    value={r.avrunding || "ingen"}
+                    onChange={(e) => endre(i, "avrunding", e.target.value)}
+                  >
+                    <option value="ingen">Ingen</option>
+                    <option value="krone">Opp til krone</option>
+                    <option value="5opp">Opp til 5</option>
+                    <option value="9opp">Opp til 9</option>
+                  </select>
                 </td>
                 <td className="h">
                   <button
@@ -582,7 +616,10 @@ export function Salgspriser({ onFeil, onMelding }) {
           <button
             className="knapp"
             onClick={() =>
-              setRader((r) => [...r, { rarity: "rare", usd_fra: 0, usd_til: "", pris_kr: 10 }])
+              setRader((r) => [
+                ...r,
+                { rarity: "rare", usd_fra: 0, usd_til: "", pris_kr: "", faktor: 11, avrunding: "5opp" },
+              ])
             }
           >
             + Nytt intervall
@@ -591,7 +628,8 @@ export function Salgspriser({ onFeil, onMelding }) {
             {lagrer ? "Lagrer…" : "Lagre intervallene"}
           </button>
           <span className="dempet">
-            Tomt «til»-felt betyr «og oppover».
+            Tomt «til»-felt betyr «og oppover». Et intervall må ha enten fast pris
+            eller faktor.
           </span>
         </div>
       </div>

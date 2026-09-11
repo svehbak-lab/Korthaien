@@ -168,3 +168,67 @@ test("manuell salgspris kan fjernes igjen", async () => {
   assert.equal(b.priser.nonfoil.manuell, null);
   assert.equal(b.priser.nonfoil.nm, 30000, "tilbake til markedspris");
 });
+
+// ── faktor og oppruning ──────────────────────────────────────────────────────
+test("oppruning til nærmeste fem og til nærmeste nier", async () => {
+  const { rundOpp } = await import("../src/salgspris.ts");
+  assert.equal(rundOpp(1419, "5opp"), 1500, "14,19 → 15");
+  assert.equal(rundOpp(1500, "5opp"), 1500, "et tall som allerede passer, står");
+  assert.equal(rundOpp(770, "9opp"), 900, "7,70 → 9");
+  assert.equal(rundOpp(1200, "9opp"), 1900, "12 → 19");
+  assert.equal(rundOpp(900, "9opp"), 900, "9 → 9");
+  assert.equal(rundOpp(1210, "krone"), 1300, "12,10 → 13");
+  assert.equal(rundOpp(1234, "ingen"), 1234);
+});
+
+test("Sveins egne eksempler", async () => {
+  await lagreIntervaller([
+    { rarity: "common", usd_fra: 0, usd_til: 1, faktor: 11, avrunding: "9opp" },
+    { rarity: "uncommon", usd_fra: 0, usd_til: 1, faktor: 11, avrunding: "9opp" },
+    { rarity: "alle", usd_fra: 1, usd_til: null, faktor: 11, avrunding: "5opp" },
+  ]);
+  const opp = await hentSalgsOppsett();
+
+  // 1,29 × 11 = 14,19 → opp til nærmeste fem = 15
+  assert.equal(salgsprisØre({ usd: 1.29, rarity: "rare" }, "nonfoil", "NM", opp), 1500);
+  // 0,70 × 11 = 7,70 → opp til nærmeste nier = 9
+  assert.equal(salgsprisØre({ usd: 0.7, rarity: "common" }, "nonfoil", "NM", opp), 900);
+  // 329,99 × 11 = 3629,89 → opp til nærmeste fem = 3630
+  assert.equal(salgsprisØre({ usd: 329.99, rarity: "mythic" }, "nonfoil", "NM", opp), 363000);
+});
+
+test("faktoren slår fast pris i samme intervall", async () => {
+  await lagreIntervaller([
+    { rarity: "rare", usd_fra: 0, usd_til: null, pris_ore: 999, faktor: 11, avrunding: "5opp" },
+  ]);
+  const opp = await hentSalgsOppsett();
+  assert.equal(salgsprisØre({ usd: 2, rarity: "rare" }, "nonfoil", "NM", opp), 2500, "22 → 25");
+});
+
+test("trappen forsvinner ikke for billige kort", async () => {
+  await lagreIntervaller([
+    { rarity: "rare", usd_fra: 0, usd_til: null, faktor: 11, avrunding: "5opp" },
+  ]);
+  const opp = await hentSalgsOppsett();
+  const alle = salgspriser({ usd: 1.29, rarity: "rare" }, "nonfoil", opp);
+  // Uten særbehandlingen ville alle fire blitt 15 kroner.
+  assert.deepEqual(alle.map((x) => x.ore), [1500, 1300, 1100, 800]);
+});
+
+test("et intervall uten både pris og faktor lagres ikke", async () => {
+  const antall = await lagreIntervaller([
+    { rarity: "rare", usd_fra: 0, usd_til: 1, pris_ore: 0, faktor: null },
+    { rarity: "rare", usd_fra: 1, usd_til: null, faktor: 11, avrunding: "5opp" },
+  ]);
+  assert.equal(antall, 1, "den tomme forkastes i stedet for å gi null kroner");
+});
+
+test("faste priser virker fortsatt", async () => {
+  await lagreIntervaller([
+    { rarity: "rare", usd_fra: 0, usd_til: 0.9, pris_ore: 1000 },
+    { rarity: "rare", usd_fra: 0.91, usd_til: null, faktor: 11, avrunding: "5opp" },
+  ]);
+  const opp = await hentSalgsOppsett();
+  assert.equal(salgsprisØre({ usd: 0.5, rarity: "rare" }, "nonfoil", "NM", opp), 1000);
+  assert.equal(salgsprisØre({ usd: 1.29, rarity: "rare" }, "nonfoil", "NM", opp), 1500);
+});

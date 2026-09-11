@@ -149,7 +149,13 @@ CREATE TABLE IF NOT EXISTS salg_intervaller (
   usd_fra    REAL NOT NULL,
   -- NULL betyr «og oppover».
   usd_til    REAL,
-  pris_ore   INTEGER NOT NULL,
+  -- Enten en fast pris, eller en faktor å gange markedsprisen med. Faste
+  -- priser virker i den nedre enden; over et par dollar må prisen følge
+  -- markedet, ellers trengs det hundre intervaller.
+  pris_ore   INTEGER NOT NULL DEFAULT 0,
+  faktor     REAL,
+  -- Hvordan grunnprisen rundes: '5opp', '9opp', 'krone' eller 'ingen'.
+  avrunding  TEXT,
   updated_at TEXT NOT NULL
 );
 

@@ -18,6 +18,8 @@ import { prisenFor, hentManuellPris } from "./pricing.js";
 // Intervallene er global. Vil du ha andre priser i et bestemt sett, settes
 // prisen manuelt på kortene der.
 
+export type Avrunding = "5opp" | "9opp" | "krone" | "ingen";
+
 export type Intervall = {
   id?: number;
   // «alle» gjelder rariteter du ikke har satt egne intervaller for.
@@ -25,8 +27,29 @@ export type Intervall = {
   usd_fra: number;
   // null betyr «og oppover».
   usd_til: number | null;
+  // Fast pris i øre. Brukes når faktor ikke er satt.
   pris_ore: number;
+  // Kroner per dollar, med påslaget innbakt. Går foran fast pris.
+  faktor: number | null;
+  avrunding: Avrunding | null;
 };
+
+// Oppruning til nærmeste fem, eller til nærmeste tall som ender på ni. Begge
+// er butikkpriser folk kjenner igjen; 14,19 kroner er ikke det.
+export function rundOpp(øre: number, regel: Avrunding | null | undefined): number {
+  const kr = øre / 100;
+  switch (regel) {
+    case "5opp":
+      return Math.ceil(kr / 5) * 5 * 100;
+    case "9opp":
+      // 7,7 → 9.  12 → 19.  19 → 19.
+      return (Math.ceil((kr - 9) / 10) * 10 + 9) * 100;
+    case "krone":
+      return Math.ceil(kr) * 100;
+    default:
+      return Math.round(øre);
+  }
+}
 
 export const SALG_STANDARD = {
   trapp: { NM: 100, EX: 85, VG: 70, G: 55 } as Record<string, number>,
@@ -46,7 +69,9 @@ export async function hentIntervaller(): Promise<Intervall[]> {
     rarity: String(x.rarity),
     usd_fra: Number(x.usd_fra),
     usd_til: x.usd_til === null || x.usd_til === undefined ? null : Number(x.usd_til),
-    pris_ore: Number(x.pris_ore),
+    pris_ore: Number(x.pris_ore || 0),
+    faktor: x.faktor === null || x.faktor === undefined ? null : Number(x.faktor),
+    avrunding: (x.avrunding as Avrunding) || null,
   }));
 }
 
@@ -55,19 +80,25 @@ export async function lagreIntervaller(rader: Intervall[]): Promise<number> {
   // gjort det mulig å ende med overlappende intervaller uten å merke det.
   await db().execute("DELETE FROM salg_intervaller");
   const rene = rader
-    .filter((r) => r.rarity && Number.isFinite(r.usd_fra) && Number.isFinite(r.pris_ore))
+    // Et intervall må ha enten en fast pris eller en faktor. Uten begge ville
+    // det stilltiende gitt null kroner.
+    .filter((r) => r.rarity && Number.isFinite(r.usd_fra) && (Number(r.pris_ore) > 0 || Number(r.faktor) > 0))
     .map((r) => ({
       rarity: String(r.rarity).toLowerCase(),
       usd_fra: Math.max(0, Number(r.usd_fra)),
       usd_til: r.usd_til === null || r.usd_til === undefined ? null : Number(r.usd_til),
-      pris_ore: Math.max(0, Math.round(Number(r.pris_ore))),
+      pris_ore: Math.max(0, Math.round(Number(r.pris_ore) || 0)),
+      faktor: r.faktor === null || r.faktor === undefined || r.faktor === ("" as any)
+        ? null
+        : Number(r.faktor),
+      avrunding: r.avrunding || null,
     }));
   if (!rene.length) return 0;
   await db().batch(
     rene.map((r) => ({
-      sql: `INSERT INTO salg_intervaller (rarity, usd_fra, usd_til, pris_ore, updated_at)
-            VALUES (?, ?, ?, ?, ?)`,
-      args: [r.rarity, r.usd_fra, r.usd_til, r.pris_ore, new Date().toISOString()],
+      sql: `INSERT INTO salg_intervaller (rarity, usd_fra, usd_til, pris_ore, faktor, avrunding, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [r.rarity, r.usd_fra, r.usd_til, r.pris_ore, r.faktor, r.avrunding, new Date().toISOString()],
     })),
     "write"
   );
@@ -194,11 +225,24 @@ export function salgsprisØre(
     const usd = manuellUsd && manuellUsd > 0 ? manuellUsd : prisenFor(kort, finish);
     if (!usd || usd <= 0) return 0;
     const i = finnIntervall(opp.intervaller, kort.rarity ?? null, usd);
-    grunn = i ? i.pris_ore : Math.round(usd * opp.usd_nok * opp.faktor * 100);
+    if (!i) {
+      // Over alle intervallene: markedspris ganget med den globale faktoren.
+      grunn = rund(Math.round(usd * opp.usd_nok * opp.faktor * 100), opp.avrunding);
+    } else if (i.faktor && i.faktor > 0) {
+      // Faktoren er kroner per dollar, påslaget innbakt. Den erstatter
+      // valutakursen i stedet for å ganges med den: 1,29 × 11 = 14,19 kr.
+      grunn = rundOpp(usd * i.faktor * 100, i.avrunding);
+    } else {
+      grunn = i.pris_ore;
+    }
   }
 
   const pct = opp.trapp[condition];
   if (pct === undefined || pct === null) return 0;
+  // Opprundingen gjelder ankerprisen for Near Mint. Tilstandene regnes av den
+  // og rundes til nærmeste krone — ellers ville 85 % av 15 blitt 15 igjen, og
+  // trappen ville forsvunnet for billige kort.
+  if (condition === "NM") return grunn;
   return rund((grunn * pct) / 100, opp.avrunding);
 }
 

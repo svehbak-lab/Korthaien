@@ -78,6 +78,14 @@ async function leggTilNyeKolonner(): Promise<void> {
   // Kortopplysninger for produktside og filtre. Fylles først ved neste
   // Scryfall-import — kolonnene står tomme til da, og ingenting avhenger av
   // dem, så siden virker som før i mellomtiden.
+  const intKol = await kolonner("salg_intervaller");
+  if (intKol.size && !intKol.has("faktor")) {
+    await db().execute("ALTER TABLE salg_intervaller ADD COLUMN faktor REAL");
+  }
+  if (intKol.size && !intKol.has("avrunding")) {
+    await db().execute("ALTER TABLE salg_intervaller ADD COLUMN avrunding TEXT");
+  }
+
   const kortKol = await kolonner("cards");
   for (const [navn, type] of [
     ["type_line", "TEXT"], ["oracle_text", "TEXT"], ["mana_cost", "TEXT"],
