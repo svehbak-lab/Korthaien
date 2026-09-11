@@ -31,7 +31,7 @@ const SORTERING = [
   { id: "pris_opp", navn: "Pris, lav til høy" },
 ];
 
-const RARITETER = ["common", "uncommon", "rare", "mythic", "special"];
+const RARITETER = ["mythic", "rare", "uncommon", "common", "special"];
 
 const TOMT = {
   q: "", rarity: [], farge: [], type: [],
@@ -100,18 +100,18 @@ export default function Butikk({ onFeil }) {
       <div style={{ display: "grid", gridTemplateColumns: "220px minmax(0, 1fr)", gap: 20, alignItems: "start" }}>
         <div className="panel" style={{ position: "sticky", top: 16 }}>
           <div className="krop">
-            <Gruppe navn="Kortnavn">
+            <Fast navn="Kortnavn">
               <input type="text" value={f.q} onChange={(e) => endre("q", e.target.value)} style={{ width: "100%" }} />
-            </Gruppe>
+            </Fast>
 
-            <Gruppe navn="Sett">
+            <Fast navn="Sett">
               <select value={sett || ""} onChange={(e) => setSett(e.target.value || null)} style={{ width: "100%" }}>
                 <option value="">Velg sett…</option>
                 {alle.map((s) => (
                   <option key={s.code} value={s.code}>{s.name}</option>
                 ))}
               </select>
-            </Gruppe>
+            </Fast>
 
             <Gruppe navn="Raritet">
               {RARITETER.map((r) => (
@@ -336,6 +336,17 @@ function VisningsIkon({ aktiv, tittel, onClick, strek }) {
         )}
       </svg>
     </button>
+  );
+}
+
+// Felter som alltid er i bruk. De trenger ingen sammenslåing — en pil å
+// klikke på gir bare et klikk uten gevinst.
+function Fast({ navn, children }) {
+  return (
+    <div style={{ marginBottom: 10, borderBottom: "1px solid var(--strek)", paddingBottom: 10 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{navn}</div>
+      {children}
+    </div>
   );
 }
 
