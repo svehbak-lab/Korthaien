@@ -1,5 +1,5 @@
 import { db, hentSettings, type Condition, type Settings } from "./db.js";
-import { prisenFor, hentManuellPris } from "./pricing.js";
+import { prisenFor, hentManuellePriser } from "./pricing.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SALGSPRIS
@@ -273,6 +273,9 @@ export async function salgsprisForSett(setCode: string) {
   });
   const ider = (r.rows as any[]).map((x) => String(x.id));
   const manuelleSalg = await hentManuellSalg(ider);
+  // Én spørring for hele settet, ikke én per kort. Med over tusen kall til
+  // en database i Frankfurt tok dette minutter i stedet for sekunder.
+  const manuelleKjøp = await hentManuellePriser(ider);
 
   const ut = [];
   for (const k of r.rows as any[]) {
@@ -281,7 +284,7 @@ export async function salgsprisForSett(setCode: string) {
       if (finish === "nonfoil" && !Number(k.has_nonfoil)) continue;
       if (finish === "foil" && !Number(k.has_foil)) continue;
       const manuell = manuelleSalg.get(`${k.id}:${finish}`) ?? null;
-      const manuellKjøp = await hentManuellPris(String(k.id), finish);
+      const manuellKjøp = manuelleKjøp.get(`${k.id}:${finish}`) ?? null;
       rad.priser[finish] = {
         manuell,
         nm: salgsprisØre(k, finish, "NM", opp, manuell, manuellKjøp),
@@ -303,6 +306,7 @@ export async function butikkvisning(opts: {
   q?: string;
   rarity?: string;
   baresalg?: boolean;
+  maks?: number;
 }) {
   const opp = await hentSalgsOppsett();
   const { beholdning } = await import("./lager.js");
@@ -332,6 +336,7 @@ export async function butikkvisning(opts: {
 
   const ider = (r.rows as any[]).map((x) => String(x.id));
   const manuelleSalg = await hentManuellSalg(ider);
+  const manuelleKjøp = await hentManuellePriser(ider);
   const lager = await beholdning(ider);
 
   const ut: any[] = [];
@@ -342,7 +347,7 @@ export async function butikkvisning(opts: {
       if (finish === "foil" && !Number(k.has_foil)) continue;
 
       const manuell = manuelleSalg.get(`${k.id}:${finish}`) ?? null;
-      const manuellKjøp = await hentManuellPris(String(k.id), finish);
+      const manuellKjøp = manuelleKjøp.get(`${k.id}:${finish}`) ?? null;
       const priser = salgspriser(k, finish, opp, manuell, manuellKjøp);
       const tilstander = priser.map((p) => ({
         ...p,
@@ -356,7 +361,15 @@ export async function butikkvisning(opts: {
     }
     if (varianter.length) ut.push({ ...k, varianter });
   }
-  return { oppsett: opp, kort: ut };
+  // Et helt sett med regeltekst og bilder er mye å sende og mye å tegne opp.
+  // Grensen holder visningen rask; filteret er der for å snevre inn.
+  const maks = opts.maks ?? 250;
+  return {
+    oppsett: opp,
+    kort: ut.slice(0, maks),
+    totalt: ut.length,
+    utenPris: (r.rows as any[]).length - ut.length,
+  };
 }
 
 // Samme normalisering som resten av søket, uten å dra inn hele db-modulen

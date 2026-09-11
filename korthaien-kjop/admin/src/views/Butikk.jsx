@@ -50,10 +50,7 @@ export default function Butikk({ onFeil }) {
       .filter((k) => k.variant?.tilstander.length);
   }, [data, finish]);
 
-  const utenPris = useMemo(() => {
-    if (!data) return 0;
-    return data.kort.filter((k) => !k.varianter.some((v) => v.tilstander.length)).length;
-  }, [data]);
+  const utenPris = data?.utenPris ?? 0;
 
   return (
     <>
@@ -127,6 +124,13 @@ export default function Butikk({ onFeil }) {
           <p className="dempet">
             {synlige.length} {synlige.length === 1 ? "kort" : "kort"} i{" "}
             {finish === "foil" ? "foil" : "vanlig utgave"}.
+            {data.totalt > data.kort.length && (
+              <>
+                {" "}
+                Viser {data.kort.length} av {data.totalt} — søk eller filtrer for å
+                snevre inn.
+              </>
+            )}
             {utenPris > 0 && (
               <>
                 {" "}
