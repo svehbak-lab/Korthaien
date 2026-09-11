@@ -24,7 +24,7 @@ export async function hvorfor(navn: string, logg: (s: string) => void = console.
 
   const r = await db().execute({
     sql: `SELECT c.id, c.name, c.set_code, c.collector_number, c.variant, c.rarity,
-                 c.usd, c.usd_foil, c.has_nonfoil, c.has_foil,
+                 c.usd, c.usd_foil, c.has_nonfoil, c.has_foil, c.reserved,
                  COALESCE(st.visningsnavn, st.name) AS set_name, st.released_at
             FROM cards c LEFT JOIN sets st ON st.code = c.set_code
            WHERE c.name_norm = ? OR c.front_norm = ? OR c.name_norm LIKE ?
@@ -55,7 +55,7 @@ export async function hvorfor(navn: string, logg: (s: string) => void = console.
     const regel = regler.get(String(x.set_code)) || standardRegel(String(x.set_code), s);
 
     logg(`── ${settNavn} [${String(x.set_code).toUpperCase()}] #${x.collector_number || "?"} ${x.variant && x.variant !== "vanlig" ? `(${x.variant})` : ""}`);
-    logg(`   id ${x.id}`);
+    logg(`   id ${x.id}${Number(x.reserved) ? "  ·  RESERVELISTEN — Scryfall-prisen er sjelden til å stole på her" : ""}`);
 
     if (!regler.has(String(x.set_code))) {
       logg("   ✗ Settet har ingen regel i det hele tatt — det er aldri satt opp i admin.");

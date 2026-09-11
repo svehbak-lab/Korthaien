@@ -39,8 +39,61 @@ type Rå = {
   frame_effects?: string[];
   full_art?: boolean;
   image_uris?: { normal?: string; small?: string };
-  card_faces?: { image_uris?: { normal?: string; small?: string } }[];
+  type_line?: string;
+  oracle_text?: string;
+  mana_cost?: string;
+  cmc?: number;
+  colors?: string[];
+  color_identity?: string[];
+  power?: string;
+  toughness?: string;
+  loyalty?: string;
+  keywords?: string[];
+  artist?: string;
+  legalities?: Record<string, string>;
+  reserved?: boolean;
+  card_faces?: {
+    image_uris?: { normal?: string; small?: string };
+    type_line?: string;
+    oracle_text?: string;
+    mana_cost?: string;
+    colors?: string[];
+    power?: string;
+    toughness?: string;
+    loyalty?: string;
+  }[];
 };
+
+// ── dobbeltsidige kort ───────────────────────────────────────────────────────
+// Transform- og modalkort har verken regeltekst eller manakostnad på kortet
+// selv — de ligger på hver side for seg. Uten dette står Fable of the
+// Mirror-Breaker uten tekst på produktsiden.
+const FRA_SIDER = " \n//\n ";
+
+function tekstFra(k: Rå, felt: "oracle_text" | "type_line" | "mana_cost"): string | null {
+  const påKortet = k[felt];
+  if (påKortet) return påKortet;
+  const sider = (k.card_faces || []).map((f) => f[felt]).filter(Boolean) as string[];
+  if (!sider.length) return null;
+  // Manakostnad og korttype leses som én linje; regelteksten trenger skille.
+  return sider.join(felt === "oracle_text" ? FRA_SIDER : " // ");
+}
+
+// Forside først: det er den som vises, og den som «6/6» hører til.
+function fraForsiden(k: Rå, felt: "power" | "toughness" | "loyalty"): string | null {
+  return k[felt] ?? k.card_faces?.[0]?.[felt] ?? null;
+}
+
+function farger(k: Rå): string[] {
+  if (k.colors) return k.colors;
+  // Dobbeltsidige mangler colors på kortnivå. Unionen av sidene er nærmere
+  // sannheten enn ingenting, og er det kunden filtrerer på.
+  const alle = new Set<string>();
+  for (const f of k.card_faces || []) for (const c of (f.colors || [])) alle.add(c);
+  return [...alle];
+}
+
+const somJson = (v: unknown) => (v && (Array.isArray(v) ? v.length : true) ? JSON.stringify(v) : null);
 
 export async function importerSett(logg: (s: string) => void = console.log) {
   await importerSettliste(logg);
@@ -141,7 +194,7 @@ function brukbart(k: Rå): boolean {
   return true;
 }
 
-async function skrivBolk(bolk: Rå[]): Promise<void> {
+export async function skrivBolk(bolk: Rå[]): Promise<void> {
   const setninger = bolk.map((k) => {
     const finishes = k.finishes || ["nonfoil"];
     const bilde =
@@ -149,12 +202,22 @@ async function skrivBolk(bolk: Rå[]): Promise<void> {
     return {
       sql: `INSERT INTO cards
               (id, oracle_id, name, name_norm, front_norm, back_norm, variant, set_code,
-               collector_number, rarity, usd, usd_foil, has_nonfoil, has_foil, image_uri, released_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               collector_number, rarity, usd, usd_foil, has_nonfoil, has_foil, image_uri, released_at,
+               type_line, oracle_text, mana_cost, cmc, colors, color_identity,
+               power, toughness, loyalty, keywords, artist, legalities, reserved)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               usd = excluded.usd, usd_foil = excluded.usd_foil,
               image_uri = excluded.image_uri, rarity = excluded.rarity,
-              variant = excluded.variant`,
+              variant = excluded.variant,
+              type_line = excluded.type_line, oracle_text = excluded.oracle_text,
+              mana_cost = excluded.mana_cost, cmc = excluded.cmc,
+              colors = excluded.colors, color_identity = excluded.color_identity,
+              power = excluded.power, toughness = excluded.toughness,
+              loyalty = excluded.loyalty, keywords = excluded.keywords,
+              artist = excluded.artist, legalities = excluded.legalities,
+              reserved = excluded.reserved`,
       args: [
         k.id,
         k.oracle_id || k.id,
@@ -173,6 +236,19 @@ async function skrivBolk(bolk: Rå[]): Promise<void> {
         finishes.includes("foil") || finishes.includes("etched") ? 1 : 0,
         bilde,
         k.released_at || null,
+        tekstFra(k, "type_line"),
+        tekstFra(k, "oracle_text"),
+        tekstFra(k, "mana_cost"),
+        k.cmc ?? null,
+        somJson(farger(k)),
+        somJson(k.color_identity),
+        fraForsiden(k, "power"),
+        fraForsiden(k, "toughness"),
+        fraForsiden(k, "loyalty"),
+        somJson(k.keywords),
+        k.artist || null,
+        somJson(k.legalities),
+        k.reserved ? 1 : 0,
       ],
     };
   });

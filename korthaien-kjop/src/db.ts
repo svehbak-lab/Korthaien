@@ -75,6 +75,22 @@ async function leggTilNyeKolonner(): Promise<void> {
     await db().execute("ALTER TABLE mystore_categories ADD COLUMN forslag TEXT");
   }
 
+  // Kortopplysninger for produktside og filtre. Fylles først ved neste
+  // Scryfall-import — kolonnene står tomme til da, og ingenting avhenger av
+  // dem, så siden virker som før i mellomtiden.
+  const kortKol = await kolonner("cards");
+  for (const [navn, type] of [
+    ["type_line", "TEXT"], ["oracle_text", "TEXT"], ["mana_cost", "TEXT"],
+    ["cmc", "REAL"], ["colors", "TEXT"], ["color_identity", "TEXT"],
+    ["power", "TEXT"], ["toughness", "TEXT"], ["loyalty", "TEXT"],
+    ["keywords", "TEXT"], ["artist", "TEXT"], ["legalities", "TEXT"],
+    ["reserved", "INTEGER NOT NULL DEFAULT 0"],
+  ] as const) {
+    if (kortKol.size && !kortKol.has(navn)) {
+      await db().execute(`ALTER TABLE cards ADD COLUMN ${navn} ${type}`);
+    }
+  }
+
   const settKol = await kolonner("sets");
   if (settKol.size && !settKol.has("parent_code")) {
     await db().execute("ALTER TABLE sets ADD COLUMN parent_code TEXT");

@@ -45,6 +45,22 @@ CREATE TABLE IF NOT EXISTS cards (
   has_nonfoil       INTEGER NOT NULL DEFAULT 1,
   has_foil          INTEGER NOT NULL DEFAULT 0,
   image_uri         TEXT,
+  -- Kortopplysninger fra Scryfall. Brukes til produktside og filtermeny; de
+  -- påvirker ikke pris eller kvote. Dobbeltsidige kort har tekst og kostnad
+  -- per side, ikke på kortet, så halvdelene slås sammen ved import.
+  type_line         TEXT,
+  oracle_text       TEXT,
+  mana_cost         TEXT,
+  cmc               REAL,
+  colors            TEXT,
+  color_identity    TEXT,
+  power             TEXT,
+  toughness         TEXT,
+  loyalty           TEXT,
+  keywords          TEXT,
+  artist            TEXT,
+  legalities        TEXT,
+  reserved          INTEGER NOT NULL DEFAULT 0,
   released_at       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_cards_name    ON cards(name_norm);
