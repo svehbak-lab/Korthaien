@@ -7,6 +7,7 @@ import { sendBekreftelse, varsleMeg, varsleStatus, sendOppgjør } from "./epost.
 import { bokførOrdre, reverserOrdre, beholdning, historikk, settBeholdning, avvikMotMystore } from "./lager.js";
 import {
   hentIntervaller, lagreIntervaller, finnHull, salgsprisForSett, settManuellSalg,
+  butikkvisning,
 } from "./salgspris.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
@@ -356,6 +357,21 @@ app.put("/api/admin/salgspriser", krevAdmin, fang(async (req: any, res: any) => 
 
 app.get("/api/admin/salgspriser/:sett", krevAdmin, fang(async (req: any, res: any) => {
   res.json(await salgsprisForSett(String(req.params.sett)));
+}));
+
+// Forhåndsvisning av butikken, inne i admin. Flyttes ut når salgssiden
+// bygges — inntil da er dette stedet å se om prisene stemmer.
+app.get("/api/admin/butikk", krevAdmin, fang(async (req: any, res: any) => {
+  const sett = String(req.query.sett || "").toLowerCase();
+  if (!sett) throw new HttpFeil(400, "Mangler ?sett=");
+  res.json(
+    await butikkvisning({
+      sett,
+      q: req.query.q ? String(req.query.q) : undefined,
+      rarity: req.query.rarity ? String(req.query.rarity) : undefined,
+      baresalg: String(req.query.baresalg || "") === "1",
+    })
+  );
 }));
 
 app.put("/api/admin/salgspris/:cardId", krevAdmin, fang(async (req: any, res: any) => {

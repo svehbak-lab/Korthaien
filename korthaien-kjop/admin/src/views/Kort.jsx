@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { api, kroner, CONDITIONS } from "../api.js";
+import { api, kroner, dato, CONDITIONS } from "../api.js";
 
 const KOLONNER = [
   { id: "collector_number", navn: "Nr.", bredde: 50 },
@@ -7,7 +7,7 @@ const KOLONNER = [
   { id: "rarity", navn: "Raritet", bredde: 90 },
   { id: "usd", navn: "USD", h: true, bredde: 70 },
   { id: "egne_conditions", navn: "Tar imot", bredde: 165 },
-  { id: "prod_nonfoil", navn: "Hos Korthaien", bredde: 200 },
+  { id: "prod_nonfoil", navn: "Hos Korthaien", bredde: 215 },
   { id: "stock_nonfoil", navn: "På lager", h: true, bredde: 80 },
   { id: "ledig_nonfoil", navn: "Kan selges", h: true, bredde: 90 },
   { id: "want_nonfoil", navn: "Vil ha", h: true, bredde: 70 },
@@ -171,6 +171,15 @@ export default function Kort({ sett, onFeil, onByttSett }) {
         >
           {modus === "priser" ? "Ferdig med prisene" : "Manuell prising"}
         </button>
+        <button
+          className={`knapp liten ${modus === "lager" ? "primar" : ""}`}
+          onClick={() => {
+            if (modus === "lager") last();
+            setModus(modus === "lager" ? "oversikt" : "lager");
+          }}
+        >
+          {modus === "lager" ? "Ferdig med lageret" : "Legg inn lager"}
+        </button>
         <span className="dempet">Raritet:</span>
         <button className={`knapp liten ${!raritet ? "primar" : ""}`} onClick={() => setRaritet("")}>
           Alle
@@ -190,7 +199,9 @@ export default function Kort({ sett, onFeil, onByttSett }) {
         })}
       </div>
 
-      {modus === "priser" ? (
+      {modus === "lager" ? (
+        <Lagerliste kort={synlige} sett={sett} onFeil={onFeil} />
+      ) : modus === "priser" ? (
         <Prisliste
           kort={synlige}
           regel={regel}
@@ -578,11 +589,11 @@ function Kobling({ kort, onFeil, onEndret, sett }) {
 
       {koblet && !åpen && (
         <button
-          className="knapp blank"
-          style={{ fontSize: 11 }}
+          className="knapp handling"
+          style={{ marginLeft: 0, whiteSpace: "nowrap" }}
           onClick={() => { setÅpen(true); søk(kort.name); }}
         >
-          Koble et produkt til
+          + Koble til
         </button>
       )}
     </div>
@@ -592,7 +603,12 @@ function Kobling({ kort, onFeil, onEndret, sett }) {
 function ProduktLinje({ navn, kategori, merke, onFjern }) {
   return (
     <div className="rad-flex" style={{ gap: 5, fontSize: 12 }}>
-      <span style={{ flex: 1, minWidth: 0 }}>
+      {/* Én linje med ellipse. Produktnavn og kategori er lange, og å la dem
+          bryte gjorde hver rad tre ganger høyere enn den trengte å være. */}
+      <span
+        style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+        title={`${navn || "(uten navn)"}${kategori ? ` · ${kategori}` : ""}`}
+      >
         {navn || "(uten navn)"}
         {merke && <span className="merkelapp m-vent" style={{ marginLeft: 4 }}>{merke}</span>}
         {kategori && <span className="dempet"> · {kategori}</span>}
@@ -774,6 +790,218 @@ function Prisliste({ kort, regel, settings, onFeil, onRegelEndret }) {
         </tbody>
       </table>
       {!kort.length && <div className="tom">Ingen kort passer filteret.</div>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LAGERINNLEGGING
+// ─────────────────────────────────────────────────────────────────────────────
+// Ved nye utgivelser åpner du bokser og fører inn det du faktisk har. Samme
+// arbeidsflyt som manuell prising: tab nedover, lagring når feltet forlates,
+// ingen henting underveis så fokus ikke hopper.
+//
+// Du oppgir beholdningen, ikke differansen. Serveren regner ut bevegelsen, så
+// du slipper å regne i hodet når du sitter med en bunke foran deg.
+function Lagerliste({ kort, sett, onFeil }) {
+  const [finish, setFinish] = useState("nonfoil");
+  const [lager, setLager] = useState(null);
+  const [utkast, setUtkast] = useState({});
+  const [lagret, setLagret] = useState({});
+  const [historikk, setHistorikk] = useState(null);
+
+  useEffect(() => {
+    api.lager(sett).then((r) => {
+      const kart = {};
+      for (const k of r.kort) kart[k.id] = k.lager;
+      setLager(kart);
+      setUtkast({});
+    }).catch(onFeil);
+  }, [sett]);
+
+  async function lagre(kortId, cond, tekst) {
+    const n = Math.max(0, parseInt(String(tekst).trim()) || 0);
+    const nå = lager?.[kortId]?.[`${finish}:${cond}`] ?? 0;
+    if (n === nå) return;
+    try {
+      await api.settLager(kortId, { finish, condition: cond, antall: n });
+      setLager((l) => ({ ...l, [kortId]: { ...(l[kortId] || {}), [`${finish}:${cond}`]: n } }));
+      setLagret((s) => ({ ...s, [`${kortId}:${cond}`]: true }));
+      setTimeout(() => setLagret((s) => ({ ...s, [`${kortId}:${cond}`]: false })), 1400);
+    } catch (e) {
+      onFeil(e);
+    }
+  }
+
+  if (!lager) return <p className="dempet">Henter lageret…</p>;
+
+  const synlige = kort.filter((k) => (finish === "foil" ? Number(k.has_foil) : Number(k.has_nonfoil)));
+  const iSettet = synlige.reduce(
+    (n, k) => n + CONDITIONS.reduce((m, c) => m + (lager[k.id]?.[`${finish}:${c}`] || 0), 0),
+    0
+  );
+
+  return (
+    <div className="panel">
+      <div className="krop">
+        <div className="rad-flex" style={{ justifyContent: "space-between" }}>
+          <div>
+            <strong>Legg inn lager</strong>
+            <p className="dempet" style={{ margin: "4px 0 0" }}>
+              Skriv hvor mange du har. Tab hopper til neste felt. Tallet du skriver
+              er beholdningen, ikke et tillegg — skriver du 4 der det står 7, går
+              tre ut av lageret.
+            </p>
+          </div>
+          <div className="rad-flex">
+            {["nonfoil", "foil"].map((f) => (
+              <button
+                key={f}
+                className={`knapp liten ${finish === f ? "primar" : ""}`}
+                onClick={() => setFinish(f)}
+              >
+                {f === "foil" ? "Foil" : "Vanlige"}
+              </button>
+            ))}
+            <span className="dempet">{iSettet} stk. i dette settet</span>
+          </div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style={{ width: 50 }}>Nr.</th>
+            <th>Kort</th>
+            <th style={{ width: 80 }}>Raritet</th>
+            {CONDITIONS.map((c) => (
+              <th key={c} className="h" style={{ width: 74 }}>{c}</th>
+            ))}
+            <th style={{ width: 70 }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {synlige.map((k) => (
+            <tr key={k.id}>
+              <td className="kode dempet">{k.collector_number}</td>
+              <td>
+                {k.name}
+                {k.variant && k.variant !== "vanlig" && (
+                  <span className="dempet"> · {k.variant}</span>
+                )}
+                {Number(k.er_token) === 1 && (
+                  <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>token</span>
+                )}
+              </td>
+              <td className="dempet">{k.rarity || "\u2014"}</td>
+              {CONDITIONS.map((c) => {
+                const nøkkel = `${k.id}:${c}`;
+                const verdi = utkast[nøkkel] ?? String(lager[k.id]?.[`${finish}:${c}`] ?? 0);
+                return (
+                  <td key={c} className="h">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={verdi}
+                      onChange={(e) =>
+                        setUtkast((u) => ({ ...u, [nøkkel]: e.target.value.replace(/[^\d]/g, "") }))
+                      }
+                      onBlur={(e) => lagre(k.id, c, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                        if (e.key === "Escape") {
+                          setUtkast((u) => ({ ...u, [nøkkel]: undefined }));
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      style={{
+                        width: 56,
+                        textAlign: "right",
+                        borderColor: lagret[nøkkel] ? "var(--ok)" : undefined,
+                        // Null er det vanlige. Da skal tallet ikke rope.
+                        color: Number(verdi) ? "inherit" : "var(--dempet)",
+                      }}
+                    />
+                  </td>
+                );
+              })}
+              <td className="h">
+                <button
+                  className="knapp handling"
+                  onClick={() =>
+                    api
+                      .lagerHistorikk(k.id, finish)
+                      .then((h) => setHistorikk({ kort: k, rader: h }))
+                      .catch(onFeil)
+                  }
+                >
+                  Historikk
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!synlige.length && (
+        <div className="tom">
+          Ingen kort i dette settet finnes i {finish === "foil" ? "foil" : "vanlig utgave"}.
+        </div>
+      )}
+
+      {historikk && <Historikk data={historikk} onLukk={() => setHistorikk(null)} />}
+    </div>
+  );
+}
+
+// Svaret på «hvor kom disse fra». Bevegelser, ikke et tall — derfor kan
+// spørsmålet stilles i det hele tatt.
+function Historikk({ data, onLukk }) {
+  const GRUNN = {
+    ordre: "Fra kjøpsordre",
+    mystore: "Åpningsbeholdning fra Mystore",
+    manuell: "Lagt inn manuelt",
+    telling: "Rettet ved telling",
+    reversert: "Reversert oppgjør",
+    salg: "Solgt",
+  };
+  return (
+    <div className="panel" style={{ margin: 16, background: "var(--papir)" }}>
+      <div className="krop">
+        <div className="rad-flex" style={{ justifyContent: "space-between" }}>
+          <strong>{data.kort.name}</strong>
+          <button className="knapp liten" onClick={onLukk}>Lukk</button>
+        </div>
+        {!data.rader.length ? (
+          <p className="dempet" style={{ marginBottom: 0 }}>Ingen bevegelser ennå.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 110 }}>Dato</th>
+                <th style={{ width: 70 }}>Tilstand</th>
+                <th className="h" style={{ width: 70 }}>Endring</th>
+                <th>Grunn</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.rader.map((r) => (
+                <tr key={r.id}>
+                  <td className="dempet">{dato(r.created_at)}</td>
+                  <td>{r.condition}</td>
+                  <td className="h tall" style={{ color: r.antall < 0 ? "var(--feil)" : "var(--ok)" }}>
+                    {r.antall > 0 ? `+${r.antall}` : r.antall}
+                  </td>
+                  <td className="dempet">
+                    {GRUNN[r.grunn] || r.grunn}
+                    {r.order_no && <span className="kode"> {r.order_no}</span>}
+                    {r.notat && ` — ${r.notat}`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }

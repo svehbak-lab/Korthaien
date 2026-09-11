@@ -77,6 +77,10 @@ export const api = {
   ordreLogg: (id) => kall(`/api/admin/orders/${id}/logg`),
   angreFjerning: (id) => kall(`/api/admin/lines/${id}?angre=1`, { method: "DELETE" }),
   lagreKreditt: (id, felt) => kall(`/api/admin/orders/${id}/kreditt`, { method: "PUT", body: felt }),
+  butikk: ({ sett, q, rarity, baresalg }) =>
+    kall(`/api/admin/butikk?${new URLSearchParams({
+      sett, ...(q ? { q } : {}), ...(rarity ? { rarity } : {}), ...(baresalg ? { baresalg: "1" } : {}),
+    })}`),
   salgspriser: () => kall("/api/admin/salgspriser"),
   lagreSalgspriser: (intervaller) =>
     kall("/api/admin/salgspriser", { method: "PUT", body: { intervaller } }),

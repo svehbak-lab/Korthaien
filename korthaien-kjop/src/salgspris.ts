@@ -248,3 +248,75 @@ export async function salgsprisForSett(setCode: string) {
   }
   return { oppsett: opp, kort: ut };
 }
+
+
+// ── butikkvisning ────────────────────────────────────────────────────────────
+// Slik kunden vil se det: pris og beholdning per tilstand, per finish. Dette
+// er den eneste måten å oppdage at et intervall traff feil — tallene må stå
+// ved siden av kortet, ikke i en tabell over regler.
+export async function butikkvisning(opts: {
+  sett: string;
+  q?: string;
+  rarity?: string;
+  baresalg?: boolean;
+}) {
+  const opp = await hentSalgsOppsett();
+  const { beholdning } = await import("./lager.js");
+
+  const hvor: string[] = ["c.set_code = ?"];
+  const args: any[] = [opts.sett.toLowerCase()];
+  if (opts.q) {
+    hvor.push("(c.name_norm LIKE ? OR c.oracle_text LIKE ?)");
+    args.push(`%${normaliserEnkelt(opts.q)}%`, `%${opts.q}%`);
+  }
+  if (opts.rarity) {
+    hvor.push("c.rarity = ?");
+    args.push(opts.rarity);
+  }
+
+  const r = await db().execute({
+    sql: `SELECT c.id, c.name, c.collector_number, c.rarity, c.variant,
+                 c.usd, c.usd_foil, c.has_nonfoil, c.has_foil, c.er_token,
+                 c.image_uri, c.type_line, c.oracle_text, c.mana_cost,
+                 c.power, c.toughness, c.loyalty, c.colors, c.artist,
+                 COALESCE(s.visningsnavn, s.name) AS set_name
+            FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+           WHERE ${hvor.join(" AND ")}
+           ORDER BY CAST(c.collector_number AS INTEGER), c.collector_number`,
+    args,
+  });
+
+  const ider = (r.rows as any[]).map((x) => String(x.id));
+  const manuelleSalg = await hentManuellSalg(ider);
+  const lager = await beholdning(ider);
+
+  const ut: any[] = [];
+  for (const k of r.rows as any[]) {
+    const varianter: any[] = [];
+    for (const finish of ["nonfoil", "foil"]) {
+      if (finish === "nonfoil" && !Number(k.has_nonfoil)) continue;
+      if (finish === "foil" && !Number(k.has_foil)) continue;
+
+      const manuell = manuelleSalg.get(`${k.id}:${finish}`) ?? null;
+      const manuellKjøp = await hentManuellPris(String(k.id), finish);
+      const priser = salgspriser(k, finish, opp, manuell, manuellKjøp);
+      const tilstander = priser.map((p) => ({
+        ...p,
+        // Butikken viser bare det du faktisk har. Null på lager betyr
+        // utsolgt, ikke at prisen er feil.
+        lager: lager.get(`${k.id}:${finish}:${p.condition}`) || 0,
+      }));
+      const påLager = tilstander.reduce((n, t) => n + t.lager, 0);
+      if (opts.baresalg && !påLager) continue;
+      varianter.push({ finish, manuell, tilstander, påLager });
+    }
+    if (varianter.length) ut.push({ ...k, varianter });
+  }
+  return { oppsett: opp, kort: ut };
+}
+
+// Samme normalisering som resten av søket, uten å dra inn hele db-modulen
+// på nytt her.
+function normaliserEnkelt(s: string): string {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
