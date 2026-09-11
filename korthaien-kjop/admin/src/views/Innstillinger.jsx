@@ -194,6 +194,10 @@ export default function Innstillinger({ onFeil, onMelding }) {
         </div>
       </div>
 
+      <Salgspriser onFeil={onFeil} onMelding={onMelding} />
+
+      <SalgsTrapp s={s} endre={endre} />
+
       <Sikkerhet onFeil={onFeil} onMelding={onMelding} />
     </>
   );
@@ -223,6 +227,55 @@ function UsdFelt({ verdi, onEndret }) {
       onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
       style={{ width: 68, textAlign: "right" }}
     />
+  );
+}
+
+// Egen trapp for salg. Den bestemmer hvor mye mindre du tar for et slitt
+// kort — ikke hvor mye mindre du betaler, som er kjøpstrappens jobb.
+function SalgsTrapp({ s, endre }) {
+  const trapp = s.salg_trapp || { NM: 100, EX: 85, VG: 70, G: 55 };
+  return (
+    <div className="panel">
+      <div className="krop">
+        <h2 style={{ marginTop: 0 }}>Salgstrapp og avrunding</h2>
+        <p className="dempet">
+          Near Mint er grunnprisen. De andre tilstandene regnes som en andel av
+          den. Trappen er egen for salg, slik at du kan justere marginen på slitte
+          kort uten å endre hva du betaler for dem.
+        </p>
+        <div className="rad-flex">
+          {CONDITIONS.map((c) => (
+            <Felt key={c} navn={c}>
+              <input
+                type="number" min="0" max="100" value={trapp[c] ?? 0}
+                onChange={(e) => endre("salg_trapp", { ...trapp, [c]: parseInt(e.target.value) || 0 })}
+                style={{ width: 64, textAlign: "right" }}
+              />
+              <span className="dempet"> %</span>
+            </Felt>
+          ))}
+          <Felt navn="Over intervallene">
+            <span className="dempet">× </span>
+            <input
+              type="text" inputMode="decimal" value={s.salg_faktor ?? 1}
+              onChange={(e) => endre("salg_faktor", Number(String(e.target.value).replace(",", ".")) || 0)}
+              style={{ width: 64, textAlign: "right" }}
+            />
+            <span className="dempet"> markedspris</span>
+          </Felt>
+          <Felt navn="Avrunding">
+            <select
+              value={s.salg_avrunding ?? 100}
+              onChange={(e) => endre("salg_avrunding", parseInt(e.target.value))}
+            >
+              <option value={1}>Ingen</option>
+              <option value={100}>Hele kroner</option>
+              <option value={500}>Nærmeste 5 kr</option>
+            </select>
+          </Felt>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -401,6 +454,146 @@ function Sikkerhet({ onFeil, onMelding }) {
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SALGSPRISER
+// ─────────────────────────────────────────────────────────────────────────────
+// Utsalgsprisen avledes av markedsprisen, ikke satt kort for kort. Endrer du
+// et intervall, følger alle kortene i det intervallet etter.
+export function Salgspriser({ onFeil, onMelding }) {
+  const [rader, setRader] = useState(null);
+  const [advarsler, setAdvarsler] = useState([]);
+  const [lagrer, setLagrer] = useState(false);
+
+  useEffect(() => {
+    api.salgspriser()
+      .then((r) => { setRader(r.intervaller); setAdvarsler(r.advarsler); })
+      .catch(onFeil);
+  }, []);
+
+  function endre(i, felt, verdi) {
+    setRader((r) => r.map((rad, j) => (j === i ? { ...rad, [felt]: verdi } : rad)));
+  }
+
+  async function lagre() {
+    setLagrer(true);
+    try {
+      const rene = rader.map((r) => ({
+        rarity: r.rarity,
+        usd_fra: Number(String(r.usd_fra).replace(",", ".")) || 0,
+        usd_til:
+          r.usd_til === "" || r.usd_til === null ? null : Number(String(r.usd_til).replace(",", ".")),
+        pris_ore: Math.round((Number(String(r.pris_kr).replace(",", ".")) || 0) * 100),
+      }));
+      const svar = await api.lagreSalgspriser(rene);
+      setAdvarsler(svar.advarsler);
+      onMelding(`${svar.antall} intervaller lagret.`);
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setLagrer(false);
+    }
+  }
+
+  if (!rader) return null;
+  const medKroner = rader.map((r) => ({ ...r, pris_kr: r.pris_kr ?? (r.pris_ore / 100) }));
+
+  return (
+    <div className="panel">
+      <div className="krop">
+        <h2 style={{ marginTop: 0 }}>Utsalgspriser</h2>
+        <p className="dempet">
+          Prisen er flat innenfor hvert intervall: et rare til 0,20 og et til 0,80
+          koster det samme. En egen regel for en raritet slår regelen for «alle».
+          Kort som er dyrere enn alle intervallene prises av markedet, ganget med
+          faktoren under.
+        </p>
+
+        {advarsler.length > 0 && (
+          <div className="varsel info">
+            <b>Se over intervallene.</b>
+            <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>
+              {advarsler.map((a, i) => <li key={i}>{a}</li>)}
+            </ul>
+          </div>
+        )}
+
+        <table>
+          <thead>
+            <tr>
+              <th style={{ width: 120 }}>Raritet</th>
+              <th className="h" style={{ width: 90 }}>Fra $</th>
+              <th className="h" style={{ width: 90 }}>Til $</th>
+              <th className="h" style={{ width: 100 }}>Pris kr</th>
+              <th style={{ width: 50 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {medKroner.map((r, i) => (
+              <tr key={i}>
+                <td>
+                  <select value={r.rarity} onChange={(e) => endre(i, "rarity", e.target.value)}>
+                    {["common", "uncommon", "rare", "mythic", "special", "alle"].map((x) => (
+                      <option key={x} value={x}>{x}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="h">
+                  <input
+                    type="text" inputMode="decimal" value={r.usd_fra}
+                    onChange={(e) => endre(i, "usd_fra", e.target.value.replace(/[^\d.,]/g, ""))}
+                    style={{ width: 70, textAlign: "right" }}
+                  />
+                </td>
+                <td className="h">
+                  <input
+                    type="text" inputMode="decimal"
+                    value={r.usd_til === null ? "" : r.usd_til}
+                    placeholder="og opp"
+                    onChange={(e) => endre(i, "usd_til", e.target.value.replace(/[^\d.,]/g, ""))}
+                    style={{ width: 70, textAlign: "right" }}
+                  />
+                </td>
+                <td className="h">
+                  <input
+                    type="text" inputMode="decimal" value={r.pris_kr}
+                    onChange={(e) => endre(i, "pris_kr", e.target.value.replace(/[^\d.,]/g, ""))}
+                    style={{ width: 80, textAlign: "right" }}
+                  />
+                </td>
+                <td className="h">
+                  <button
+                    className="knapp handling"
+                    onClick={() => setRader((x) => x.filter((_, j) => j !== i))}
+                  >
+                    Fjern
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="rad-flex" style={{ marginTop: 12 }}>
+          <button
+            className="knapp"
+            onClick={() =>
+              setRader((r) => [...r, { rarity: "rare", usd_fra: 0, usd_til: "", pris_kr: 10 }])
+            }
+          >
+            + Nytt intervall
+          </button>
+          <button className="knapp primar" onClick={lagre} disabled={lagrer}>
+            {lagrer ? "Lagrer…" : "Lagre intervallene"}
+          </button>
+          <span className="dempet">
+            Tomt «til»-felt betyr «og oppover».
+          </span>
+        </div>
       </div>
     </div>
   );

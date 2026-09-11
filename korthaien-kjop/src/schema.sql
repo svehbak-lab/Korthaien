@@ -141,6 +141,27 @@ CREATE TABLE IF NOT EXISTS lager_bevegelser (
 CREATE INDEX IF NOT EXISTS idx_lager_kort  ON lager_bevegelser (card_id, finish, condition);
 CREATE INDEX IF NOT EXISTS idx_lager_ordre ON lager_bevegelser (order_id);
 
+-- Utsalgspris per raritet og dollarintervall. Et rare til under 0,90 dollar
+-- koster det samme uansett om markedet sier 0,20 eller 0,80.
+CREATE TABLE IF NOT EXISTS salg_intervaller (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  rarity     TEXT NOT NULL,
+  usd_fra    REAL NOT NULL,
+  -- NULL betyr «og oppover».
+  usd_til    REAL,
+  pris_ore   INTEGER NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- Manuell utsalgspris for Near Mint. Trappen regner ut de andre tilstandene.
+CREATE TABLE IF NOT EXISTS card_sale_prices (
+  card_id    TEXT NOT NULL,
+  finish     TEXT NOT NULL CHECK (finish IN ('nonfoil','foil')),
+  nm_ore     INTEGER NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (card_id, finish)
+);
+
 CREATE TABLE IF NOT EXISTS card_conditions (
   card_id     TEXT PRIMARY KEY,
   conditions  TEXT NOT NULL,

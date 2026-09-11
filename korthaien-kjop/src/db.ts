@@ -267,6 +267,13 @@ export type Settings = {
   // ikke i det hele tatt. Terskelen ligger på markedsprisen og ikke på
   // utbetalingen, så den ikke flytter seg når du endrer kjøpsandelen.
   min_usd: Record<string, number>;
+  // Salgssiden. Egen trapp, fordi den tjener motsatt formål av kjøpstrappen:
+  // den bestemmer hvor mye mindre du tar, ikke hvor mye mindre du betaler.
+  salg_trapp: Record<string, number>;
+  // Brukes på kort som er dyrere enn alle intervallene. 1,0 er markedspris.
+  salg_faktor: number;
+  // Avrunding i øre. 100 gir hele kroner.
+  salg_avrunding: number;
   default_conditions: Condition[];
   default_ladder: Ladder;
   order_expiry_days: number;
@@ -284,6 +291,9 @@ const STANDARD: Settings = {
   // Ingen terskel som utgangspunkt. Sett common og uncommon til for eksempel
   // 0.5 for å slippe å motta bulk du likevel ikke tjener på å håndtere.
   min_usd: { common: 0, uncommon: 0, rare: 0, mythic: 0 },
+  salg_trapp: { NM: 100, EX: 85, VG: 70, G: 55 },
+  salg_faktor: 1.0,
+  salg_avrunding: 100,
   // NM er standard for alle sett, slik du beskrev.
   default_conditions: ["NM"],
   default_ladder: { NM: 100, EX: 85, VG: 70, G: 55 },

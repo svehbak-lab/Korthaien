@@ -5,6 +5,9 @@ import { db, migrate, hentSettings, settSetting, normaliser, CONDITIONS, type Se
 import { søk, løsBulk, tilbudFor } from "./catalog.js";
 import { sendBekreftelse, varsleMeg, varsleStatus, sendOppgjør } from "./epost.js";
 import { bokførOrdre, reverserOrdre, beholdning, historikk, settBeholdning, avvikMotMystore } from "./lager.js";
+import {
+  hentIntervaller, lagreIntervaller, finnHull, salgsprisForSett, settManuellSalg,
+} from "./salgspris.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
   lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal,
@@ -334,6 +337,107 @@ app.post("/api/admin/orders/:id/testepost", krevAdmin, fang(async (req: any, res
       args: [String(o.rows[0].email), id],
     });
   }
+}));
+
+// ── salgspriser ──────────────────────────────────────────────────────────────
+app.get("/api/admin/salgspriser", krevAdmin, fang(async (_req: any, res: any) => {
+  const intervaller = await hentIntervaller();
+  res.json({ intervaller, advarsler: finnHull(intervaller) });
+}));
+
+app.put("/api/admin/salgspriser", krevAdmin, fang(async (req: any, res: any) => {
+  const rader = Array.isArray(req.body?.intervaller) ? req.body.intervaller : [];
+  // Overlapp og hull sier vi fra om, men vi nekter ikke — noen ganger er et
+  // hull med vilje, og da skal ikke systemet krangle.
+  const advarsler = finnHull(rader);
+  const antall = await lagreIntervaller(rader);
+  res.json({ ok: true, antall, advarsler });
+}));
+
+app.get("/api/admin/salgspriser/:sett", krevAdmin, fang(async (req: any, res: any) => {
+  res.json(await salgsprisForSett(String(req.params.sett)));
+}));
+
+app.put("/api/admin/salgspris/:cardId", krevAdmin, fang(async (req: any, res: any) => {
+  const finish = req.body?.finish === "foil" ? "foil" : "nonfoil";
+  const ore = req.body?.nm_ore === null || req.body?.nm_ore === "" ? null : Number(req.body?.nm_ore);
+  if (ore !== null && (!Number.isFinite(ore) || ore < 0)) throw new HttpFeil(400, "Ugyldig beløp");
+  await settManuellSalg(String(req.params.cardId), finish, ore);
+  res.json({ ok: true, nm_ore: ore });
+}));
+
+// ── varelager ────────────────────────────────────────────────────────────────
+// Beholdningen for ett sett, med alle tilstander og begge finisher per kort.
+app.get("/api/admin/lager", krevAdmin, fang(async (req: any, res: any) => {
+  const sett = String(req.query.sett || "").toLowerCase();
+  if (!sett) throw new HttpFeil(400, "Mangler ?sett=");
+  const r = await db().execute({
+    sql: `SELECT c.id, c.name, c.collector_number, c.rarity, c.variant,
+                 c.has_foil, c.has_nonfoil, c.er_token,
+                 b.finish, b.condition, b.n
+            FROM cards c
+            LEFT JOIN (
+              SELECT card_id, finish, condition, SUM(antall) AS n
+                FROM lager_bevegelser GROUP BY card_id, finish, condition
+            ) b ON b.card_id = c.id
+           WHERE c.set_code = ?
+           ORDER BY CAST(c.collector_number AS INTEGER), c.collector_number`,
+    args: [sett],
+  });
+
+  // Én rad per kort, med beholdningen samlet i et kart. Databasen gir én rad
+  // per kombinasjon, og det er klienten dårlig tjent med.
+  const kart = new Map<string, any>();
+  for (const x of r.rows as any[]) {
+    const id = String(x.id);
+    if (!kart.has(id)) {
+      kart.set(id, {
+        id, name: x.name, collector_number: x.collector_number, rarity: x.rarity,
+        variant: x.variant, has_foil: x.has_foil, has_nonfoil: x.has_nonfoil,
+        er_token: x.er_token, lager: {},
+      });
+    }
+    if (x.finish && Number(x.n)) {
+      kart.get(id).lager[`${x.finish}:${x.condition}`] = Number(x.n);
+    }
+  }
+  const kort = [...kart.values()];
+  res.json({
+    kort,
+    stykker: kort.reduce((n, k) => n + Object.values(k.lager).reduce((a: any, b: any) => a + b, 0), 0),
+  });
+}));
+
+// Du oppgir beholdningen, ikke differansen. Bevegelsen regnes ut her, så du
+// slipper å regne i hodet når du sitter med en bunke foran deg.
+app.put("/api/admin/lager/:cardId", krevAdmin, fang(async (req: any, res: any) => {
+  const { finish, condition, antall, grunn } = req.body || {};
+  if (!CONDITIONS.includes(condition)) throw new HttpFeil(400, "Ukjent condition");
+  const n = Number(antall);
+  if (!Number.isFinite(n) || n < 0) throw new HttpFeil(400, "Antall må være null eller mer");
+  const ut = await settBeholdning(
+    String(req.params.cardId),
+    finish === "foil" ? "foil" : "nonfoil",
+    condition,
+    n,
+    grunn === "telling" ? "telling" : "manuell"
+  );
+  res.json(ut);
+}));
+
+app.get("/api/admin/lager/:cardId/historikk", krevAdmin, fang(async (req: any, res: any) => {
+  res.json(await historikk(String(req.params.cardId), req.query.finish ? String(req.query.finish) : undefined));
+}));
+
+// Samlet oversikt. Salgsverdi kommer først når prismotoren finnes.
+app.get("/api/admin/lager-sammendrag", krevAdmin, fang(async (_req: any, res: any) => {
+  const r = await db().execute(`
+    SELECT COUNT(DISTINCT card_id) AS kort, COALESCE(SUM(antall), 0) AS stykker
+      FROM lager_bevegelser`);
+  const perTilstand = await db().execute(`
+    SELECT condition, finish, SUM(antall) AS n FROM lager_bevegelser
+     GROUP BY condition, finish HAVING n <> 0 ORDER BY n DESC`);
+  res.json({ ...r.rows[0], fordeling: perTilstand.rows, avvik: await avvikMotMystore(25) });
 }));
 
 app.get("/api/admin/orders/:id/logg", krevAdmin, fang(async (req: any, res: any) => {
@@ -803,7 +907,8 @@ app.get("/api/admin/settings", krevAdmin, fang(async (_req: any, res: any) => {
 
 app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
   const lov: (keyof Settings)[] = [
-    "usd_nok", "buy_pct", "min_buy_ore", "min_order_ore", "min_usd", "default_conditions",
+    "usd_nok", "buy_pct", "min_buy_ore", "min_order_ore", "min_usd",
+    "salg_trapp", "salg_faktor", "salg_avrunding", "default_conditions",
     "default_ladder", "order_expiry_days", "ship_to",
   ];
   for (const [k, v] of Object.entries(req.body || {})) {

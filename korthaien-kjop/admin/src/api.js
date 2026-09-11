@@ -77,6 +77,17 @@ export const api = {
   ordreLogg: (id) => kall(`/api/admin/orders/${id}/logg`),
   angreFjerning: (id) => kall(`/api/admin/lines/${id}?angre=1`, { method: "DELETE" }),
   lagreKreditt: (id, felt) => kall(`/api/admin/orders/${id}/kreditt`, { method: "PUT", body: felt }),
+  salgspriser: () => kall("/api/admin/salgspriser"),
+  lagreSalgspriser: (intervaller) =>
+    kall("/api/admin/salgspriser", { method: "PUT", body: { intervaller } }),
+  salgsprisSett: (sett) => kall(`/api/admin/salgspriser/${encodeURIComponent(sett)}`),
+  settSalgspris: (id, finish, nm_ore) =>
+    kall(`/api/admin/salgspris/${id}`, { method: "PUT", body: { finish, nm_ore } }),
+  lager: (sett) => kall(`/api/admin/lager?sett=${encodeURIComponent(sett)}`),
+  settLager: (id, felt) => kall(`/api/admin/lager/${id}`, { method: "PUT", body: felt }),
+  lagerHistorikk: (id, finish) =>
+    kall(`/api/admin/lager/${id}/historikk${finish ? `?finish=${finish}` : ""}`),
+  lagerSammendrag: () => kall("/api/admin/lager-sammendrag"),
   lagreKortConditions: (id, conditions) =>
     kall(`/api/admin/cards/${id}/conditions`, { method: "PUT", body: { conditions } }),
   lagrePris: (id, finish, usd) =>
