@@ -290,6 +290,30 @@ function Massefelt({ antall, raritet, harFoil, jobber, onSett }) {
 // Settregelen er grov. Noen kort i et sett er verdt å ta i dårligere stand
 // enn resten, og da settes tilstandene her. Tomt valg betyr at settets regel
 // gjelder — og det er tilstanden man vil tilbake til, ikke en tom liste.
+// Foil-bare-sett som Invocations har ingen vanlig pris, bare en foil-pris.
+// Viste vi bare den vanlige, så hele settet prisløst ut.
+function Pris({ kort }) {
+  const manuell = kort.pris_nonfoil ?? kort.pris_foil;
+  if (manuell) {
+    return (
+      <span title="Manuell pris">
+        ${Number(manuell).toFixed(2)}
+        <span style={{ color: "var(--aksent)" }}>*</span>
+      </span>
+    );
+  }
+  if (kort.usd) return <span>${Number(kort.usd).toFixed(2)}</span>;
+  if (kort.usd_foil) {
+    return (
+      <span title="Kortet finnes bare i foil">
+        ${Number(kort.usd_foil).toFixed(2)}{" "}
+        <span className="merkelapp m-vent" style={{ fontSize: 10 }}>foil</span>
+      </span>
+    );
+  }
+  return <span>{"\u2014"}</span>;
+}
+
 function Tilstander({ kort, regel, onFeil }) {
   const fra = kort.egne_conditions ? JSON.parse(kort.egne_conditions) : null;
   const [egne, setEgne] = useState(fra);
@@ -365,9 +389,7 @@ function KortRad({ kort, regel, onFeil, onEndret, sett }) {
       </td>
       <td className="dempet">{kort.rarity || "\u2014"}</td>
       <td className="h tall dempet">
-        {kort.pris_nonfoil
-          ? <span title="Manuell pris">${Number(kort.pris_nonfoil).toFixed(2)}<span style={{ color: "var(--aksent)" }}>*</span></span>
-          : kort.usd ? `$${Number(kort.usd).toFixed(2)}` : "\u2014"}
+        <Pris kort={kort} />
       </td>
       <td>
         <Tilstander kort={kort} regel={regel} onFeil={onFeil} />

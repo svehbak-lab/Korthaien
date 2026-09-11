@@ -320,6 +320,15 @@ function Navn({ sett, onDøpt }) {
   return (
     <span>
       {sett.name} <span className="kode dempet">{String(sett.code).toUpperCase()}</span>
+      {Number(sett.bare_foil) === 1 && (
+        <span
+          className="merkelapp m-vent"
+          style={{ marginLeft: 6 }}
+          title="Settet finnes bare i foil. Sett foil-antallet, ellers kjøpes ingenting herfra."
+        >
+          bare foil
+        </span>
+      )}
       <button className="knapp handling" onClick={() => setRedigerer(true)}>
         {sett.visningsnavn ? "Endre navn" : "Døp om"}
       </button>

@@ -356,7 +356,11 @@ app.get("/api/admin/sets", krevAdmin, fang(async (_req: any, res: any) => {
   const r = await db().execute(`
     SELECT s.code, COALESCE(s.visningsnavn, s.name) AS name, s.name AS scryfall_navn,
            s.visningsnavn, s.released_at, s.card_count,
-           r.enabled, r.wanted_default, r.wanted_foil, r.conditions, r.ladder
+           r.enabled, r.wanted_default, r.wanted_foil, r.conditions, r.ladder,
+           -- Sett som Invocations finnes bare i foil. Der kjøper du ingenting
+           -- før foil-antallet er satt, siden foil aldri arver det vanlige.
+           NOT EXISTS (SELECT 1 FROM cards c WHERE c.set_code = s.code AND c.has_nonfoil = 1)
+             AND EXISTS (SELECT 1 FROM cards c WHERE c.set_code = s.code) AS bare_foil
       FROM sets s LEFT JOIN set_rules r ON r.set_code = s.code
      ORDER BY name COLLATE NOCASE`);
   res.json({
