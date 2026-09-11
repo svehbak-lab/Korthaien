@@ -6,8 +6,8 @@ const KOLONNER = [
   { id: "name", navn: "Kort" },
   { id: "rarity", navn: "Raritet", bredde: 90 },
   { id: "usd", navn: "USD", h: true, bredde: 70 },
-  { id: "egne_conditions", navn: "Tar imot", bredde: 150 },
-  { id: "prod_nonfoil", navn: "Hos Korthaien", bredde: 230 },
+  { id: "egne_conditions", navn: "Tar imot", bredde: 165 },
+  { id: "prod_nonfoil", navn: "Hos Korthaien", bredde: 200 },
   { id: "stock_nonfoil", navn: "På lager", h: true, bredde: 80 },
   { id: "ledig_nonfoil", navn: "Kan selges", h: true, bredde: 90 },
   { id: "want_nonfoil", navn: "Vil ha", h: true, bredde: 70 },
@@ -311,7 +311,11 @@ function Tilstander({ kort, regel, onFeil }) {
   }
 
   return (
-    <div className="rad-flex" style={{ gap: 3 }} title={egne ? "Egen regel for dette kortet" : "Følger settet"}>
+    <div
+      className="rad-flex"
+      style={{ gap: 3, flexWrap: "nowrap" }}
+      title={egne ? "Egen regel for dette kortet" : "Følger settet"}
+    >
       {CONDITIONS.map((c) => (
         <button
           key={c}
@@ -354,13 +358,13 @@ function KortRad({ kort, regel, onFeil, onEndret, sett }) {
         )}
       </td>
       <td className="dempet">{kort.rarity || "\u2014"}</td>
-      <td>
-        <Tilstander kort={kort} regel={regel} onFeil={onFeil} />
-      </td>
       <td className="h tall dempet">
         {kort.pris_nonfoil
           ? <span title="Manuell pris">${Number(kort.pris_nonfoil).toFixed(2)}<span style={{ color: "var(--aksent)" }}>*</span></span>
           : kort.usd ? `$${Number(kort.usd).toFixed(2)}` : "\u2014"}
+      </td>
+      <td>
+        <Tilstander kort={kort} regel={regel} onFeil={onFeil} />
       </td>
       <td>
         <Kobling kort={kort} onFeil={onFeil} onEndret={onEndret} sett={sett} />
