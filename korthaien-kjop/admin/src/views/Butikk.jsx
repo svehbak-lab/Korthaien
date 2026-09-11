@@ -301,19 +301,36 @@ function Tekstrad({ kort }) {
           {kort.valgt.finish === "foil" && <FoilMerke />}
         </div>
 
-        <table style={{ width: 260, flex: "none" }}>
+        {/* Tilstand, pris, antall, og til slutt handlingen. Rekkefølgen er
+            den man leser i: hva slags stand, hva koster det, har du noen,
+            og kan jeg få det. */}
+        <table style={{ width: 330, flex: "none" }}>
           <tbody>
             {kort.valgt.tilstander.map((t) => (
               <tr key={t.condition}>
-                <td style={{ width: 40, padding: "3px 6px" }}>{t.condition}</td>
-                <td className="h dempet" style={{ padding: "3px 6px", fontSize: 13 }}>
-                  {t.lager > 0 ? `${t.lager} stk.` : "utsolgt"}
-                </td>
+                <td style={{ width: 38, padding: "3px 6px", fontWeight: 500 }}>{t.condition}</td>
                 <td
                   className="h tall"
-                  style={{ padding: "3px 6px", color: t.lager > 0 ? "inherit" : "var(--dempet)" }}
+                  style={{ width: 80, padding: "3px 6px", color: t.lager > 0 ? "inherit" : "var(--dempet)" }}
                 >
                   {kroner(t.ore)}
+                </td>
+                <td className="h dempet" style={{ width: 62, padding: "3px 6px", fontSize: 13 }}>
+                  {t.lager > 0 ? `${t.lager} stk.` : ""}
+                </td>
+                <td className="h" style={{ padding: "3px 6px" }}>
+                  {t.lager > 0 ? (
+                    <button
+                      className="knapp liten"
+                      disabled
+                      title="Kurven kommer når kassen bygges"
+                      style={{ padding: "2px 10px" }}
+                    >
+                      Legg i kurven
+                    </button>
+                  ) : (
+                    <span className="dempet" style={{ fontSize: 13 }}>Utsolgt</span>
+                  )}
                 </td>
               </tr>
             ))}
