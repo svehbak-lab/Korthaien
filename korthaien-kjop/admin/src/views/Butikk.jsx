@@ -247,6 +247,28 @@ export default function Butikk({ onFeil }) {
   );
 }
 
+// Gult merke, som hos Card Kingdom. Foil og vanlig er samme kort med samme
+// bilde, og uten et tydelig merke er det lett å bestille feil.
+function FoilMerke() {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        marginTop: 5,
+        background: "#f5d020",
+        color: "#3b2f05",
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        padding: "1px 7px",
+        borderRadius: 3,
+      }}
+    >
+      FOIL
+    </span>
+  );
+}
+
 function Gruppe({ navn, children }) {
   return (
     <div style={{ marginBottom: 12 }}>
@@ -273,9 +295,10 @@ function Tekstrad({ kort }) {
             {kort.set_name} · {kort.type_line || kort.rarity}
           </div>
           <div className="dempet" style={{ fontSize: 12 }}>
-            Nr. {kort.collector_number}
+            Collector #: {kort.collector_number}
             {kort.mana_cost ? ` · ${kort.mana_cost}` : ""}
           </div>
+          {kort.valgt.finish === "foil" && <FoilMerke />}
         </div>
 
         <table style={{ width: 260, flex: "none" }}>
@@ -329,6 +352,7 @@ function Detaljrad({ kort }) {
           <div className="dempet" style={{ fontSize: 13 }}>
             Collector #: {kort.collector_number}
           </div>
+          {kort.valgt.finish === "foil" && <FoilMerke />}
 
           <div className="dempet" style={{ fontSize: 13, margin: "8px 0 0" }}>
             {kort.mana_cost} {kort.type_line}
