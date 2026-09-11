@@ -93,7 +93,13 @@ export default function Kort({ sett, onFeil, onByttSett }) {
     const retning = stigende ? 1 : -1;
     let x = a[kolonne];
     let y = b[kolonne];
-    if (kolonne === "rarity") {
+    if (kolonne === "usd") {
+      // Sorter på prisen som faktisk gjelder. Din egen der du har satt en,
+      // Scryfalls ellers — samme regel som prisberegningen bruker. Uten dette
+      // havner alle manuelt prisede kort bakerst fordi Scryfall-feltet er tomt.
+      x = a.pris_nonfoil ?? a.usd;
+      y = b.pris_nonfoil ?? b.usd;
+    } else if (kolonne === "rarity") {
       x = RARITET_RANG[String(x || "")] ?? 99;
       y = RARITET_RANG[String(y || "")] ?? 99;
     } else if (kolonne === "collector_number") {
