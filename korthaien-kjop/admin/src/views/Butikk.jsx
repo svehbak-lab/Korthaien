@@ -4,14 +4,38 @@ import { api, kroner, CONDITIONS } from "../api.js";
 // ─────────────────────────────────────────────────────────────────────────────
 // BUTIKKVISNING
 // ─────────────────────────────────────────────────────────────────────────────
-// Forhåndsvisning av hvordan kundene vil se kortene. Den ligger i admin inntil
+// Forhåndsvisning av hvordan kundene vil se kortene. Ligger i admin inntil
 // salgssiden bygges, og flyttes ut da.
 //
 // Hensikten er ikke pynt. Det er den eneste måten å oppdage at et intervall
 // traff feil: prisene må stå ved siden av kortet, ikke i en tabell over regler.
 //
-// To visninger, som hos Card Kingdom. Tekstvisning med tilstandene nedover for
-// å skumme mange kort, og detaljvisning med bilde og faner når du vil se ett.
+// Sorteringen skjer på serveren, over hele settet. Sorterer man bare de kortene
+// man allerede har hentet, får man den dyreste av de 25 første.
+
+const FARGER = [
+  { kode: "W", navn: "Hvit" },
+  { kode: "U", navn: "Blå" },
+  { kode: "B", navn: "Svart" },
+  { kode: "R", navn: "Rød" },
+  { kode: "G", navn: "Grønn" },
+  { kode: "C", navn: "Fargeløs" },
+];
+
+const TYPER = ["Creature", "Instant", "Sorcery", "Artifact", "Enchantment", "Planeswalker", "Land"];
+
+const SORTERING = [
+  { id: "nummer", navn: "Samlernummer" },
+  { id: "pris_ned", navn: "Pris, høy til lav" },
+  { id: "pris_opp", navn: "Pris, lav til høy" },
+  { id: "navn", navn: "Navn, A til Å" },
+  { id: "navn_ned", navn: "Navn, Å til A" },
+];
+
+const TOMT = {
+  q: "", tekst: "", rarity: "", farge: "", type: "",
+  baresalg: false, prisFra: "", prisTil: "",
+};
 
 export default function Butikk({ onFeil }) {
   const [sett, setSett] = useState(null);
@@ -20,37 +44,39 @@ export default function Butikk({ onFeil }) {
   const [laster, setLaster] = useState(false);
   const [visning, setVisning] = useState("tekst");
   const [finish, setFinish] = useState("nonfoil");
-  const [q, setQ] = useState("");
-  const [rarity, setRarity] = useState("");
-  const [baresalg, setBaresalg] = useState(false);
+  const [sortering, setSortering] = useState("nummer");
+  const [perSide, setPerSide] = useState(25);
+  const [side, setSide] = useState(1);
+  const [f, setF] = useState(TOMT);
 
   useEffect(() => {
-    api.sett().then((r) => {
-      setAlle(r.sett.filter((s) => Number(s.enabled)));
-    }).catch(onFeil);
+    api.sett().then((r) => setAlle(r.sett.filter((s) => Number(s.enabled)))).catch(onFeil);
   }, []);
+
+  // Endrer du et filter, må du tilbake til første side. Ellers står du på side
+  // sju i et resultat med to sider og ser ingenting.
+  useEffect(() => setSide(1), [sett, finish, sortering, perSide, f]);
 
   useEffect(() => {
     if (!sett) return;
     setLaster(true);
     const t = setTimeout(() => {
-      api.butikk({ sett, q, rarity, baresalg })
+      api.butikk({ sett, finish, sortering, side, perSide, ...f })
         .then(setData)
         .catch(onFeil)
         .finally(() => setLaster(false));
     }, 250);
     return () => clearTimeout(t);
-  }, [sett, q, rarity, baresalg]);
+  }, [sett, finish, sortering, side, perSide, f]);
 
-  // Bare kort som finnes i valgt finish, og som har minst én pris.
   const synlige = useMemo(() => {
     if (!data) return [];
     return data.kort
-      .map((k) => ({ ...k, variant: k.varianter.find((v) => v.finish === finish) }))
-      .filter((k) => k.variant?.tilstander.length);
+      .map((k) => ({ ...k, valgt: k.varianter.find((v) => v.finish === finish) }))
+      .filter((k) => k.valgt?.tilstander.length);
   }, [data, finish]);
 
-  const utenPris = data?.utenPris ?? 0;
+  const endre = (felt, verdi) => setF((x) => ({ ...x, [felt]: verdi }));
 
   return (
     <>
@@ -60,94 +86,183 @@ export default function Butikk({ onFeil }) {
         til å se om intervallene gir prisene du mente.
       </p>
 
-      <div className="panel">
-        <div className="krop">
-          <div className="rad-flex">
-            <select value={sett || ""} onChange={(e) => setSett(e.target.value || null)}>
-              <option value="">Velg sett…</option>
-              {alle.map((s) => (
-                <option key={s.code} value={s.code}>
-                  {s.name} ({String(s.code).toUpperCase()})
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Søk i settet"
-              style={{ width: 200 }}
-            />
-            <select value={rarity} onChange={(e) => setRarity(e.target.value)}>
-              <option value="">Alle rariteter</option>
-              {["common", "uncommon", "rare", "mythic", "special"].map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-            <label className="dempet" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <input type="checkbox" checked={baresalg} onChange={(e) => setBaresalg(e.target.checked)} />
+      <div style={{ display: "grid", gridTemplateColumns: "220px minmax(0, 1fr)", gap: 20, alignItems: "start" }}>
+        <div className="panel" style={{ position: "sticky", top: 16 }}>
+          <div className="krop">
+            <Gruppe navn="Sett">
+              <select value={sett || ""} onChange={(e) => setSett(e.target.value || null)} style={{ width: "100%" }}>
+                <option value="">Velg sett…</option>
+                {alle.map((s) => (
+                  <option key={s.code} value={s.code}>{s.name}</option>
+                ))}
+              </select>
+            </Gruppe>
+
+            <Gruppe navn="Kortnavn">
+              <input type="text" value={f.q} onChange={(e) => endre("q", e.target.value)} style={{ width: "100%" }} />
+            </Gruppe>
+
+            <Gruppe navn="Regeltekst">
+              <input
+                type="text" value={f.tekst}
+                placeholder="f.eks. flying"
+                onChange={(e) => endre("tekst", e.target.value)}
+                style={{ width: "100%" }}
+              />
+            </Gruppe>
+
+            <Gruppe navn="Raritet">
+              <select value={f.rarity} onChange={(e) => endre("rarity", e.target.value)} style={{ width: "100%" }}>
+                <option value="">Alle</option>
+                {["common", "uncommon", "rare", "mythic", "special"].map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </Gruppe>
+
+            <Gruppe navn="Farge">
+              <div className="rad-flex" style={{ gap: 3 }}>
+                {FARGER.map((x) => (
+                  <button
+                    key={x.kode}
+                    className={`knapp liten ${f.farge === x.kode ? "primar" : ""}`}
+                    title={x.navn}
+                    style={{ padding: "2px 8px" }}
+                    onClick={() => endre("farge", f.farge === x.kode ? "" : x.kode)}
+                  >
+                    {x.kode}
+                  </button>
+                ))}
+              </div>
+            </Gruppe>
+
+            <Gruppe navn="Type">
+              <select value={f.type} onChange={(e) => endre("type", e.target.value)} style={{ width: "100%" }}>
+                <option value="">Alle</option>
+                {TYPER.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Gruppe>
+
+            <Gruppe navn="Pris">
+              <div className="rad-flex" style={{ gap: 4 }}>
+                <input
+                  type="text" inputMode="numeric" value={f.prisFra} placeholder="fra"
+                  onChange={(e) => endre("prisFra", e.target.value.replace(/\D/g, ""))}
+                  style={{ width: 62 }}
+                />
+                <input
+                  type="text" inputMode="numeric" value={f.prisTil} placeholder="til"
+                  onChange={(e) => endre("prisTil", e.target.value.replace(/\D/g, ""))}
+                  style={{ width: 62 }}
+                />
+              </div>
+            </Gruppe>
+
+            <label className="dempet" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
+              <input type="checkbox" checked={f.baresalg} onChange={(e) => endre("baresalg", e.target.checked)} />
               Bare det jeg har på lager
             </label>
+
+            <button className="knapp liten" style={{ marginTop: 12 }} onClick={() => setF(TOMT)}>
+              Nullstill filtre
+            </button>
           </div>
+        </div>
+
+        <div>
+          {!sett && <p className="dempet">Velg et sett til venstre.</p>}
 
           {sett && (
-            <div className="rad-flex" style={{ marginTop: 12 }}>
-              {["nonfoil", "foil"].map((f) => (
-                <button
-                  key={f}
-                  className={`knapp liten ${finish === f ? "primar" : ""}`}
-                  onClick={() => setFinish(f)}
-                >
-                  {f === "foil" ? "Foils" : "Vanlige"}
-                </button>
-              ))}
-              <span style={{ marginLeft: "auto" }} />
-              {["tekst", "detalj"].map((v) => (
-                <button
-                  key={v}
-                  className={`knapp liten ${visning === v ? "primar" : ""}`}
-                  onClick={() => setVisning(v)}
-                >
-                  {v === "tekst" ? "Tekstvisning" : "Detaljvisning"}
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="panel">
+                <div className="krop rad-flex" style={{ gap: 14 }}>
+                  {["nonfoil", "foil"].map((x) => (
+                    <button
+                      key={x}
+                      className={`knapp liten ${finish === x ? "primar" : ""}`}
+                      onClick={() => setFinish(x)}
+                    >
+                      {x === "foil" ? "Foils" : "Vanlige"}
+                    </button>
+                  ))}
+
+                  <label className="dempet" style={{ marginLeft: "auto" }}>
+                    Sorter{" "}
+                    <select value={sortering} onChange={(e) => setSortering(e.target.value)}>
+                      {SORTERING.map((s) => <option key={s.id} value={s.id}>{s.navn}</option>)}
+                    </select>
+                  </label>
+                  <label className="dempet">
+                    Vis{" "}
+                    <select value={perSide} onChange={(e) => setPerSide(Number(e.target.value))}>
+                      {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </label>
+                  {["tekst", "detalj"].map((v) => (
+                    <button
+                      key={v}
+                      className={`knapp liten ${visning === v ? "primar" : ""}`}
+                      onClick={() => setVisning(v)}
+                    >
+                      {v === "tekst" ? "Tekst" : "Detalj"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {laster && <p className="dempet">Henter…</p>}
+
+              {!laster && data && (
+                <>
+                  <p className="dempet">
+                    {data.totalt} treff i {finish === "foil" ? "foil" : "vanlig utgave"}.
+                    {data.utenPris > 0 && (
+                      <>
+                        {" "}
+                        {data.utenPris} kort i settet har ingen pris — verken fra
+                        Scryfall, intervallene eller manuelt. De ville ikke vært til
+                        salgs.
+                      </>
+                    )}
+                  </p>
+
+                  {visning === "tekst"
+                    ? synlige.map((k) => <Tekstrad key={k.id} kort={k} />)
+                    : synlige.map((k) => <Detaljrad key={k.id} kort={k} />)}
+
+                  {!synlige.length && <div className="tom">Ingen kort passer filteret.</div>}
+
+                  {data.sider > 1 && (
+                    <div className="rad-flex" style={{ justifyContent: "center", marginTop: 16 }}>
+                      <button className="knapp" disabled={data.side <= 1} onClick={() => setSide(data.side - 1)}>
+                        Forrige
+                      </button>
+                      <span className="dempet">Side {data.side} av {data.sider}</span>
+                      <button
+                        className="knapp"
+                        disabled={data.side >= data.sider}
+                        onClick={() => setSide(data.side + 1)}
+                      >
+                        Neste
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
           )}
         </div>
       </div>
-
-      {!sett && <p className="dempet">Velg et sett for å se hvordan det ser ut.</p>}
-      {sett && laster && <p className="dempet">Henter…</p>}
-
-      {sett && !laster && data && (
-        <>
-          <p className="dempet">
-            {synlige.length} {synlige.length === 1 ? "kort" : "kort"} i{" "}
-            {finish === "foil" ? "foil" : "vanlig utgave"}.
-            {data.totalt > data.kort.length && (
-              <>
-                {" "}
-                Viser {data.kort.length} av {data.totalt} — søk eller filtrer for å
-                snevre inn.
-              </>
-            )}
-            {utenPris > 0 && (
-              <>
-                {" "}
-                {utenPris} kort i settet har ingen pris — verken fra Scryfall,
-                intervallene eller manuelt. De ville ikke vært til salgs.
-              </>
-            )}
-          </p>
-
-          {visning === "tekst"
-            ? synlige.map((k) => <Tekstrad key={k.id} kort={k} />)
-            : synlige.map((k) => <Detaljrad key={k.id} kort={k} />)}
-
-          {!synlige.length && <div className="tom">Ingen kort passer filteret.</div>}
-        </>
-      )}
     </>
+  );
+}
+
+function Gruppe({ navn, children }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div className="dempet" style={{ fontSize: 12.5, marginBottom: 3 }}>{navn}</div>
+      {children}
+    </div>
   );
 }
 
@@ -175,7 +290,7 @@ function Tekstrad({ kort }) {
 
         <table style={{ width: 260, flex: "none" }}>
           <tbody>
-            {kort.variant.tilstander.map((t) => (
+            {kort.valgt.tilstander.map((t) => (
               <tr key={t.condition}>
                 <td style={{ width: 40, padding: "3px 6px" }}>{t.condition}</td>
                 <td className="h dempet" style={{ padding: "3px 6px", fontSize: 13 }}>
@@ -199,9 +314,9 @@ function Tekstrad({ kort }) {
 // Bilde og faner per tilstand. Trykker du på en fane, er det den prisen som
 // vises — slik Card Kingdom gjør det.
 function Detaljrad({ kort }) {
-  const første = kort.variant.tilstander.find((t) => t.lager > 0) || kort.variant.tilstander[0];
+  const første = kort.valgt.tilstander.find((t) => t.lager > 0) || kort.valgt.tilstander[0];
   const [valgt, setValgt] = useState(første.condition);
-  const t = kort.variant.tilstander.find((x) => x.condition === valgt) || første;
+  const t = kort.valgt.tilstander.find((x) => x.condition === valgt) || første;
 
   return (
     <div className="panel" style={{ marginBottom: 10 }}>
@@ -242,7 +357,7 @@ function Detaljrad({ kort }) {
 
           <div className="rad-flex" style={{ gap: 4 }}>
             {CONDITIONS.map((c) => {
-              const x = kort.variant.tilstander.find((y) => y.condition === c);
+              const x = kort.valgt.tilstander.find((y) => y.condition === c);
               if (!x) return null;
               return (
                 <button

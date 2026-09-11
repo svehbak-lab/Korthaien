@@ -77,10 +77,15 @@ export const api = {
   ordreLogg: (id) => kall(`/api/admin/orders/${id}/logg`),
   angreFjerning: (id) => kall(`/api/admin/lines/${id}?angre=1`, { method: "DELETE" }),
   lagreKreditt: (id, felt) => kall(`/api/admin/orders/${id}/kreditt`, { method: "PUT", body: felt }),
-  butikk: ({ sett, q, rarity, baresalg }) =>
-    kall(`/api/admin/butikk?${new URLSearchParams({
-      sett, ...(q ? { q } : {}), ...(rarity ? { rarity } : {}), ...(baresalg ? { baresalg: "1" } : {}),
-    })}`),
+  butikk: (f) => {
+    // Tomme felter sendes ikke — de ville blitt lest som filtre på tom streng.
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(f)) {
+      if (v === "" || v === null || v === undefined || v === false) continue;
+      p.set(k, v === true ? "1" : String(v));
+    }
+    return kall(`/api/admin/butikk?${p}`);
+  },
   salgspriser: () => kall("/api/admin/salgspriser"),
   lagreSalgspriser: (intervaller) =>
     kall("/api/admin/salgspriser", { method: "PUT", body: { intervaller } }),

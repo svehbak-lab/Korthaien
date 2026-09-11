@@ -301,13 +301,23 @@ export async function salgsprisForSett(setCode: string) {
 // Slik kunden vil se det: pris og beholdning per tilstand, per finish. Dette
 // er den eneste måten å oppdage at et intervall traff feil — tallene må stå
 // ved siden av kortet, ikke i en tabell over regler.
-export async function butikkvisning(opts: {
+export type ButikkFilter = {
   sett: string;
   q?: string;
+  tekst?: string;
   rarity?: string;
+  farge?: string;
+  type?: string;
   baresalg?: boolean;
-  maks?: number;
-}) {
+  prisFra?: number;
+  prisTil?: number;
+  finish?: string;
+  sortering?: string;
+  side?: number;
+  perSide?: number;
+};
+
+export async function butikkvisning(opts: ButikkFilter) {
   const opp = await hentSalgsOppsett();
   const { beholdning } = await import("./lager.js");
 
@@ -320,6 +330,23 @@ export async function butikkvisning(opts: {
   if (opts.rarity) {
     hvor.push("c.rarity = ?");
     args.push(opts.rarity);
+  }
+  if (opts.tekst) {
+    hvor.push("c.oracle_text LIKE ?");
+    args.push(`%${opts.tekst}%`);
+  }
+  if (opts.type) {
+    hvor.push("c.type_line LIKE ?");
+    args.push(`%${opts.type}%`);
+  }
+  if (opts.farge) {
+    if (opts.farge === "C") {
+      // Fargeløs: enten ingen farger lagret, eller en tom liste.
+      hvor.push("(c.colors IS NULL OR c.colors = '[]')");
+    } else {
+      hvor.push("c.colors LIKE ?");
+      args.push(`%"${opts.farge}"%`);
+    }
   }
 
   const r = await db().execute({
@@ -361,13 +388,42 @@ export async function butikkvisning(opts: {
     }
     if (varianter.length) ut.push({ ...k, varianter });
   }
+
+  // Sorteringen må skje over hele settet, ikke over siden. Sorterer man bare
+  // det man allerede har hentet, får man den dyreste av de 25 første.
+  const finish = opts.finish === "foil" ? "foil" : "nonfoil";
+  const nmPris = (k: any) =>
+    k.varianter.find((v: any) => v.finish === finish)?.tilstander?.[0]?.ore ?? -1;
+
+  switch (opts.sortering) {
+    case "pris_ned": ut.sort((a, b) => nmPris(b) - nmPris(a)); break;
+    case "pris_opp": ut.sort((a, b) => nmPris(a) - nmPris(b)); break;
+    case "navn":     ut.sort((a, b) => String(a.name).localeCompare(String(b.name), "nb")); break;
+    case "navn_ned": ut.sort((a, b) => String(b.name).localeCompare(String(a.name), "nb")); break;
+    default: break; // samlernummer, som spørringen allerede gir
+  }
+
+  // Prisfilteret må komme etter at prisene er regnet ut — de finnes ikke i
+  // databasen, de utledes.
+  const filtrert = ut.filter((k) => {
+    const p = nmPris(k);
+    if (p < 0) return true;
+    if (opts.prisFra !== undefined && p < opts.prisFra * 100) return false;
+    if (opts.prisTil !== undefined && p > opts.prisTil * 100) return false;
+    return true;
+  });
   // Et helt sett med regeltekst og bilder er mye å sende og mye å tegne opp.
   // Grensen holder visningen rask; filteret er der for å snevre inn.
-  const maks = opts.maks ?? 250;
+  const perSide = Math.min(200, Math.max(1, opts.perSide ?? 25));
+  const side = Math.max(1, opts.side ?? 1);
+  const sider = Math.max(1, Math.ceil(filtrert.length / perSide));
   return {
     oppsett: opp,
-    kort: ut.slice(0, maks),
-    totalt: ut.length,
+    kort: filtrert.slice((side - 1) * perSide, side * perSide),
+    totalt: filtrert.length,
+    side: Math.min(side, sider),
+    sider,
+    perSide,
     utenPris: (r.rows as any[]).length - ut.length,
   };
 }

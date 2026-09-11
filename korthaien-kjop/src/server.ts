@@ -364,12 +364,22 @@ app.get("/api/admin/salgspriser/:sett", krevAdmin, fang(async (req: any, res: an
 app.get("/api/admin/butikk", krevAdmin, fang(async (req: any, res: any) => {
   const sett = String(req.query.sett || "").toLowerCase();
   if (!sett) throw new HttpFeil(400, "Mangler ?sett=");
+  const tall = (v: any) => (v === undefined || v === "" ? undefined : Number(v));
   res.json(
     await butikkvisning({
       sett,
       q: req.query.q ? String(req.query.q) : undefined,
+      tekst: req.query.tekst ? String(req.query.tekst) : undefined,
       rarity: req.query.rarity ? String(req.query.rarity) : undefined,
+      farge: req.query.farge ? String(req.query.farge) : undefined,
+      type: req.query.type ? String(req.query.type) : undefined,
       baresalg: String(req.query.baresalg || "") === "1",
+      prisFra: tall(req.query.prisFra),
+      prisTil: tall(req.query.prisTil),
+      finish: req.query.finish ? String(req.query.finish) : undefined,
+      sortering: req.query.sortering ? String(req.query.sortering) : undefined,
+      side: tall(req.query.side),
+      perSide: tall(req.query.perSide),
     })
   );
 }));
