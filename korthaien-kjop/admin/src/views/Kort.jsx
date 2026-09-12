@@ -8,11 +8,14 @@ const KOLONNER = [
   { id: "usd", navn: "USD", h: true, bredde: 70 },
   { id: "egne_conditions", navn: "Tar imot", bredde: 165 },
   { id: "prod_nonfoil", navn: "Hos Korthaien", bredde: 215 },
-  { id: "stock_nonfoil", navn: "På lager", h: true, bredde: 80 },
-  { id: "ledig_nonfoil", navn: "Kan selges", h: true, bredde: 90 },
-  { id: "want_nonfoil", navn: "Vil ha", h: true, bredde: 70 },
-  { id: "stock_foil", navn: "Foil lager", h: true, bredde: 85 },
-  { id: "want_foil", navn: "Vil ha foil", h: true, bredde: 85 },
+  // Gruppeoverskrift gjør at navnene kan være korte. «Foil lager» og «Vil ha
+  // foil» ble lange fordi de måtte bære gruppen sin i selve navnet.
+  { id: "stock_nonfoil", navn: "Lager", gruppe: "Vanlige", h: true, bredde: 62 },
+  { id: "ledig_nonfoil", navn: "Ledig", gruppe: "Vanlige", h: true, bredde: 62 },
+  { id: "want_nonfoil", navn: "Vil ha", gruppe: "Vanlige", h: true, bredde: 68 },
+  { id: "stock_foil", navn: "Lager", gruppe: "Foil", h: true, bredde: 62 },
+  { id: "ledig_foil", navn: "Ledig", gruppe: "Foil", h: true, bredde: 62 },
+  { id: "want_foil", navn: "Vil ha", gruppe: "Foil", h: true, bredde: 68 },
 ];
 
 // Rariteten sorteres etter verdi, ikke alfabetisk — «common» før «mythic»
@@ -42,8 +45,8 @@ export default function Kort({ sett, onFeil, onByttSett }) {
   // Ser du bare vanlige kort, er de to foil-kolonnene bare i veien — og elleve
   // kolonner er det som gjør at raden går ut over kanten.
   const synligKolonne = (k) => {
-    if (finish === "nonfoil") return !["stock_foil", "want_foil"].includes(k.id);
-    if (finish === "foil") return !["stock_nonfoil", "ledig_nonfoil", "want_nonfoil"].includes(k.id);
+    if (finish === "nonfoil") return k.gruppe !== "Foil";
+    if (finish === "foil") return k.gruppe !== "Vanlige";
     return true;
   };
   const [sortering, setSortering] = useState({ kolonne: "collector_number", stigende: true });
@@ -263,6 +266,24 @@ export default function Kort({ sett, onFeil, onByttSett }) {
         <table>
           <thead>
             <tr>
+              {grupperader(KOLONNER.filter(synligKolonne)).map((g, i) => (
+                <th
+                  key={i}
+                  colSpan={g.antall}
+                  className={g.navn ? "h" : undefined}
+                  style={{
+                    padding: g.navn ? "0 8px 4px" : 0,
+                    fontSize: 12,
+                    color: "var(--dempet)",
+                    borderBottom: g.navn ? "1px solid var(--strek)" : "none",
+                    textAlign: "center",
+                  }}
+                >
+                  {g.navn}
+                </th>
+              ))}
+            </tr>
+            <tr>
               {KOLONNER.filter(synligKolonne).map((k) => (
                 <th
                   key={k.id}
@@ -435,6 +456,18 @@ function Tilstander({ kort, regel, onFeil }) {
   );
 }
 
+// Slår sammen kolonner som deler gruppe, så overskriften kan spenne over
+// dem. Kolonner uten gruppe blir tomme celler av samme bredde.
+function grupperader(kolonner) {
+  const ut = [];
+  for (const k of kolonner) {
+    const forrige = ut[ut.length - 1];
+    if (forrige && forrige.navn === (k.gruppe || null)) forrige.antall++;
+    else ut.push({ navn: k.gruppe || null, antall: 1 });
+  }
+  return ut;
+}
+
 function KortRad({ kort, regel, vis, finish, onFeil, onEndret, sett }) {
   return (
     <tr>
@@ -470,25 +503,32 @@ function KortRad({ kort, regel, vis, finish, onFeil, onEndret, sett }) {
       <td>
         <Kobling kort={kort} onFeil={onFeil} onEndret={onEndret} sett={sett} />
       </td>
-      {vis({ id: "stock_nonfoil" }) && (
+      {vis({ id: "stock_nonfoil", gruppe: "Vanlige" }) && (
         <td className="h tall"><Lager qty={kort.stock_nonfoil} koblet={!!kort.prod_nonfoil} /></td>
       )}
-      {vis({ id: "ledig_nonfoil" }) && (
+      {vis({ id: "ledig_nonfoil", gruppe: "Vanlige" }) && (
         <td className="h tall">
           {kort.ledig_nonfoil > 0 ? kort.ledig_nonfoil : <span className="dempet">0</span>}
         </td>
       )}
-      {vis({ id: "want_nonfoil" }) && (
+      {vis({ id: "want_nonfoil", gruppe: "Vanlige" }) && (
         <td className="h">
           <ØnskeFelt kortId={kort.id} finish="nonfoil" verdi={kort.want_nonfoil} onFeil={onFeil} />
         </td>
       )}
-      {vis({ id: "stock_foil" }) && (
+      {vis({ id: "stock_foil", gruppe: "Foil" }) && (
         <td className="h tall">
           {Number(kort.has_foil) ? <Lager qty={kort.stock_foil} koblet={!!kort.prod_foil} /> : <span className="dempet">{"\u2014"}</span>}
         </td>
       )}
-      {vis({ id: "want_foil" }) && (
+      {vis({ id: "ledig_foil", gruppe: "Foil" }) && (
+        <td className="h tall">
+          {Number(kort.has_foil)
+            ? (kort.ledig_foil > 0 ? kort.ledig_foil : <span className="dempet">0</span>)
+            : <span className="dempet">{"\u2014"}</span>}
+        </td>
+      )}
+      {vis({ id: "want_foil", gruppe: "Foil" }) && (
         <td className="h">
           {Number(kort.has_foil) ? (
             <ØnskeFelt kortId={kort.id} finish="foil" verdi={kort.want_foil} onFeil={onFeil} />
