@@ -4,17 +4,15 @@ import { api, kroner, dato, CONDITIONS } from "../api.js";
 const KOLONNER = [
   { id: "collector_number", navn: "Nr.", bredde: 50 },
   { id: "name", navn: "Kort" },
-  { id: "rarity", navn: "Raritet", bredde: 90 },
+  { id: "rarity", navn: "Raritet", bredde: 76 },
   { id: "usd", navn: "USD", h: true, bredde: 70 },
   { id: "egne_conditions", navn: "Tar imot", bredde: 165 },
-  { id: "prod_nonfoil", navn: "Hos Korthaien", bredde: 215 },
+  { id: "prod_nonfoil", navn: "Hos Korthaien", bredde: 190 },
   // Gruppeoverskrift gjør at navnene kan være korte. «Foil lager» og «Vil ha
   // foil» ble lange fordi de måtte bære gruppen sin i selve navnet.
   { id: "stock_nonfoil", navn: "Lager", gruppe: "Vanlige", h: true, bredde: 62 },
-  { id: "ledig_nonfoil", navn: "Ledig", gruppe: "Vanlige", h: true, bredde: 62 },
   { id: "want_nonfoil", navn: "Vil ha", gruppe: "Vanlige", h: true, bredde: 68 },
   { id: "stock_foil", navn: "Lager", gruppe: "Foil", h: true, bredde: 62 },
-  { id: "ledig_foil", navn: "Ledig", gruppe: "Foil", h: true, bredde: 62 },
   { id: "want_foil", navn: "Vil ha", gruppe: "Foil", h: true, bredde: 68 },
 ];
 
@@ -506,11 +504,6 @@ function KortRad({ kort, regel, vis, finish, onFeil, onEndret, sett }) {
       {vis({ id: "stock_nonfoil", gruppe: "Vanlige" }) && (
         <td className="h tall"><Lager qty={kort.stock_nonfoil} koblet={!!kort.prod_nonfoil} /></td>
       )}
-      {vis({ id: "ledig_nonfoil", gruppe: "Vanlige" }) && (
-        <td className="h tall">
-          {kort.ledig_nonfoil > 0 ? kort.ledig_nonfoil : <span className="dempet">0</span>}
-        </td>
-      )}
       {vis({ id: "want_nonfoil", gruppe: "Vanlige" }) && (
         <td className="h">
           <ØnskeFelt kortId={kort.id} finish="nonfoil" verdi={kort.want_nonfoil} onFeil={onFeil} />
@@ -519,13 +512,6 @@ function KortRad({ kort, regel, vis, finish, onFeil, onEndret, sett }) {
       {vis({ id: "stock_foil", gruppe: "Foil" }) && (
         <td className="h tall">
           {Number(kort.has_foil) ? <Lager qty={kort.stock_foil} koblet={!!kort.prod_foil} /> : <span className="dempet">{"\u2014"}</span>}
-        </td>
-      )}
-      {vis({ id: "ledig_foil", gruppe: "Foil" }) && (
-        <td className="h tall">
-          {Number(kort.has_foil)
-            ? (kort.ledig_foil > 0 ? kort.ledig_foil : <span className="dempet">0</span>)
-            : <span className="dempet">{"\u2014"}</span>}
         </td>
       )}
       {vis({ id: "want_foil", gruppe: "Foil" }) && (
