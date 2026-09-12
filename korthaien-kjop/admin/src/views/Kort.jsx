@@ -247,6 +247,7 @@ export default function Kort({ sett, onFeil, onByttSett }) {
         antall={filtrert.length}
         raritet={raritet ? RARITETER.find(([v]) => v === raritet)?.[1] : null}
         harFoil={filtrert.some((k) => Number(k.has_foil))}
+        egne={filtrert.filter((k) => k.want_nonfoil !== null || k.want_foil !== null).length}
         jobber={jobber}
         onSett={settMange}
       />
@@ -298,7 +299,7 @@ export default function Kort({ sett, onFeil, onByttSett }) {
   );
 }
 
-function Massefelt({ antall, raritet, harFoil, jobber, onSett }) {
+function Massefelt({ antall, raritet, harFoil, egne, jobber, onSett }) {
   const [verdi, setVerdi] = useState(8);
   const hva = raritet ? `${antall} ${raritet.toLowerCase()}` : `alle ${antall}`;
 
@@ -332,8 +333,16 @@ function Massefelt({ antall, raritet, harFoil, jobber, onSett }) {
           </button>
         </div>
         <p className="dempet" style={{ margin: "8px 0 0" }}>
-          Gjelder kortene raritetsfilteret viser. «Følg settet igjen» fjerner
-          overstyringen, så kortene bruker settets antall på nytt.
+          Gjelder kortene filtrene viser. Et antall satt på kortet går foran
+          settets — sett du 4 på settet og 8 på kortet, er det 8 som gjelder.
+          «Følg settet igjen» fjerner overstyringen, så kortene bruker settets
+          antall på nytt.
+          {egne > 0 && (
+            <>
+              {" "}
+              <b>{egne} av kortene her har eget antall.</b>
+            </>
+          )}
         </p>
       </div>
     </div>

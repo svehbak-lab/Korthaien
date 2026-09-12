@@ -320,6 +320,15 @@ function Navn({ sett, onDøpt }) {
   return (
     <span>
       {sett.name} <span className="kode dempet">{String(sett.code).toUpperCase()}</span>
+      {Number(sett.egne_antall) > 0 && (
+        <span
+          className="merkelapp m-velg"
+          style={{ marginLeft: 6 }}
+          title="Disse kortene har egne antall og følger ikke settets tall. Åpne Enkeltkort og bruk «Følg settet igjen» for å fjerne dem."
+        >
+          {sett.egne_antall} egne
+        </span>
+      )}
       {Number(sett.bare_foil) === 1 && (
         <span
           className="merkelapp m-vent"

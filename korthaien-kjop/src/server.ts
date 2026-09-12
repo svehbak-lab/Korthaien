@@ -498,7 +498,12 @@ app.get("/api/admin/sets", krevAdmin, fang(async (_req: any, res: any) => {
            -- Sett som Invocations finnes bare i foil. Der kjøper du ingenting
            -- før foil-antallet er satt, siden foil aldri arver det vanlige.
            NOT EXISTS (SELECT 1 FROM cards c WHERE c.set_code = s.code AND c.has_nonfoil = 1)
-             AND EXISTS (SELECT 1 FROM cards c WHERE c.set_code = s.code) AS bare_foil
+             AND EXISTS (SELECT 1 FROM cards c WHERE c.set_code = s.code) AS bare_foil,
+           -- Kort med eget antall følger ikke settets tall. Uten dette ser
+           -- settets tall ut som hele sannheten, og det er det ikke.
+           (SELECT COUNT(*) FROM card_wants w
+              JOIN cards c ON c.id = w.card_id
+             WHERE c.set_code = s.code) AS egne_antall
       FROM sets s LEFT JOIN set_rules r ON r.set_code = s.code
      ORDER BY name COLLATE NOCASE`);
   res.json({
@@ -602,7 +607,7 @@ app.get("/api/admin/cards", krevAdmin, fang(async (req: any, res: any) => {
   // produkt hos deg.
   const r = await db().execute({
     sql: `SELECT c.id, c.name, c.collector_number, c.rarity, c.usd, c.usd_foil,
-                 c.has_foil, c.image_uri, c.variant, c.set_code,
+                 c.has_foil, c.has_nonfoil, c.image_uri, c.variant, c.set_code,
                  (SELECT wanted FROM card_wants w WHERE w.card_id = c.id AND w.finish='nonfoil') AS want_nonfoil,
                  (SELECT wanted FROM card_wants w WHERE w.card_id = c.id AND w.finish='foil')    AS want_foil,
                  (SELECT conditions FROM card_conditions cc WHERE cc.card_id = c.id) AS egne_conditions,
