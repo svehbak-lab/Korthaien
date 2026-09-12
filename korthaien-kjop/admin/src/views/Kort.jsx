@@ -29,6 +29,16 @@ export default function Kort({ sett, onFeil, onByttSett }) {
   const [data, setData] = useState(null);
   const [søk, setSøk] = useState("");
   const [raritet, setRaritet] = useState("");
+  // Noen sett har foil som egne kort med eget samlernummer — 7ED har «1★» ved
+  // siden av «1». Uten et filter blir lista dobbelt så lang som den trenger.
+  const [finish, setFinish] = useState("alle");
+  // Ser du bare vanlige kort, er de to foil-kolonnene bare i veien — og elleve
+  // kolonner er det som gjør at raden går ut over kanten.
+  const synligKolonne = (k) => {
+    if (finish === "nonfoil") return !["stock_foil", "want_foil"].includes(k.id);
+    if (finish === "foil") return !["stock_nonfoil", "ledig_nonfoil", "want_nonfoil"].includes(k.id);
+    return true;
+  };
   const [sortering, setSortering] = useState({ kolonne: "collector_number", stigende: true });
   const [jobber, setJobber] = useState(false);
   const [modus, setModus] = useState("oversikt");
@@ -85,6 +95,8 @@ export default function Kort({ sett, onFeil, onByttSett }) {
   const filtrert = beriket.filter((k) => {
     if (raritet && String(k.rarity || "") !== raritet) return false;
     if (q && !String(k.name).toLowerCase().includes(q)) return false;
+    if (finish === "nonfoil" && !Number(k.has_nonfoil)) return false;
+    if (finish === "foil" && !Number(k.has_foil)) return false;
     return true;
   });
 
@@ -180,6 +192,26 @@ export default function Kort({ sett, onFeil, onByttSett }) {
         >
           {modus === "lager" ? "Ferdig med lageret" : "Legg inn lager"}
         </button>
+        {/* Finish-filteret skjuler både rader og de kolonnene som ikke hører
+            til. Uten det er 7ED dobbelt så langt som det trenger å være. */}
+        {beriket.some((k) => Number(k.has_foil)) && (
+          <>
+            <span className="dempet">Viser:</span>
+            {[
+              ["alle", "Alle"],
+              ["nonfoil", "Vanlige"],
+              ["foil", "Foils"],
+            ].map(([v, l]) => (
+              <button
+                key={v}
+                className={`knapp liten ${finish === v ? "primar" : ""}`}
+                onClick={() => setFinish(v)}
+              >
+                {l}
+              </button>
+            ))}
+          </>
+        )}
         <span className="dempet">Raritet:</span>
         <button className={`knapp liten ${!raritet ? "primar" : ""}`} onClick={() => setRaritet("")}>
           Alle
@@ -219,11 +251,11 @@ export default function Kort({ sett, onFeil, onByttSett }) {
         onSett={settMange}
       />
 
-      <div className="panel">
+      <div className="panel" style={{ overflowX: "auto" }}>
         <table>
           <thead>
             <tr>
-              {KOLONNER.map((k) => (
+              {KOLONNER.filter(synligKolonne).map((k) => (
                 <th
                   key={k.id}
                   className={k.h ? "h" : undefined}
@@ -243,7 +275,15 @@ export default function Kort({ sett, onFeil, onByttSett }) {
           </thead>
           <tbody>
             {synlige.slice(0, 500).map((k) => (
-              <KortRad key={k.id} kort={k} regel={regel} onFeil={onFeil} onEndret={last} sett={sett} />
+              <KortRad
+                key={k.id}
+                kort={k}
+                regel={regel}
+                vis={synligKolonne}
+                onFeil={onFeil}
+                onEndret={last}
+                sett={sett}
+              />
             ))}
           </tbody>
         </table>
@@ -273,16 +313,18 @@ function Massefelt({ antall, raritet, harFoil, jobber, onSett }) {
             value={verdi}
             onChange={(e) => setVerdi(Math.max(0, parseInt(e.target.value) || 0))}
           />
-          <button className="knapp liten primar" disabled={jobber} onClick={() => onSett("nonfoil", verdi)}>
-            Vanlige
+          {/* Handlinger, ikke avhuking. Begge sto som primærknapper og så ut
+              som to valg der begge var på — men de utfører hver sin endring. */}
+          <button className="knapp liten" disabled={jobber} onClick={() => onSett("nonfoil", verdi)}>
+            Sett på vanlige
           </button>
           <button
-            className="knapp liten primar"
+            className="knapp liten"
             disabled={jobber || !harFoil}
             onClick={() => onSett("foil", verdi)}
             title={harFoil ? "Gjelder bare kort som finnes i foil" : "Ingen av kortene finnes i foil"}
           >
-            Foil
+            Sett på foil
           </button>
           <span className="dempet">|</span>
           <button className="knapp liten" disabled={jobber} onClick={() => onSett("nonfoil", 0, true)}>
@@ -373,7 +415,7 @@ function Tilstander({ kort, regel, onFeil }) {
   );
 }
 
-function KortRad({ kort, regel, onFeil, onEndret, sett }) {
+function KortRad({ kort, regel, vis, onFeil, onEndret, sett }) {
   return (
     <tr>
       <td className="kode dempet">
@@ -408,23 +450,33 @@ function KortRad({ kort, regel, onFeil, onEndret, sett }) {
       <td>
         <Kobling kort={kort} onFeil={onFeil} onEndret={onEndret} sett={sett} />
       </td>
-      <td className="h tall"><Lager qty={kort.stock_nonfoil} koblet={!!kort.prod_nonfoil} /></td>
-      <td className="h tall">
-        {kort.ledig_nonfoil > 0 ? kort.ledig_nonfoil : <span className="dempet">0</span>}
-      </td>
-      <td className="h">
-        <ØnskeFelt kortId={kort.id} finish="nonfoil" verdi={kort.want_nonfoil} onFeil={onFeil} />
-      </td>
-      <td className="h tall">
-        {Number(kort.has_foil) ? <Lager qty={kort.stock_foil} koblet={!!kort.prod_foil} /> : <span className="dempet">{"\u2014"}</span>}
-      </td>
-      <td className="h">
-        {Number(kort.has_foil) ? (
-          <ØnskeFelt kortId={kort.id} finish="foil" verdi={kort.want_foil} onFeil={onFeil} />
-        ) : (
-          <span className="dempet">{"\u2014"}</span>
-        )}
-      </td>
+      {vis({ id: "stock_nonfoil" }) && (
+        <td className="h tall"><Lager qty={kort.stock_nonfoil} koblet={!!kort.prod_nonfoil} /></td>
+      )}
+      {vis({ id: "ledig_nonfoil" }) && (
+        <td className="h tall">
+          {kort.ledig_nonfoil > 0 ? kort.ledig_nonfoil : <span className="dempet">0</span>}
+        </td>
+      )}
+      {vis({ id: "want_nonfoil" }) && (
+        <td className="h">
+          <ØnskeFelt kortId={kort.id} finish="nonfoil" verdi={kort.want_nonfoil} onFeil={onFeil} />
+        </td>
+      )}
+      {vis({ id: "stock_foil" }) && (
+        <td className="h tall">
+          {Number(kort.has_foil) ? <Lager qty={kort.stock_foil} koblet={!!kort.prod_foil} /> : <span className="dempet">{"\u2014"}</span>}
+        </td>
+      )}
+      {vis({ id: "want_foil" }) && (
+        <td className="h">
+          {Number(kort.has_foil) ? (
+            <ØnskeFelt kortId={kort.id} finish="foil" verdi={kort.want_foil} onFeil={onFeil} />
+          ) : (
+            <span className="dempet">{"\u2014"}</span>
+          )}
+        </td>
+      )}
     </tr>
   );
 }
