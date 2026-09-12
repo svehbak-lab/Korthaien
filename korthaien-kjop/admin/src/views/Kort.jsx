@@ -502,11 +502,21 @@ function KortRad({ kort, regel, vis, finish, onFeil, onEndret, sett }) {
         <Kobling kort={kort} onFeil={onFeil} onEndret={onEndret} sett={sett} />
       </td>
       {vis({ id: "stock_nonfoil", gruppe: "Vanlige" }) && (
-        <td className="h tall"><Lager qty={kort.stock_nonfoil} koblet={!!kort.prod_nonfoil} /></td>
+        <td className="h tall">
+          {Number(kort.has_nonfoil)
+            ? <Lager qty={kort.stock_nonfoil} koblet={!!kort.prod_nonfoil} />
+            : <span className="dempet">{"\u2014"}</span>}
+        </td>
       )}
       {vis({ id: "want_nonfoil", gruppe: "Vanlige" }) && (
         <td className="h">
-          <ØnskeFelt kortId={kort.id} finish="nonfoil" verdi={kort.want_nonfoil} onFeil={onFeil} />
+          {/* Foil-bare-kort skal ikke ha et felt for vanlig antall. Uten dette
+              står det «8» på et kort som ikke finnes i vanlig utgave. */}
+          {Number(kort.has_nonfoil) ? (
+            <ØnskeFelt kortId={kort.id} finish="nonfoil" verdi={kort.want_nonfoil} onFeil={onFeil} />
+          ) : (
+            <span className="dempet">{"\u2014"}</span>
+          )}
         </td>
       )}
       {vis({ id: "stock_foil", gruppe: "Foil" }) && (
