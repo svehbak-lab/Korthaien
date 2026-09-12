@@ -33,6 +33,10 @@ const SORTERING = [
 
 const RARITETER = ["mythic", "rare", "uncommon", "common", "special"];
 
+// Rariteten er små bokstaver i dataene, men skal leses som en etikett ved
+// siden av Hvit, Blå og Creature.
+const stor = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
 const TOMT = {
   q: "", rarity: [], farge: [], type: [],
   baresalg: false, prisFra: "", prisTil: "",
@@ -117,7 +121,7 @@ export default function Butikk({ onFeil }) {
               {RARITETER.map((r) => (
                 <Hake
                   key={r}
-                  navn={r}
+                  navn={stor(r)}
                   av={f.rarity.includes(r)}
                   onVeksle={() => veksle("rarity", r)}
                 />

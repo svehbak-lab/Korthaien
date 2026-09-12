@@ -18,6 +18,13 @@ const KOLONNER = [
 // Rariteten sorteres etter verdi, ikke alfabetisk — «common» før «mythic»
 // er ikke rekkefølgen noen leter etter.
 const RARITET_RANG = { common: 0, uncommon: 1, rare: 2, mythic: 3, special: 4, bonus: 5 };
+// Prisen som vises i USD-kolonnen. Foil-bare-kort har ingenting i «usd», så
+// uten foil-leddene sorterer de på tomt og havner alle på samme plass.
+function effektivUsd(k, finish) {
+  if (finish === "foil") return k.pris_foil ?? k.usd_foil ?? k.pris_nonfoil ?? k.usd ?? null;
+  return k.pris_nonfoil ?? k.usd ?? k.pris_foil ?? k.usd_foil ?? null;
+}
+
 const RARITETER = [
   ["common", "Common"],
   ["uncommon", "Uncommon"],
@@ -109,8 +116,8 @@ export default function Kort({ sett, onFeil, onByttSett }) {
       // Sorter på prisen som faktisk gjelder. Din egen der du har satt en,
       // Scryfalls ellers — samme regel som prisberegningen bruker. Uten dette
       // havner alle manuelt prisede kort bakerst fordi Scryfall-feltet er tomt.
-      x = a.pris_nonfoil ?? a.usd;
-      y = b.pris_nonfoil ?? b.usd;
+      x = effektivUsd(a, finish);
+      y = effektivUsd(b, finish);
     } else if (kolonne === "rarity") {
       x = RARITET_RANG[String(x || "")] ?? 99;
       y = RARITET_RANG[String(y || "")] ?? 99;
@@ -281,6 +288,7 @@ export default function Kort({ sett, onFeil, onByttSett }) {
                 kort={k}
                 regel={regel}
                 vis={synligKolonne}
+                finish={finish}
                 onFeil={onFeil}
                 onEndret={last}
                 sett={sett}
@@ -354,8 +362,10 @@ function Massefelt({ antall, raritet, harFoil, egne, jobber, onSett }) {
 // gjelder — og det er tilstanden man vil tilbake til, ikke en tom liste.
 // Foil-bare-sett som Invocations har ingen vanlig pris, bare en foil-pris.
 // Viste vi bare den vanlige, så hele settet prisløst ut.
-function Pris({ kort }) {
-  const manuell = kort.pris_nonfoil ?? kort.pris_foil;
+function Pris({ kort, finish }) {
+  const manuell = finish === "foil"
+    ? kort.pris_foil ?? kort.pris_nonfoil
+    : kort.pris_nonfoil ?? kort.pris_foil;
   if (manuell) {
     return (
       <span title="Manuell pris">
@@ -364,16 +374,17 @@ function Pris({ kort }) {
       </span>
     );
   }
-  if (kort.usd) return <span>${Number(kort.usd).toFixed(2)}</span>;
-  if (kort.usd_foil) {
-    return (
-      <span title="Kortet finnes bare i foil">
-        ${Number(kort.usd_foil).toFixed(2)}{" "}
-        <span className="merkelapp m-vent" style={{ fontSize: 10 }}>foil</span>
-      </span>
-    );
-  }
-  return <span>{"\u2014"}</span>;
+  const usd = effektivUsd(kort, finish);
+  if (!usd) return <span>{"\u2014"}</span>;
+  // Er det foil-prisen som vises, skal det stå. Ellers ser to kort ut som om
+  // de koster det samme når de ikke gjør det.
+  const erFoil = !kort.usd || (finish === "foil" && kort.usd_foil);
+  return (
+    <span title={erFoil ? "Foil-pris" : undefined}>
+      ${Number(usd).toFixed(2)}
+      {erFoil && <span className="merkelapp m-vent" style={{ fontSize: 10, marginLeft: 4 }}>foil</span>}
+    </span>
+  );
 }
 
 function Tilstander({ kort, regel, onFeil }) {
@@ -424,7 +435,7 @@ function Tilstander({ kort, regel, onFeil }) {
   );
 }
 
-function KortRad({ kort, regel, vis, onFeil, onEndret, sett }) {
+function KortRad({ kort, regel, vis, finish, onFeil, onEndret, sett }) {
   return (
     <tr>
       <td className="kode dempet">
@@ -451,7 +462,7 @@ function KortRad({ kort, regel, vis, onFeil, onEndret, sett }) {
       </td>
       <td className="dempet">{kort.rarity || "\u2014"}</td>
       <td className="h tall dempet">
-        <Pris kort={kort} />
+        <Pris kort={kort} finish={finish} />
       </td>
       <td>
         <Tilstander kort={kort} regel={regel} onFeil={onFeil} />
