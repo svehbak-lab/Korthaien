@@ -59,6 +59,12 @@ export default function Butikk({ onFeil }) {
     api.sett().then((r) => setAlle(r.sett.filter((s) => Number(s.enabled)))).catch(onFeil);
   }, []);
 
+  // Lagerfilteret hører til forsiden, der det er det eneste som avgrenser.
+  // Velger du et sett, vil du se hele settet — ikke bare det du eier.
+  useEffect(() => {
+    setF((x) => ({ ...x, baresalg: !sett }));
+  }, [sett]);
+
   // Endrer du et filter, må du tilbake til første side. Ellers står du på side
   // sju i et resultat med to sider og ser ingenting.
   useEffect(() => setSide(1), [sett, finish, sortering, perSide, f]);
