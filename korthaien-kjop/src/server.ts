@@ -362,8 +362,8 @@ app.get("/api/admin/salgspriser/:sett", krevAdmin, fang(async (req: any, res: an
 // Forhåndsvisning av butikken, inne i admin. Flyttes ut når salgssiden
 // bygges — inntil da er dette stedet å se om prisene stemmer.
 app.get("/api/admin/butikk", krevAdmin, fang(async (req: any, res: any) => {
+  // Settet er valgfritt: uten det søker vi på tvers av alle sett.
   const sett = String(req.query.sett || "").toLowerCase();
-  if (!sett) throw new HttpFeil(400, "Mangler ?sett=");
   const tall = (v: any) => (v === undefined || v === "" ? undefined : Number(v));
   res.json(
     await butikkvisning({

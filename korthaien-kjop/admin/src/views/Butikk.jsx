@@ -39,7 +39,8 @@ const stor = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const TOMT = {
   q: "", rarity: [], farge: [], type: [],
-  baresalg: false, prisFra: "", prisTil: "",
+  // Forsiden viser det du faktisk har. Et tomt skjermbilde forteller ingenting.
+  baresalg: true, prisFra: "", prisTil: "",
 };
 
 export default function Butikk({ onFeil }) {
@@ -49,7 +50,7 @@ export default function Butikk({ onFeil }) {
   const [laster, setLaster] = useState(false);
   const [visning, setVisning] = useState("detalj");
   const [finish, setFinish] = useState("nonfoil");
-  const [sortering, setSortering] = useState("navn");
+  const [sortering, setSortering] = useState("pris_ned");
   const [perSide, setPerSide] = useState(25);
   const [side, setSide] = useState(1);
   const [f, setF] = useState(TOMT);
@@ -63,11 +64,10 @@ export default function Butikk({ onFeil }) {
   useEffect(() => setSide(1), [sett, finish, sortering, perSide, f]);
 
   useEffect(() => {
-    if (!sett) return;
     setLaster(true);
     const t = setTimeout(() => {
       api.butikk({
-        sett, finish, sortering, side, perSide, ...f,
+        sett: sett || "", finish, sortering, side, perSide, ...f,
         rarity: f.rarity.join(","), farge: f.farge.join(","), type: f.type.join(","),
       })
         .then(setData)
@@ -110,7 +110,7 @@ export default function Butikk({ onFeil }) {
 
             <Fast navn="Sett">
               <select value={sett || ""} onChange={(e) => setSett(e.target.value || null)} style={{ width: "100%" }}>
-                <option value="">Velg sett…</option>
+                <option value="">Alle sett</option>
                 {alle.map((s) => (
                   <option key={s.code} value={s.code}>{s.name}</option>
                 ))}
@@ -172,10 +172,7 @@ export default function Butikk({ onFeil }) {
         </div>
 
         <div>
-          {!sett && <p className="dempet">Velg et sett til venstre.</p>}
-
-          {sett && (
-            <>
+          <>
               <div className="panel" style={{ paddingBottom: 0 }}>
                 <div className="krop" style={{ paddingBottom: 0 }}>
                   {/* Fanene er sidenavigasjon, ikke knapper. Antallet i
@@ -275,8 +272,7 @@ export default function Butikk({ onFeil }) {
                   )}
                 </>
               )}
-            </>
-          )}
+          </>
         </div>
       </div>
     </div>

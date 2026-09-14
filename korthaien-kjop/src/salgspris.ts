@@ -321,8 +321,20 @@ export async function butikkvisning(opts: ButikkFilter) {
   const opp = await hentSalgsOppsett();
   const { beholdning } = await import("./lager.js");
 
-  const hvor: string[] = ["c.set_code = ?"];
-  const args: any[] = [opts.sett.toLowerCase()];
+  const hvor: string[] = ["c.er_token = 0"];
+  const args: any[] = [];
+  if (opts.sett) {
+    hvor.push("c.set_code = ?");
+    args.push(opts.sett.toLowerCase());
+  } else {
+    // På tvers av alle sett må noe avgrense utvalget. Uten sett og uten søk
+    // viser vi det du faktisk har på lager — det er den nyttige forsiden.
+    if (!opts.q) {
+      hvor.push(`EXISTS (SELECT 1 FROM lager_bevegelser b
+                          WHERE b.card_id = c.id
+                          GROUP BY b.card_id HAVING SUM(b.antall) > 0)`);
+    }
+  }
   if (opts.q) {
     hvor.push("(c.name_norm LIKE ? OR c.oracle_text LIKE ?)");
     args.push(`%${normaliserEnkelt(opts.q)}%`, `%${opts.q}%`);
@@ -368,7 +380,8 @@ export async function butikkvisning(opts: ButikkFilter) {
                  COALESCE(s.visningsnavn, s.name) AS set_name
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
            WHERE ${hvor.join(" AND ")}
-           ORDER BY CAST(c.collector_number AS INTEGER), c.collector_number`,
+           ORDER BY ${opts.sett ? "CAST(c.collector_number AS INTEGER), c.collector_number" : "c.name"}
+           LIMIT ${opts.sett ? 2000 : 1500}`,
     args,
   });
 
@@ -395,6 +408,9 @@ export async function butikkvisning(opts: ButikkFilter) {
       }));
       const påLager = tilstander.reduce((n, t) => n + t.lager, 0);
       if (opts.baresalg && !påLager) continue;
+      // Uten pris er kortet ikke til salgs. Ble det lagt inn likevel, sorterte
+      // det som «ingen pris» og fylte første side ved lav til høy.
+      if (!tilstander.length) continue;
       varianter.push({ finish, manuell, tilstander, påLager });
     }
     if (varianter.length) ut.push({ ...k, varianter });
