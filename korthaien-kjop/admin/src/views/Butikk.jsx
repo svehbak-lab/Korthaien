@@ -242,9 +242,9 @@ export default function Butikk({ onFeil }) {
                     {data.utenPris > 0 && (
                       <>
                         {" "}
-                        {data.utenPris} kort i settet har ingen pris — verken fra
-                        Scryfall, intervallene eller manuelt. De ville ikke vært til
-                        salgs.
+                        {data.utenPris} av kortene på denne siden har ingen pris —
+                        verken fra Scryfall, intervallene eller manuelt. De ville ikke
+                        vært til salgs.
                       </>
                     )}
                   </p>

@@ -326,14 +326,18 @@ export async function butikkvisning(opts: ButikkFilter) {
   if (opts.sett) {
     hvor.push("c.set_code = ?");
     args.push(opts.sett.toLowerCase());
-  } else {
-    // På tvers av alle sett må noe avgrense utvalget. Uten sett og uten søk
-    // viser vi det du faktisk har på lager — det er den nyttige forsiden.
-    if (!opts.q) {
-      hvor.push(`EXISTS (SELECT 1 FROM lager_bevegelser b
-                          WHERE b.card_id = c.id
-                          GROUP BY b.card_id HAVING SUM(b.antall) > 0)`);
-    }
+  }
+  if (opts.finish === "foil") hvor.push("c.has_foil = 1");
+  else if (opts.finish === "nonfoil") hvor.push("c.has_nonfoil = 1");
+  if (opts.baresalg) {
+    hvor.push(`EXISTS (SELECT 1 FROM lager_bevegelser b
+                        WHERE b.card_id = c.id
+                        GROUP BY b.card_id HAVING SUM(b.antall) > 0)`);
+  } else if (!opts.sett && !opts.q) {
+    // Uten sett, uten søk og uten lagerfilter ville vi hentet hele katalogen.
+    hvor.push(`EXISTS (SELECT 1 FROM lager_bevegelser b
+                        WHERE b.card_id = c.id
+                        GROUP BY b.card_id HAVING SUM(b.antall) > 0)`);
   }
   if (opts.q) {
     hvor.push("(c.name_norm LIKE ? OR c.oracle_text LIKE ?)");
@@ -372,6 +376,41 @@ export async function butikkvisning(opts: ButikkFilter) {
     hvor.push(`(${deler.join(" OR ")})`);
   }
 
+  const perSide = Math.min(200, Math.max(1, opts.perSide ?? 25));
+  const side = Math.max(1, opts.side ?? 1);
+  const foilFørst = opts.finish === "foil";
+
+  // «Prisen som gjelder» i sorteringen: din egen først, så markedets.
+  const SORTPRIS = foilFørst
+    ? `COALESCE((SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='foil'),
+                c.usd_foil, c.usd, 0)`
+    : `COALESCE((SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='nonfoil'),
+                c.usd, c.usd_foil, 0)`;
+
+  const ORDNING = {
+    pris_ned: `${SORTPRIS} DESC, c.name`,
+    pris_opp: `${SORTPRIS} ASC, c.name`,
+    navn: "c.name COLLATE NOCASE ASC",
+    navn_ned: "c.name COLLATE NOCASE DESC",
+  }[String(opts.sortering || "")] || (opts.sett
+    ? "CAST(c.collector_number AS INTEGER), c.collector_number"
+    : "c.name COLLATE NOCASE ASC");
+
+  // Totalen og fanetallene telles i databasen. Å telle det som ligger på
+  // siden ville gitt «Enkeltkort (25)» uansett hvor mange det er.
+  const tellinger = await db().execute({
+    sql: `SELECT COUNT(*) AS n,
+                 SUM(CASE WHEN c.has_nonfoil = 1 THEN 1 ELSE 0 END) AS nonfoil,
+                 SUM(CASE WHEN c.has_foil = 1 THEN 1 ELSE 0 END)    AS foil
+            FROM cards c WHERE ${hvor.join(" AND ")}`,
+    args,
+  });
+  const totalt = Number(tellinger.rows[0]?.n || 0);
+  const antall = {
+    nonfoil: Number(tellinger.rows[0]?.nonfoil || 0),
+    foil: Number(tellinger.rows[0]?.foil || 0),
+  };
+
   const r = await db().execute({
     sql: `SELECT c.id, c.name, c.collector_number, c.rarity, c.variant,
                  c.usd, c.usd_foil, c.has_nonfoil, c.has_foil, c.er_token,
@@ -380,9 +419,9 @@ export async function butikkvisning(opts: ButikkFilter) {
                  COALESCE(s.visningsnavn, s.name) AS set_name
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
            WHERE ${hvor.join(" AND ")}
-           ORDER BY ${opts.sett ? "CAST(c.collector_number AS INTEGER), c.collector_number" : "c.name"}
-           LIMIT ${opts.sett ? 2000 : 1500}`,
-    args,
+           ORDER BY ${ORDNING}
+           LIMIT ? OFFSET ?`,
+    args: [...args, perSide, (side - 1) * perSide],
   });
 
   const ider = (r.rows as any[]).map((x) => String(x.id));
@@ -416,45 +455,23 @@ export async function butikkvisning(opts: ButikkFilter) {
     if (varianter.length) ut.push({ ...k, varianter });
   }
 
-  // Fanene viser antall per finish. De telles før finish velges, ellers
-  // kunne ikke den andre fanen vise sitt eget tall.
-  const antall = {
-    nonfoil: ut.filter((k) => k.varianter.some((v: any) => v.finish === "nonfoil" && v.tilstander.length)).length,
-    foil: ut.filter((k) => k.varianter.some((v: any) => v.finish === "foil" && v.tilstander.length)).length,
-  };
-
-  // Sorteringen må skje over hele settet, ikke over siden. Sorterer man bare
-  // det man allerede har hentet, får man den dyreste av de 25 første.
-  const finish = opts.finish === "foil" ? "foil" : "nonfoil";
-  const nmPris = (k: any) =>
-    k.varianter.find((v: any) => v.finish === finish)?.tilstander?.[0]?.ore ?? -1;
-
-  switch (opts.sortering) {
-    case "pris_ned": ut.sort((a, b) => nmPris(b) - nmPris(a)); break;
-    case "pris_opp": ut.sort((a, b) => nmPris(a) - nmPris(b)); break;
-    case "navn":     ut.sort((a, b) => String(a.name).localeCompare(String(b.name), "nb")); break;
-    case "navn_ned": ut.sort((a, b) => String(b.name).localeCompare(String(a.name), "nb")); break;
-    default: break; // samlernummer, som spørringen allerede gir
-  }
-
-  // Prisfilteret må komme etter at prisene er regnet ut — de finnes ikke i
-  // databasen, de utledes.
+  // Prisintervallet kan først anvendes når prisene er regnet ut, og de finnes
+  // bare for denne siden. Det filtrerer derfor innenfor siden.
   const filtrert = ut.filter((k) => {
-    const p = nmPris(k);
+    if (opts.prisFra === undefined && opts.prisTil === undefined) return true;
+    const finish = foilFørst ? "foil" : "nonfoil";
+    const p = k.varianter.find((v: any) => v.finish === finish)?.tilstander?.[0]?.ore ?? -1;
     if (p < 0) return true;
     if (opts.prisFra !== undefined && p < opts.prisFra * 100) return false;
     if (opts.prisTil !== undefined && p > opts.prisTil * 100) return false;
     return true;
   });
-  // Et helt sett med regeltekst og bilder er mye å sende og mye å tegne opp.
-  // Grensen holder visningen rask; filteret er der for å snevre inn.
-  const perSide = Math.min(200, Math.max(1, opts.perSide ?? 25));
-  const side = Math.max(1, opts.side ?? 1);
-  const sider = Math.max(1, Math.ceil(filtrert.length / perSide));
+
+  const sider = Math.max(1, Math.ceil(totalt / perSide));
   return {
     oppsett: opp,
-    kort: filtrert.slice((side - 1) * perSide, side * perSide),
-    totalt: filtrert.length,
+    kort: filtrert,
+    totalt,
     antall,
     side: Math.min(side, sider),
     sider,
