@@ -63,6 +63,9 @@ CREATE TABLE IF NOT EXISTS cards (
   reserved          INTEGER NOT NULL DEFAULT 0,
   -- Tokens og emblemer selges, men kjøpes aldri inn.
   er_token          INTEGER NOT NULL DEFAULT 0,
+  -- Serienummererte kort. Unike eksemplarer med trykt nummer; prisen sier
+  -- ingenting om hva et vanlig eksemplar er verdt.
+  er_serialized     INTEGER NOT NULL DEFAULT 0,
   released_at       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_cards_name    ON cards(name_norm);

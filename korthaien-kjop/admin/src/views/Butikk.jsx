@@ -511,10 +511,10 @@ function Detaljrad({ kort }) {
               return (
                 <button
                   key={c}
-                  onClick={() => x.lager && setValgt(c)}
-                  disabled={!x.lager}
+                  onClick={() => setValgt(c)}
                   aria-pressed={aktiv}
-                  title={x.lager ? `${x.lager} på lager` : "Utsolgt"}
+                  className={x.lager ? undefined : "tom"}
+                  title={x.lager ? `${x.lager} på lager` : "Utsolgt — prisen vises likevel"}
                 >
                   {c}
                 </button>

@@ -37,6 +37,7 @@ type Rå = {
   prices?: { usd?: string | null; usd_foil?: string | null };
   border_color?: string;
   layout?: string;
+  promo_types?: string[];
   frame_effects?: string[];
   full_art?: boolean;
   image_uris?: { normal?: string; small?: string };
@@ -98,6 +99,12 @@ function farger(k: Rå): string[] {
 // kunne kjøpes inn — Scryfall har ingen pris på dem, og du får dem gratis i
 // pakkene. Merkingen gjør at kjøpssiden kan holde dem utenfor eksplisitt i
 // stedet for at de blir usynlige av feil grunn.
+// Serienummererte kort er unike eksemplarer med et trykt nummer, ofte
+// «0120/500». Scryfall merker dem med promo-typen «serialized». Prisen deres
+// sier ingenting om hva et vanlig eksemplar er verdt, så de skal ikke kunne
+// kjøpes inn på vanlige vilkår.
+const erSerialized = (k: Rå) => (k.promo_types || []).includes("serialized");
+
 const TOKEN_LAYOUT = new Set(["token", "double_faced_token", "emblem", "art_series"]);
 const erToken = (k: Rå) =>
   TOKEN_LAYOUT.has(String(k.layout || "")) || /^Token\b|^Emblem\b/.test(k.type_line || "");
@@ -213,9 +220,10 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
               (id, oracle_id, name, name_norm, front_norm, back_norm, variant, set_code,
                collector_number, rarity, usd, usd_foil, has_nonfoil, has_foil, image_uri, released_at,
                type_line, oracle_text, mana_cost, cmc, colors, color_identity,
-               power, toughness, loyalty, keywords, artist, legalities, reserved, er_token)
+               power, toughness, loyalty, keywords, artist, legalities, reserved,
+               er_token, er_serialized)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               usd = excluded.usd, usd_foil = excluded.usd_foil,
               image_uri = excluded.image_uri, rarity = excluded.rarity,
@@ -226,7 +234,8 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
               power = excluded.power, toughness = excluded.toughness,
               loyalty = excluded.loyalty, keywords = excluded.keywords,
               artist = excluded.artist, legalities = excluded.legalities,
-              reserved = excluded.reserved, er_token = excluded.er_token`,
+              reserved = excluded.reserved, er_token = excluded.er_token,
+              er_serialized = excluded.er_serialized`,
       args: [
         k.id,
         k.oracle_id || k.id,
@@ -259,6 +268,7 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
         somJson(k.legalities),
         k.reserved ? 1 : 0,
         erToken(k) ? 1 : 0,
+        erSerialized(k) ? 1 : 0,
       ],
     };
   });

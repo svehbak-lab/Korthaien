@@ -255,4 +255,7 @@ textarea { width: 100%; font-family: inherit; }
   color: var(--sjo);
   font-weight: 600;
 }
-.butikk .cond-valg button:disabled { color: var(--strek); cursor: default; }
+/* Utsolgte tilstander er dempet, men fortsatt klikkbare — prisen er verdt å
+   se selv når beholdningen er null. */
+.butikk .cond-valg button.tom { color: var(--dempet); }
+.butikk .cond-valg button.tom[aria-pressed="true"] { color: var(--sjo); }

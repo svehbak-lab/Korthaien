@@ -289,14 +289,15 @@ export type Kandidat = {
   has_foil: boolean;
   has_nonfoil: boolean;
   er_token: boolean;
+  er_serialized: boolean;
   released_at: string | null;
 };
 
 const VELG = `SELECT c.id AS card_id, c.name, c.set_code, COALESCE(s.visningsnavn, s.name) AS set_name,
                      c.collector_number, c.rarity, c.image_uri, c.usd, c.usd_foil,
-                     c.has_foil, c.has_nonfoil, c.er_token, c.released_at
+                     c.has_foil, c.has_nonfoil, c.er_token, c.er_serialized, c.released_at
                 FROM cards c LEFT JOIN sets s ON s.code = c.set_code
-               WHERE c.er_token = 0`;
+               WHERE c.er_token = 0 AND c.er_serialized = 0`;
 
 export async function finnKandidater(
   navn: string,
@@ -367,6 +368,7 @@ export function radTilKandidat(x: any): Kandidat {
     has_foil: !!Number(x.has_foil),
     has_nonfoil: !!Number(x.has_nonfoil),
     er_token: !!Number(x.er_token),
+    er_serialized: !!Number(x.er_serialized),
     released_at: x.released_at ? String(x.released_at) : null,
   };
 }

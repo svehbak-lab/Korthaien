@@ -49,7 +49,7 @@ export function beregnØre(
 // uendret: kurs, buy_pct og trappen for settet gjelder som før, så NM, EX, VG
 // og G følger av det ene tallet du skriver inn.
 export function prisØre(
-  kort: { usd?: number | null; usd_foil?: number | null; rarity?: string | null; er_token?: number | boolean | null },
+  kort: { usd?: number | null; usd_foil?: number | null; rarity?: string | null; er_token?: number | boolean | null; er_serialized?: number | boolean | null },
   finish: string,
   condition: Condition,
   regel: { ladder: Ladder; buy_pct?: number | null; conditions?: Condition[] },
@@ -62,7 +62,7 @@ export function prisØre(
   // tar imot, og få pris på den fordi trappen tilfeldigvis har en sats.
   // Tokens selges, men kjøpes aldri inn. Sjekken ligger her og ikke i søket,
   // så den også gjelder en ordre sendt rett mot API-et.
-  if (kort.er_token) return 0;
+  if (kort.er_token || kort.er_serialized) return 0;
 
   const godtatt = egneConditions?.length ? egneConditions : regel.conditions;
   if (godtatt && !godtatt.includes(condition)) return 0;
