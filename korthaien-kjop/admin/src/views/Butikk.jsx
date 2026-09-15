@@ -358,6 +358,61 @@ function Fast({ navn, children }) {
 
 // Grupper som kan slås sammen. Med haker i stedet for nedtrekk blir menyen
 // lang, og da må den kunne ryddes bort.
+// ─────────────────────────────────────────────────────────────────────────────
+// MANASYMBOLER
+// ─────────────────────────────────────────────────────────────────────────────
+// Scryfall serverer symbolene som SVG på faste adresser. «{3}» blir 3.svg,
+// «{W/U}» blir WU.svg. Symbolene er Wizards' eiendom, men de stilles til
+// rådighet gjennom Scryfall og brukes av alle kortbutikker.
+//
+// Teksten splittes på klammene og settes sammen igjen med bilder der det var
+// symboler. Ukjente koder får stå som de er — bedre en synlig «{Q}» enn et
+// ødelagt bilde.
+// Delingen må være global, men prøvingen må ikke: et globalt regexp husker
+// posisjon mellom kall til test(), og da slår annenhver sjekk feil.
+const SYMBOL_DEL = /(\{[^}]{1,10}\})/g;
+const ER_SYMBOL = /^\{[^}]{1,10}\}$/;
+
+function symbolFil(kode) {
+  return kode
+    .slice(1, -1)
+    .replace(/\//g, "")
+    .toUpperCase();
+}
+
+export function MedSymboler({ tekst, størrelse = 14 }) {
+  if (!tekst) return null;
+  const deler = String(tekst).split(SYMBOL_DEL);
+  return (
+    <>
+      {deler.map((d, i) => {
+        if (!ER_SYMBOL.test(d)) return d;
+        const fil = symbolFil(d);
+        if (!/^[A-Z0-9∞]{1,4}$/.test(fil)) return d;
+        return (
+          <img
+            key={i}
+            src={`https://svgs.scryfall.io/card-symbols/${fil}.svg`}
+            alt={d}
+            title={d}
+            loading="lazy"
+            style={{
+              width: størrelse,
+              height: størrelse,
+              verticalAlign: "-2px",
+              margin: "0 1px",
+            }}
+            // Finnes ikke symbolet, vis koden i stedet for et brutt bilde.
+            onError={(e) => {
+              e.currentTarget.replaceWith(document.createTextNode(d));
+            }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 function Gruppe({ navn, children, lukket }) {
   const [åpen, setÅpen] = useState(!lukket);
   return (
@@ -412,7 +467,7 @@ function Tekstrad({ kort }) {
           </div>
           <div className="dempet" style={{ fontSize: 12 }}>
             Collector #: {kort.collector_number}
-            {kort.mana_cost ? ` · ${kort.mana_cost}` : ""}
+            {kort.mana_cost ? <> · <MedSymboler tekst={kort.mana_cost} størrelse={12} /></> : null}
           </div>
           {kort.valgt.finish === "foil" && <FoilMerke />}
         </div>
@@ -488,14 +543,14 @@ function Detaljrad({ kort }) {
           {kort.valgt.finish === "foil" && <FoilMerke />}
 
           <div className="dempet" style={{ fontSize: 13, margin: "8px 0 0" }}>
-            {kort.mana_cost} {kort.type_line}
+            <MedSymboler tekst={kort.mana_cost} /> {kort.type_line}
             {kort.power ? ` · ${kort.power}/${kort.toughness}` : ""}
             {kort.loyalty ? ` · ${kort.loyalty}` : ""}
           </div>
 
           {kort.oracle_text && (
-            <p style={{ whiteSpace: "pre-line", fontSize: 13.5, margin: "6px 0 0", maxWidth: "56ch" }}>
-              {kort.oracle_text}
+            <p style={{ whiteSpace: "pre-line", fontSize: 13.5, margin: "6px 0 0", maxWidth: "56ch", lineHeight: 1.6 }}>
+              <MedSymboler tekst={kort.oracle_text} />
             </p>
           )}
         </div>
