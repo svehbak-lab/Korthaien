@@ -415,7 +415,7 @@ export async function butikkvisning(opts: ButikkFilter) {
     sql: `SELECT c.id, c.name, c.collector_number, c.rarity, c.variant,
                  c.usd, c.usd_foil, c.has_nonfoil, c.has_foil, c.er_token,
                  c.image_uri, c.type_line, c.oracle_text, c.mana_cost,
-                 c.power, c.toughness, c.loyalty, c.colors, c.artist,
+                 c.power, c.toughness, c.loyalty, c.colors, c.artist, c.set_code,
                  COALESCE(s.visningsnavn, s.name) AS set_name
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
            WHERE ${hvor.join(" AND ")}
