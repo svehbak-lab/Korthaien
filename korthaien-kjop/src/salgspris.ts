@@ -485,3 +485,74 @@ export async function butikkvisning(opts: ButikkFilter) {
 function normaliserEnkelt(s: string): string {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
+
+
+// ── ett kort ─────────────────────────────────────────────────────────────────
+// Kortsiden: alt vi vet om ett trykk, pluss de andre utgavene av samme kort.
+// «Samme kort» er oracle_id — det er Scryfalls identitet på tvers av sett, og
+// den holder også når navnet er skrevet ulikt.
+export async function kortdetaljer(cardId: string) {
+  const opp = await hentSalgsOppsett();
+  const { beholdning } = await import("./lager.js");
+
+  const r = await db().execute({
+    sql: `SELECT c.*, COALESCE(s.visningsnavn, s.name) AS set_name, s.released_at AS sett_utgitt
+            FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+           WHERE c.id = ?`,
+    args: [cardId],
+  });
+  const kort: any = r.rows[0];
+  if (!kort) return null;
+
+  // Andre utgaver: samme oracle_id, men ikke samme trykk. Faller tilbake på
+  // navnet for kort der oracle_id mangler.
+  const andre = await db().execute({
+    sql: `SELECT c.id, c.name, c.set_code, c.collector_number, c.image_uri, c.rarity,
+                 c.usd, c.usd_foil, c.has_nonfoil, c.has_foil, c.variant,
+                 COALESCE(s.visningsnavn, s.name) AS set_name, s.released_at
+            FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+           WHERE c.id <> ?
+             AND c.er_token = 0
+             AND (${kort.oracle_id ? "c.oracle_id = ?" : "c.name_norm = ?"})
+           ORDER BY s.released_at DESC
+           LIMIT 40`,
+    args: [cardId, kort.oracle_id || kort.name_norm],
+  });
+
+  const ider = [cardId, ...(andre.rows as any[]).map((x) => String(x.id))];
+  const manuelleSalg = await hentManuellSalg(ider);
+  const manuelleKjøp = await hentManuellePriser(ider);
+  const lager = await beholdning(ider);
+
+  const priserFor = (k: any) => {
+    const ut: any[] = [];
+    for (const finish of ["nonfoil", "foil"]) {
+      if (finish === "nonfoil" && !Number(k.has_nonfoil)) continue;
+      if (finish === "foil" && !Number(k.has_foil)) continue;
+      const manuell = manuelleSalg.get(`${k.id}:${finish}`) ?? null;
+      const kjøp = manuelleKjøp.get(`${k.id}:${finish}`) ?? null;
+      const tilstander = salgspriser(k, finish, opp, manuell, kjøp).map((p) => ({
+        ...p,
+        lager: lager.get(`${k.id}:${finish}:${p.condition}`) || 0,
+      }));
+      if (tilstander.length) ut.push({ finish, manuell, tilstander });
+    }
+    return ut;
+  };
+
+  return {
+    kort: { ...kort, varianter: priserFor(kort) },
+    andreUtgaver: (andre.rows as any[])
+      .map((k) => {
+        const v = priserFor(k);
+        return {
+          ...k,
+          nm: v[0]?.tilstander?.[0]?.ore ?? null,
+          påLager: v.reduce((n, x: any) => n + x.tilstander.reduce((m: number, t: any) => m + t.lager, 0), 0),
+        };
+      })
+      // Utgaver uten pris er ikke til salgs, men de er fortsatt utgaver du
+      // kanskje leter etter. De blir med, bakerst.
+      .sort((a, b) => (b.nm ?? -1) - (a.nm ?? -1)),
+  };
+}

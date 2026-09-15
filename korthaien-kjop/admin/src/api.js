@@ -86,6 +86,7 @@ export const api = {
     }
     return kall(`/api/admin/butikk?${p}`);
   },
+  butikkKort: (id) => kall(`/api/admin/butikk/kort/${id}`),
   salgspriser: () => kall("/api/admin/salgspriser"),
   lagreSalgspriser: (intervaller) =>
     kall("/api/admin/salgspriser", { method: "PUT", body: { intervaller } }),

@@ -259,3 +259,16 @@ textarea { width: 100%; font-family: inherit; }
    se selv når beholdningen er null. */
 .butikk .cond-valg button.tom { color: var(--dempet); }
 .butikk .cond-valg button.tom[aria-pressed="true"] { color: var(--sjo); }
+
+/* Lenker inne i butikkvisningen. Kortnavn og settnavn er klikkbare, og må se
+   det ut — en museklikk-flate som ser ut som tekst finner ingen. */
+.butikk .lenke {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--sjo);
+  cursor: pointer;
+  text-align: left;
+}
+.butikk .lenke:hover { text-decoration: underline; }

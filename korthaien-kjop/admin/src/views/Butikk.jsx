@@ -54,6 +54,7 @@ export default function Butikk({ onFeil }) {
   const [perSide, setPerSide] = useState(25);
   const [side, setSide] = useState(1);
   const [f, setF] = useState(TOMT);
+  const [åpentKort, setÅpentKort] = useState(null);
 
   useEffect(() => {
     api.sett().then((r) => setAlle(r.sett.filter((s) => Number(s.enabled)))).catch(onFeil);
@@ -98,6 +99,20 @@ export default function Butikk({ onFeil }) {
       ...x,
       [felt]: x[felt].includes(verdi) ? x[felt].filter((v) => v !== verdi) : [...x[felt], verdi],
     }));
+
+  if (åpentKort) {
+    return (
+      <div className="butikk">
+        <Kortside
+          id={åpentKort}
+          onLukk={() => setÅpentKort(null)}
+          onÅpne={setÅpentKort}
+          onSett={(kode) => { setSett(kode); setÅpentKort(null); }}
+          onFeil={onFeil}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="butikk">
@@ -256,8 +271,22 @@ export default function Butikk({ onFeil }) {
                   </p>
 
                   {visning === "tekst"
-                    ? synlige.map((k) => <Tekstrad key={k.id} kort={k} />)
-                    : synlige.map((k) => <Detaljrad key={k.id} kort={k} />)}
+                    ? synlige.map((k) => (
+                        <Tekstrad
+                          key={k.id}
+                          kort={k}
+                          onÅpne={() => setÅpentKort(k.id)}
+                          onSett={() => setSett(k.set_code)}
+                        />
+                      ))
+                    : synlige.map((k) => (
+                        <Detaljrad
+                          key={k.id}
+                          kort={k}
+                          onÅpne={() => setÅpentKort(k.id)}
+                          onSett={() => setSett(k.set_code)}
+                        />
+                      ))}
 
                   {!synlige.length && <div className="tom">Ingen kort passer filteret.</div>}
 
@@ -451,19 +480,21 @@ function Hake({ navn, av, onVeksle }) {
 
 // Tilstandene nedover, med lager og pris på samme linje. Tettere og lettere å
 // skumme enn et rutenett, som er hele poenget med tekstvisning.
-function Tekstrad({ kort }) {
+function Tekstrad({ kort, onÅpne, onSett }) {
   return (
     <div className="panel" style={{ marginBottom: 8 }}>
       <div className="krop" style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600 }}>
-            {kort.name}
+            <button className="lenke" onClick={onÅpne}>{kort.name}</button>
             {kort.variant && kort.variant !== "vanlig" && (
               <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>{kort.variant}</span>
             )}
           </div>
           <div className="dempet" style={{ fontSize: 13 }}>
-            {kort.set_name} · {kort.type_line || kort.rarity}
+            <button className="lenke" onClick={onSett}>{kort.set_name}</button>
+            {" · "}
+            {kort.type_line || kort.rarity}
           </div>
           <div className="dempet" style={{ fontSize: 12 }}>
             Collector #: {kort.collector_number}
@@ -515,7 +546,7 @@ function Tekstrad({ kort }) {
 // Bilde til venstre, kortopplysninger i midten, og en prisboks til høyre med
 // tilstandene som faner — slik Card Kingdom gjør det. Trykker du på en fane,
 // bytter både prisen og antallet over og under.
-function Detaljrad({ kort }) {
+function Detaljrad({ kort, onÅpne, onSett }) {
   const første = kort.valgt.tilstander.find((t) => t.lager > 0) || kort.valgt.tilstander[0];
   const [valgt, setValgt] = useState(første.condition);
   const t = kort.valgt.tilstander.find((x) => x.condition === valgt) || første;
@@ -528,15 +559,20 @@ function Detaljrad({ kort }) {
             src={kort.image_uri}
             alt={kort.name}
             loading="lazy"
-            style={{ width: 130, borderRadius: 7, alignSelf: "flex-start" }}
+            onClick={onÅpne}
+            style={{ width: 130, borderRadius: 7, alignSelf: "flex-start", cursor: "pointer" }}
           />
         ) : (
           <div style={{ width: 130, aspectRatio: "5 / 7", background: "var(--papir)", borderRadius: 7 }} />
         )}
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 16 }}>{kort.name}</div>
-          <div style={{ fontSize: 13 }}>{kort.set_name}</div>
+          <div style={{ fontWeight: 600, fontSize: 16 }}>
+            <button className="lenke" onClick={onÅpne}>{kort.name}</button>
+          </div>
+          <div style={{ fontSize: 13 }}>
+            <button className="lenke" onClick={onSett}>{kort.set_name}</button>
+          </div>
           <div className="dempet" style={{ fontSize: 13 }}>
             Collector #: {kort.collector_number}
           </div>
@@ -593,6 +629,179 @@ function Detaljrad({ kort }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KORTSIDE
+// ─────────────────────────────────────────────────────────────────────────────
+// Alt om ett trykk, og de andre utgavene av samme kort. «Samme kort» er
+// Scryfalls oracle_id, ikke navnet — den holder også når navnet er skrevet
+// ulikt mellom utgivelser.
+function Kortside({ id, onLukk, onÅpne, onSett, onFeil }) {
+  const [data, setData] = useState(null);
+  const [finish, setFinish] = useState("nonfoil");
+  const [valgt, setValgt] = useState(null);
+
+  useEffect(() => {
+    setData(null);
+    api.butikkKort(id)
+      .then((d) => {
+        setData(d);
+        const første = d.kort.varianter[0];
+        setFinish(første?.finish || "nonfoil");
+        setValgt(
+          (første?.tilstander.find((t) => t.lager > 0) || første?.tilstander[0])?.condition || "NM"
+        );
+      })
+      .catch(onFeil);
+  }, [id]);
+
+  if (!data) return <p className="dempet">Henter…</p>;
+
+  const k = data.kort;
+  const variant = k.varianter.find((v) => v.finish === finish) || k.varianter[0];
+  const t = variant?.tilstander.find((x) => x.condition === valgt) || variant?.tilstander[0];
+  const harBegge = k.varianter.length > 1;
+
+  return (
+    <>
+      <button className="knapp liten" style={{ marginBottom: 14 }} onClick={onLukk}>
+        ← Tilbake til lista
+      </button>
+
+      <h1 style={{ marginBottom: 4 }}>{k.name}</h1>
+      <p className="dempet" style={{ marginTop: 0 }}>
+        <button className="lenke" onClick={() => onSett(k.set_code)}>{k.set_name}</button>
+      </p>
+
+      <div className="panel">
+        <div className="krop" style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
+          {k.image_uri ? (
+            <img src={k.image_uri} alt={k.name} style={{ width: 240, borderRadius: 11 }} />
+          ) : (
+            <div style={{ width: 240, aspectRatio: "5 / 7", background: "var(--papir)", borderRadius: 11 }} />
+          )}
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Rad navn="Utgave">
+              <button className="lenke" onClick={() => onSett(k.set_code)}>{k.set_name}</button>
+            </Rad>
+            <Rad navn="Type">{k.type_line || "\u2014"}</Rad>
+            {k.mana_cost && <Rad navn="Kostnad"><MedSymboler tekst={k.mana_cost} /></Rad>}
+            <Rad navn="Raritet">{k.rarity || "\u2014"}</Rad>
+            <Rad navn="Collector #">{k.collector_number}</Rad>
+            {(k.power || k.loyalty) && (
+              <Rad navn={k.loyalty ? "Lojalitet" : "Styrke"}>
+                {k.loyalty ? k.loyalty : `${k.power}/${k.toughness}`}
+              </Rad>
+            )}
+            {k.artist && <Rad navn="Kunstner">{k.artist}</Rad>}
+            {Number(k.reserved) === 1 && (
+              <Rad navn="Merk">
+                <span className="merkelapp m-velg">På reservelisten</span>
+              </Rad>
+            )}
+
+            {k.oracle_text && (
+              <p style={{ whiteSpace: "pre-line", fontSize: 14, lineHeight: 1.65, margin: "16px 0 0", maxWidth: "58ch" }}>
+                <MedSymboler tekst={k.oracle_text} />
+              </p>
+            )}
+          </div>
+
+          <div style={{ width: 210, flex: "none", textAlign: "center" }}>
+            {!variant ? (
+              <p className="dempet">Ikke til salgs — kortet har ingen pris.</p>
+            ) : (
+              <>
+                <div className="tall pris-stor" style={{ marginBottom: 6 }}>{kroner(t.ore)}</div>
+                <div className="cond-valg">
+                  {CONDITIONS.map((c) => {
+                    const x = variant.tilstander.find((y) => y.condition === c);
+                    if (!x) return null;
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => setValgt(c)}
+                        aria-pressed={valgt === c}
+                        className={x.lager ? undefined : "tom"}
+                        title={x.lager ? `${x.lager} på lager` : "Utsolgt — prisen vises likevel"}
+                      >
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="dempet" style={{ fontSize: 13, margin: "7px 0 8px" }}>
+                  {t.lager > 0 ? `${t.lager} tilgjengelig` : "Utsolgt"}
+                </div>
+                <button className="knapp primar" style={{ width: "100%" }} disabled title="Kurven kommer når kassen bygges">
+                  Legg i kurven
+                </button>
+                {harBegge && (
+                  <button
+                    className="knapp"
+                    style={{ width: "100%", marginTop: 8 }}
+                    onClick={() => {
+                      const ny = finish === "foil" ? "nonfoil" : "foil";
+                      setFinish(ny);
+                      const v = k.varianter.find((x) => x.finish === ny);
+                      setValgt((v?.tilstander.find((x) => x.lager > 0) || v?.tilstander[0])?.condition);
+                    }}
+                  >
+                    {finish === "foil" ? "Bytt til vanlig" : "Bytt til foil"}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {data.andreUtgaver.length > 0 && (
+        <>
+          <h2 style={{ marginTop: 22 }}>Andre utgaver ({data.andreUtgaver.length})</h2>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            {data.andreUtgaver.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => onÅpne(u.id)}
+                title={`${u.set_name} #${u.collector_number}`}
+                style={{
+                  width: 116, border: "1px solid var(--strek)", borderRadius: 9,
+                  background: "var(--flate)", padding: 7, cursor: "pointer", textAlign: "center",
+                }}
+              >
+                {u.image_uri ? (
+                  <img src={u.image_uri} alt={u.set_name} loading="lazy" style={{ width: "100%", borderRadius: 5 }} />
+                ) : (
+                  <div style={{ width: "100%", aspectRatio: "5 / 7", background: "var(--papir)", borderRadius: 5 }} />
+                )}
+                <div className="dempet" style={{ fontSize: 11, marginTop: 5, lineHeight: 1.3 }}>
+                  {u.set_name}
+                </div>
+                <div className="tall" style={{ fontSize: 12.5, fontWeight: 600, color: "var(--brass)" }}>
+                  {u.nm ? kroner(u.nm) : "\u2014"}
+                </div>
+                {u.påLager > 0 && (
+                  <div className="dempet" style={{ fontSize: 11 }}>{u.påLager} på lager</div>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function Rad({ navn, children }) {
+  return (
+    <div style={{ display: "flex", gap: 12, fontSize: 14, padding: "3px 0" }}>
+      <span className="dempet" style={{ width: 96, flex: "none" }}>{navn}</span>
+      <span>{children}</span>
     </div>
   );
 }

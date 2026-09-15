@@ -7,7 +7,7 @@ import { sendBekreftelse, varsleMeg, varsleStatus, sendOppgjør } from "./epost.
 import { bokførOrdre, reverserOrdre, beholdning, historikk, settBeholdning, avvikMotMystore } from "./lager.js";
 import {
   hentIntervaller, lagreIntervaller, finnHull, salgsprisForSett, settManuellSalg,
-  butikkvisning,
+  butikkvisning, kortdetaljer,
 } from "./salgspris.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
@@ -382,6 +382,12 @@ app.get("/api/admin/butikk", krevAdmin, fang(async (req: any, res: any) => {
       perSide: tall(req.query.perSide),
     })
   );
+}));
+
+app.get("/api/admin/butikk/kort/:id", krevAdmin, fang(async (req: any, res: any) => {
+  const d = await kortdetaljer(String(req.params.id));
+  if (!d) throw new HttpFeil(404, "Fant ikke kortet");
+  res.json(d);
 }));
 
 app.put("/api/admin/salgspris/:cardId", krevAdmin, fang(async (req: any, res: any) => {
