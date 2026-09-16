@@ -208,7 +208,7 @@ test("admin kan bytte trykk på en linje uten å røre antall", async () => {
   const o = await nyOrdre();
   await regnOmLinje(o.lid, { condition: "EX" });
 
-  const total = await byttKort(o.lid, "lil-uma");
+  const { total } = await byttKort(o.lid, "lil-uma");
   const l = await db().execute({ sql: "SELECT * FROM order_lines WHERE id = ?", args: [o.lid] });
   assert.equal(l.rows[0].set_name, "Ultimate Masters");
   assert.equal(l.rows[0].card_id, "lil-uma");
@@ -229,4 +229,30 @@ test("bytter du tilbake, forsvinner utgaven fra loggen", async () => {
   await byttKort(o.lid, "lil-isd");
   const logg = await endringslogg(o.oid);
   assert.ok(!logg.some((e) => e.hva === "utgave"), "ingen endring å forklare");
+});
+
+test("bytte til et avslått sett går gjennom, men sier fra", async () => {
+  const { byttKort } = await import("../src/orders.ts");
+  await db().execute("UPDATE set_rules SET enabled = 0 WHERE set_code = 'uma'");
+  const o = await nyOrdre();
+  const r = await byttKort(o.lid, "lil-uma");
+  assert.ok(r.total > 0, "prisen regnes ut likevel");
+  assert.ok(r.advarsler.some((a) => /slått av/.test(a)));
+  await db().execute("UPDATE set_rules SET enabled = 1 WHERE set_code = 'uma'");
+});
+
+test("bytte som sprenger kvoten sier fra", async () => {
+  const { byttKort } = await import("../src/orders.ts");
+  await db().execute("UPDATE set_rules SET wanted_default = 1 WHERE set_code = 'uma'");
+  const o = await nyOrdre();   // to eksemplarer
+  const r = await byttKort(o.lid, "lil-uma");
+  assert.ok(r.advarsler.some((a) => /kvote/.test(a)), "to mot en kvote på én");
+  await db().execute("UPDATE set_rules SET wanted_default = 8 WHERE set_code = 'uma'");
+});
+
+test("et bytte uten problemer gir ingen advarsler", async () => {
+  const { byttKort } = await import("../src/orders.ts");
+  const o = await nyOrdre();
+  const r = await byttKort(o.lid, "lil-uma");
+  assert.deepEqual(r.advarsler, []);
 });

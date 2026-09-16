@@ -274,8 +274,8 @@ app.patch("/api/admin/lines/:id", krevAdmin, fang(async (req: any, res: any) => 
   }
   if (req.body?.card_id) {
     // Bytte av trykk: antall og tilstand står, prisen regnes om etter settet.
-    const total = await byttKort(id, String(req.body.card_id), req.body?.finish);
-    return res.json({ ok: true, total_ore: total });
+    const ut = await byttKort(id, String(req.body.card_id), req.body?.finish);
+    return res.json({ ok: true, total_ore: ut.total, advarsler: ut.advarsler });
   }
   const ut = await regnOmLinje(id, { condition, qty, qty_received });
   const l = await db().execute({ sql: "SELECT order_id FROM order_lines WHERE id = ?", args: [id] });

@@ -369,6 +369,33 @@ export async function byttKort(linjeId: number, cardId: string, finish?: string)
   const egne = await hentEgneConditionsFor(cardId);
   const ore = prisØre(kort, nyFinish, condition, regel, s, manuell, egne);
 
+  // Byttet gjennomføres uansett — kortet ligger fysisk i hånden din, og admin
+  // skal kunne føre det som faktisk kom. Men tre ting bør sies høyt, for de
+  // ville ellers gått stille forbi.
+  const advarsler: string[] = [];
+  if (!regel.enabled) {
+    advarsler.push(`${kort.set_name} er slått av på kjøpssiden. Prisen er regnet ut likevel.`);
+  }
+  if (ore === 0) {
+    advarsler.push(
+      `Prisen ble 0 kr. ${kort.set_name} tar ikke imot ${condition}, eller kortet mangler pris.`
+    );
+  }
+  {
+    const brukt = await db().execute({
+      sql: `SELECT COALESCE(SUM(COALESCE(l.qty_received, l.qty)), 0) AS n
+              FROM order_lines l JOIN orders o ON o.id = l.order_id
+             WHERE l.card_id = ? AND l.finish = ? AND l.fjernet_at IS NULL
+               AND l.id <> ? AND o.status IN ('pending','received','stocked')`,
+      args: [cardId, nyFinish, linjeId],
+    });
+    const kvote = nyFinish === "foil" ? regel.wanted_foil : regel.wanted_default;
+    const etter = Number(brukt.rows[0]?.n || 0) + Number(linje.qty_received ?? linje.qty);
+    if (kvote > 0 && etter > kvote) {
+      advarsler.push(`Du har nå ${etter} av dette kortet i åpne ordrer, mot en kvote på ${kvote}.`);
+    }
+  }
+
   await db().execute({
     sql: `UPDATE order_lines
              SET card_id = ?, finish = ?, card_name = ?, set_code = ?, set_name = ?,
@@ -384,7 +411,7 @@ export async function byttKort(linjeId: number, cardId: string, finish?: string)
       linjeId,
     ],
   });
-  return oppdaterTotal(Number(linje.order_id));
+  return { total: await oppdaterTotal(Number(linje.order_id)), advarsler };
 }
 
 // ── endringslogg ─────────────────────────────────────────────────────────────

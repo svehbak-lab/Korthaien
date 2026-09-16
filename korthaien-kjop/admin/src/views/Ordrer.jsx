@@ -212,10 +212,13 @@ function Utgave({ linje, onEndret, onFeil }) {
       .catch(() => setTreff([]));
   }, [åpen, treff, linje.card_name]);
 
+  const [advarsler, setAdvarsler] = useState([]);
+
   async function bytt(kort, finish) {
     setJobber(true);
     try {
-      await api.byttKort(linje.id, kort.id, finish);
+      const svar = await api.byttKort(linje.id, kort.id, finish);
+      setAdvarsler(svar.advarsler || []);
       setÅpen(false);
       onEndret();
     } catch (e) {
@@ -228,6 +231,13 @@ function Utgave({ linje, onEndret, onFeil }) {
   if (!åpen) {
     return (
       <>
+        {/* Byttet gikk gjennom, men noe er verdt å vite. Meldingen står til
+            du bytter igjen — den skal ikke forsvinne av seg selv. */}
+        {advarsler.length > 0 && (
+          <div className="varsel info" style={{ margin: "0 0 6px", padding: "6px 9px", fontSize: 12 }}>
+            {advarsler.map((a, i) => <div key={i}>{a}</div>)}
+          </div>
+        )}
         <span className="kode">{linje.set_code.toUpperCase()}</span>{" "}
         {linje.collector_number && <span className="kode dempet">#{linje.collector_number}</span>}
         {linje.finish === "foil" && <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>Foil</span>}
