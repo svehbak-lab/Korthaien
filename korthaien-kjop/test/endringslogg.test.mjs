@@ -241,6 +241,30 @@ test("bytte til et avslått sett går gjennom, men sier fra", async () => {
   await db().execute("UPDATE set_rules SET enabled = 1 WHERE set_code = 'uma'");
 });
 
+test("en tilstand settet ikke tar imot prises etter standardtrappen", async () => {
+  const { byttKort } = await import("../src/orders.ts");
+  // Settet tar bare NM og EX. Kunden sendte et kort i VG, og det ligger nå
+  // på bordet ditt — da er null kroner ingen rimelig pris.
+  const o = await nyOrdre();
+  await regnOmLinje(o.lid, { condition: "VG" });
+  const r = await byttKort(o.lid, "lil-uma");
+
+  const l = await db().execute({ sql: "SELECT unit_ore FROM order_lines WHERE id = ?", args: [o.lid] });
+  // $10 × 10 kr × 70 % × 70 % (VG i standardtrappen) = 49 kr
+  assert.equal(Number(l.rows[0].unit_ore), 4900);
+  assert.ok(r.advarsler.some((a) => /standardtrappen/.test(a)));
+});
+
+test("kort uten markedspris blir fortsatt null, og sier fra", async () => {
+  const { byttKort } = await import("../src/orders.ts");
+  await db().execute("UPDATE cards SET usd = NULL, usd_foil = NULL WHERE id = 'lil-uma'");
+  const o = await nyOrdre();
+  const r = await byttKort(o.lid, "lil-uma");
+  assert.equal(r.total, 0);
+  assert.ok(r.advarsler.some((a) => /ingen markedspris/.test(a)));
+  await db().execute("UPDATE cards SET usd = 10 WHERE id = 'lil-uma'");
+});
+
 test("bytte som sprenger kvoten sier fra", async () => {
   const { byttKort } = await import("../src/orders.ts");
   await db().execute("UPDATE set_rules SET wanted_default = 1 WHERE set_code = 'uma'");

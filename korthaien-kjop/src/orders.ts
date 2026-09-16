@@ -14,7 +14,9 @@ export const SORTERING = `set_name,
     WHEN 'mythic' THEN 0 WHEN 'rare' THEN 1
     WHEN 'uncommon' THEN 2 WHEN 'common' THEN 3 ELSE 4 END,
   card_name`;
-import { prisØre, hentSetRule, hentManuellPris, hentEgneConditionsFor } from "./pricing.js";
+import {
+  prisØre, beregnØre, prisenFor, hentSetRule, hentManuellPris, hentEgneConditionsFor,
+} from "./pricing.js";
 import { hentKvote } from "./quota.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -313,7 +315,8 @@ export async function leggTilLinje(
   const regel = await hentSetRule(String(kort.set_code), s);
   const manuell = await hentManuellPris(input.card_id, input.finish);
   const egne = await hentEgneConditionsFor(input.card_id);
-  const ore = prisØre(kort, input.finish, input.condition, regel, s, manuell, egne);
+  // Kortet lå i pakken. Da prises det som om du ville kjøpt det.
+  const { ore } = await prisVedMottak(kort, input.finish, input.condition, regel, s, manuell, egne);
 
   const sett = await db().execute({ sql: "SELECT COALESCE(visningsnavn, name) AS name FROM sets WHERE code = ?", args: [String(kort.set_code)] });
   await db().execute({
@@ -345,6 +348,45 @@ export async function fjernLinje(linjeId: number, angre = false): Promise<number
   return oppdaterTotal(Number(r.rows[0].order_id));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PRIS VED MOTTAK
+// ─────────────────────────────────────────────────────────────────────────────
+// Kjøpssiden sier hva du *ville* kjøpt. Ved mottak er kortet allerede kommet,
+// og da skal det prises som om du ville kjøpt det — også om settet er avslått
+// eller tilstanden ikke står på lista. Alternativet er null kroner for et kort
+// du faktisk beholder, og det er ingen rimelig pris.
+//
+// Trappen og kjøpsandelen gjelder fortsatt. Det er bare portvokterne som
+// settes til side.
+async function prisVedMottak(
+  kort: any,
+  finish: string,
+  condition: Condition,
+  regel: any,
+  s: any,
+  manuell: number | null,
+  egne: Condition[] | null
+): Promise<{ ore: number; standard: boolean }> {
+  const vanlig = prisØre(kort, finish, condition, regel, s, manuell, egne);
+  if (vanlig > 0) return { ore: vanlig, standard: false };
+
+  // Tokens og serienummererte kort holdes utenfor med vilje. De har ingen
+  // pålitelig markedspris, og skal prises for hånd om de i det hele tatt
+  // skal kjøpes.
+  if (Number(kort.er_token) || Number(kort.er_serialized)) return { ore: 0, standard: false };
+
+  const usd = manuell && manuell > 0 ? manuell : prisenFor(kort, finish);
+  if (!usd || usd <= 0) return { ore: 0, standard: false };
+
+  const ore = beregnØre(
+    usd,
+    condition,
+    { ladder: { ...s.default_ladder, ...regel.ladder }, buy_pct: regel.buy_pct },
+    s
+  );
+  return { ore, standard: ore > 0 };
+}
+
 // Kunden trodde det var Innistrad, men sendte Ultimate Masters. Da byttes
 // kortet på linjen, ikke hele ordren — antall og tilstand står, og prisen
 // regnes om etter det nye settet.
@@ -367,19 +409,21 @@ export async function byttKort(linjeId: number, cardId: string, finish?: string)
   const regel = await hentSetRule(String(kort.set_code), s);
   const manuell = await hentManuellPris(cardId, nyFinish);
   const egne = await hentEgneConditionsFor(cardId);
-  const ore = prisØre(kort, nyFinish, condition, regel, s, manuell, egne);
+  const { ore, standard } = await prisVedMottak(kort, nyFinish, condition, regel, s, manuell, egne);
 
   // Byttet gjennomføres uansett — kortet ligger fysisk i hånden din, og admin
   // skal kunne føre det som faktisk kom. Men tre ting bør sies høyt, for de
   // ville ellers gått stille forbi.
   const advarsler: string[] = [];
-  if (!regel.enabled) {
+  if (standard) {
+    advarsler.push(
+      `${kort.set_name} er ikke på kjøpslista for ${condition}. Prisen er regnet etter standardtrappen.`
+    );
+  } else if (!regel.enabled) {
     advarsler.push(`${kort.set_name} er slått av på kjøpssiden. Prisen er regnet ut likevel.`);
   }
   if (ore === 0) {
-    advarsler.push(
-      `Prisen ble 0 kr. ${kort.set_name} tar ikke imot ${condition}, eller kortet mangler pris.`
-    );
+    advarsler.push(`Prisen ble 0 kr — kortet har ingen markedspris. Sett en manuell pris.`);
   }
   {
     const brukt = await db().execute({
