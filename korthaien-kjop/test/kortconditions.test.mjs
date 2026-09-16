@@ -83,3 +83,40 @@ test("fjernes regelen, følger kortet settet igjen", async () => {
   const t = await søk({ q: "Black Lotus" });
   assert.deepEqual(t[0].conditions.map((c) => c.condition), ["NM"]);
 });
+
+test("åpner du en tilstand settet ikke har, får den likevel en sats", async () => {
+  // Revised tar bare NM, så trappen inneholder bare NM. Åpner du EX på ett
+  // kort, må satsen komme et sted fra — ellers blir prisen null og kortet
+  // forsvinner, uten at noe sier fra.
+  await db().execute({
+    sql: `UPDATE set_rules SET conditions = ?, ladder = ? WHERE set_code = 'leb'`,
+    args: [JSON.stringify(["NM"]), JSON.stringify({ NM: 100 })],
+  });
+  await db().execute("DELETE FROM card_conditions");
+
+  const bare = await søk({ q: "Black Lotus" });
+  assert.deepEqual(bare[0].conditions.map((c) => c.condition), ["NM"]);
+
+  await db().execute({
+    sql: `INSERT INTO card_conditions (card_id, conditions, updated_at)
+          VALUES ('lotus', ?, '2026-09-15')`,
+    args: [JSON.stringify(["NM", "EX", "VG", "G"])],
+  });
+
+  const med = await søk({ q: "Black Lotus" });
+  assert.deepEqual(med[0].conditions.map((c) => c.condition), ["NM", "EX", "VG", "G"]);
+  // Standardtrappen er 100/85/70/55. $100 × 10 × 70 % × 85 % = 595 kr for EX.
+  assert.equal(med[0].conditions.find((c) => c.condition === "EX").ore, 59500);
+});
+
+test("settets egne satser går fortsatt foran de globale", async () => {
+  await db().execute({
+    sql: `UPDATE set_rules SET conditions = ?, ladder = ? WHERE set_code = 'leb'`,
+    args: [JSON.stringify(["NM", "EX"]), JSON.stringify({ NM: 100, EX: 50 })],
+  });
+  const t = await søk({ q: "Black Lotus" });
+  // EX står på 50 i settets trapp, ikke 85 fra den globale.
+  assert.equal(t[0].conditions.find((c) => c.condition === "EX").ore, 35000);
+  // VG finnes ikke i settets trapp, så den globale fyller hullet: 70 %.
+  assert.equal(t[0].conditions.find((c) => c.condition === "VG").ore, 49000);
+});

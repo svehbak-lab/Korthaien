@@ -53,7 +53,10 @@ export function prisØre(
   finish: string,
   condition: Condition,
   regel: { ladder: Ladder; buy_pct?: number | null; conditions?: Condition[] },
-  s: Pick<Settings, "usd_nok" | "buy_pct" | "min_buy_ore"> & { min_usd?: Record<string, number> },
+  s: Pick<Settings, "usd_nok" | "buy_pct" | "min_buy_ore"> & {
+    min_usd?: Record<string, number>;
+    default_ladder?: Ladder;
+  },
   manuellUsd?: number | null,
   egneConditions?: Condition[] | null
 ): number {
@@ -66,6 +69,14 @@ export function prisØre(
 
   const godtatt = egneConditions?.length ? egneConditions : regel.conditions;
   if (godtatt && !godtatt.includes(condition)) return 0;
+
+  // Settets trapp inneholder bare de tilstandene settet selv tar imot. Åpner
+  // du en ekstra tilstand på ett kort, finnes det ingen sats for den der — og
+  // uten dette ville kortet fått null og forsvunnet. Den globale trappen
+  // fyller hullet; settets egne satser går fortsatt foran.
+  if (egneConditions?.length && regel.ladder[condition] === undefined && s.default_ladder) {
+    regel = { ...regel, ladder: { ...s.default_ladder, ...regel.ladder } };
+  }
   const usd = manuellUsd && manuellUsd > 0 ? manuellUsd : prisenFor(kort, finish);
   // Terskelen gjelder markedsprisen, ikke utbetalingen. Ligger kortet under,
   // kjøpes det ikke — da slipper du å håndtere bulk du ikke tjener på. Sjekken
