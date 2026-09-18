@@ -330,6 +330,37 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
   box-shadow: var(--skygge);
 }
 .tilstandsbilder figcaption { font-size: 12.5px; line-height: 1.5; margin-top: 6px; }
+.bildeknapp {
+  display: block; width: 100%; padding: 0; border: none;
+  background: none; cursor: zoom-in; border-radius: 8px;
+}
+.bildeknapp:hover img { box-shadow: 0 2px 6px rgba(4,48,44,.18), 0 12px 28px -14px rgba(4,48,44,.7); }
+
+/* Forstørringen. Bildet skal få så mye plass som skjermen tillater — det er
+   detaljene i kantene folk prøver å se. */
+.lupe {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(4, 48, 44, 0.93);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px; padding: 24px; cursor: zoom-out;
+}
+.lupe img {
+  max-width: min(92vw, 620px);
+  max-height: 76vh;
+  border-radius: 10px;
+  cursor: default;
+  box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.7);
+}
+.lupe-tekst {
+  color: #f4faf8; text-align: center; max-width: 52ch;
+  font-size: 14px; line-height: 1.55; cursor: default;
+}
+.lupe-lukk {
+  position: absolute; top: 14px; right: 18px;
+  border: none; background: none; color: #f4faf8;
+  font-size: 34px; line-height: 1; cursor: pointer; padding: 4px 10px;
+}
 @media (max-width: 620px) { .tilstandsbilder figure { width: calc(50% - 8px); } }
 
 /* To spalter side om side i tilstandsguiden, én på smal skjerm. */

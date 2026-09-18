@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TILSTANDSGUIDE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,6 +90,33 @@ const GRADER = [
 ];
 
 export default function Tilstander({ onTilbake }) {
+  // Bildet som vises forstørret. Null betyr at ingenting er åpent.
+  const [stort, setStort] = useState(null);
+
+  // Escape lukker, og piltastene blar. Alle bildene i rekkefølge, så man kan
+  // sammenligne gradene mot hverandre — det er slik man faktisk lærer
+  // forskjellen.
+  const alle = GRADER.flatMap((g) => (g.bilder || []).map((b) => ({ ...b, grad: g })));
+
+  useEffect(() => {
+    if (!stort) return;
+    const tast = (e) => {
+      if (e.key === "Escape") setStort(null);
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        const i = alle.findIndex((b) => b.fil === stort.fil);
+        const neste = (i + (e.key === "ArrowRight" ? 1 : -1) + alle.length) % alle.length;
+        setStort(alle[neste]);
+      }
+    };
+    window.addEventListener("keydown", tast);
+    // Bakgrunnen skal ikke kunne scrolles mens bildet er oppe.
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", tast);
+      document.body.style.overflow = "";
+    };
+  }, [stort, alle]);
+
   return (
     <>
       <h1>Hvilken tilstand har kortet?</h1>
@@ -131,11 +160,17 @@ export default function Tilstander({ onTilbake }) {
             <div className="tilstandsbilder">
               {g.bilder.map((b) => (
                 <figure key={b.fil}>
-                  <img
-                    src={`/tilstander/${b.fil}`}
-                    alt={`${g.navn} — ${b.tekst}`}
-                    loading="lazy"
-                  />
+                  <button
+                    className="bildeknapp"
+                    onClick={() => setStort({ ...b, grad: g })}
+                    title="Klikk for å forstørre"
+                  >
+                    <img
+                      src={`/tilstander/${b.fil}`}
+                      alt={`${g.navn} — ${b.tekst}`}
+                      loading="lazy"
+                    />
+                  </button>
                   <figcaption className="dempet">{b.tekst}</figcaption>
                 </figure>
               ))}
@@ -194,6 +229,25 @@ export default function Tilstander({ onTilbake }) {
       <div className="rad-flex ingen-print">
         <button className="knapp primar" onClick={onTilbake}>Tilbake til søket</button>
       </div>
+
+      {stort && (
+        <div className="lupe" onClick={() => setStort(null)} role="dialog" aria-modal="true">
+          <button className="lupe-lukk" aria-label="Lukk">×</button>
+          {/* Klikk på selve bildet skal ikke lukke — man vil se nærmere. */}
+          <img
+            src={`/tilstander/${stort.fil.replace(".jpg", "-stor.jpg")}`}
+            alt={`${stort.grad.navn} — ${stort.tekst}`}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div className="lupe-tekst" onClick={(e) => e.stopPropagation()}>
+            <b>{stort.grad.kode} — {stort.grad.navn}</b>
+            <div>{stort.tekst}</div>
+            <div className="dempet" style={{ fontSize: 12, marginTop: 6 }}>
+              Bruk piltastene for å bla mellom gradene. Escape lukker.
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
