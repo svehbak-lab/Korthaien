@@ -158,9 +158,15 @@ export default function App() {
                 <button role="tab" aria-selected={fane === "bulk"} onClick={() => setFane("bulk")}>
                   Lim inn liste
                 </button>
-                {/* Guiden hører hjemme her, ved siden av valget den handler om
-                    — ikke som en egen side kunden må lete seg fram til. */}
-                <button role="tab" aria-selected={fane === "guide"} onClick={() => setFane("guide")}>
+                {/* Guiden hører hjemme på samme linje, men ikke i samme rekke
+                    som de to måtene å legge inn kort på. Den skyves til høyre
+                    så det leses som to grupper. */}
+                <button
+                  role="tab"
+                  aria-selected={fane === "guide"}
+                  onClick={() => setFane("guide")}
+                  style={{ marginLeft: "auto" }}
+                >
                   Tilstandsguide
                 </button>
               </div>
