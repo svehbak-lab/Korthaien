@@ -82,6 +82,13 @@ services:
         sync: false
       - key: DATABASE_AUTH_TOKEN
         sync: false
+      # Uten denne feiler jobben i stillhet — du får ingen beskjed.
+      - key: RESEND_KEY
+        sync: false
+      - key: EPOST_FRA
+        value: Korthaien <ordre@korthaien.no>
+      - key: EPOST_TIL_MEG
+        value: korthaien@gmail.com
 
   # Beholdningen endrer seg gjennom dagen, så denne går oftere.
   - type: cron
@@ -101,3 +108,10 @@ services:
         sync: false
       - key: MYSTORE_KEY
         sync: false
+      # Uten denne feiler jobben i stillhet — du får ingen beskjed.
+      - key: RESEND_KEY
+        sync: false
+      - key: EPOST_FRA
+        value: Korthaien <ordre@korthaien.no>
+      - key: EPOST_TIL_MEG
+        value: korthaien@gmail.com

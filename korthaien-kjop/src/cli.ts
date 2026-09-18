@@ -8,6 +8,7 @@ import { analyserGruppe, skrivAnalyse } from "./analyser.js";
 import { helsesjekk } from "./helse.js";
 import { utløpGamleOrdrer } from "./orders.js";
 import { hvorfor } from "./hvorfor.js";
+import { varsleJobbfeil } from "./epost.js";
 import { åpningsbeholdningFraMystore, avvikMotMystore } from "./lager.js";
 
 // Kommandolinje for jobbene. Render kjører disse som cron.
@@ -71,79 +72,94 @@ async function seed() {
 
 await migrate();
 
-switch (kommando) {
-  case "import":
-    await importerScryfall();
-    break;
-  case "mystore":
-    await synkMystore();
-    break;
-  case "seed":
-    await seed();
-    break;
-  case "gjett":
-    await gjettKategorier(console.log, {
-      bareForeslå: process.argv.includes("--kun-forslag"),
-      påNytt: process.argv.includes("--pa-nytt"),
-    });
-    break;
-  case "sett":
-    // Bare settlista. Går på sekunder, mot minutter for hele katalogen.
-    await importerSett();
-    break;
-  case "helse":
-    await helsesjekk();
-    break;
-  case "analyser": {
-    const koder = process.argv.slice(3).filter((a) => !a.startsWith("--"));
-    if (!koder.length) {
-      // Uten argument tar vi de største gruppene, som er der svaret ligger.
-      const r = await db().execute(`
-        SELECT set_code, COUNT(*) AS n FROM mystore_unmatched
-         WHERE set_code IS NOT NULL GROUP BY set_code ORDER BY n DESC LIMIT 5`);
-      koder.push(...r.rows.map((x: any) => String(x.set_code)));
-      console.log(`Ingen settkode oppgitt — tar de ${koder.length} største gruppene.`);
+// Cron-jobber feiler i stillhet med mindre noen ser etter. De som kjører
+// uten tilsyn sender nå en e-post når de ryker, og avslutter med feilkode så
+// Render også melder fra.
+const UTEN_TILSYN = new Set(["import", "mystore", "expire"]);
+
+try {
+  switch (kommando) {
+    case "import":
+      await importerScryfall();
+      break;
+    case "mystore":
+      await synkMystore();
+      break;
+    case "seed":
+      await seed();
+      break;
+    case "gjett":
+      await gjettKategorier(console.log, {
+        bareForeslå: process.argv.includes("--kun-forslag"),
+        påNytt: process.argv.includes("--pa-nytt"),
+      });
+      break;
+    case "sett":
+      // Bare settlista. Går på sekunder, mot minutter for hele katalogen.
+      await importerSett();
+      break;
+    case "helse":
+      await helsesjekk();
+      break;
+    case "analyser": {
+      const koder = process.argv.slice(3).filter((a) => !a.startsWith("--"));
+      if (!koder.length) {
+        // Uten argument tar vi de største gruppene, som er der svaret ligger.
+        const r = await db().execute(`
+          SELECT set_code, COUNT(*) AS n FROM mystore_unmatched
+           WHERE set_code IS NOT NULL GROUP BY set_code ORDER BY n DESC LIMIT 5`);
+        koder.push(...r.rows.map((x: any) => String(x.set_code)));
+        console.log(`Ingen settkode oppgitt — tar de ${koder.length} største gruppene.`);
+      }
+      for (const k of koder) skrivAnalyse(k, await analyserGruppe(k));
+      break;
     }
-    for (const k of koder) skrivAnalyse(k, await analyserGruppe(k));
-    break;
-  }
-  case "rydd":
-    if (process.argv.includes("--angre")) await angreOpprydding();
-    else await ryddOpp({ rapportSti: "gjenstaende.csv" });
-    break;
-  case "skrivefeil":
-    await lagSkrivefeilrapport(process.argv[3] || "skrivefeil.csv");
-    break;
-  case "reindeks": {
-    const n = await fyllForsidenavn(console.log);
-    console.log(n ? `${n} dobbeltsidige kort oppdatert.` : "Alt er allerede indeksert.");
-    break;
-  }
-  case "lager-fra-mystore":
-    await åpningsbeholdningFraMystore();
-    break;
-  case "lageravvik": {
-    const rader = await avvikMotMystore(40);
-    if (!rader.length) console.log("Ingen avvik. Eget lager og Mystore er i takt.");
-    for (const r of rader as any[]) {
-      console.log(`${String(r.name || r.card_id).padEnd(34)} ${String(r.set_code || "").padEnd(6)} ${String(r.finish).padEnd(8)} Mystore ${r.mystore}  eget ${r.eget}`);
+    case "rydd":
+      if (process.argv.includes("--angre")) await angreOpprydding();
+      else await ryddOpp({ rapportSti: "gjenstaende.csv" });
+      break;
+    case "skrivefeil":
+      await lagSkrivefeilrapport(process.argv[3] || "skrivefeil.csv");
+      break;
+    case "reindeks": {
+      const n = await fyllForsidenavn(console.log);
+      console.log(n ? `${n} dobbeltsidige kort oppdatert.` : "Alt er allerede indeksert.");
+      break;
     }
-    break;
+    case "lager-fra-mystore":
+      await åpningsbeholdningFraMystore();
+      break;
+    case "lageravvik": {
+      const rader = await avvikMotMystore(40);
+      if (!rader.length) console.log("Ingen avvik. Eget lager og Mystore er i takt.");
+      for (const r of rader as any[]) {
+        console.log(`${String(r.name || r.card_id).padEnd(34)} ${String(r.set_code || "").padEnd(6)} ${String(r.finish).padEnd(8)} Mystore ${r.mystore}  eget ${r.eget}`);
+      }
+      break;
+    }
+    case "hvorfor":
+      await hvorfor(process.argv.slice(3).join(" "));
+      break;
+    case "expire":
+      console.log(`${await utløpGamleOrdrer()} ordrer utløpt.`);
+      break;
+    case "sett-kurs": {
+      const kurs = Number(process.argv[3]);
+      if (!Number.isFinite(kurs) || kurs <= 0) throw new Error("Oppgi en kurs, f.eks. 10.6");
+      await settSetting("usd_nok", kurs);
+      console.log(`USD/NOK satt til ${kurs}`);
+      break;
+    }
+    default:
+      console.log("Bruk: import | sett | mystore | gjett | helse | hvorfor <kortnavn> | lager-fra-mystore | lageravvik | analyser [settkode…] | skrivefeil | rydd | reindeks | seed | expire | sett-kurs <tall>");
   }
-  case "hvorfor":
-    await hvorfor(process.argv.slice(3).join(" "));
-    break;
-  case "expire":
-    console.log(`${await utløpGamleOrdrer()} ordrer utløpt.`);
-    break;
-  case "sett-kurs": {
-    const kurs = Number(process.argv[3]);
-    if (!Number.isFinite(kurs) || kurs <= 0) throw new Error("Oppgi en kurs, f.eks. 10.6");
-    await settSetting("usd_nok", kurs);
-    console.log(`USD/NOK satt til ${kurs}`);
-    break;
+} catch (feil) {
+  console.error(feil);
+  if (UTEN_TILSYN.has(kommando)) {
+    const r = await varsleJobbfeil(kommando, feil);
+    if (!r.sendt) console.error(`Klarte ikke varsle på e-post: ${r.grunn}`);
   }
-  default:
-    console.log("Bruk: import | sett | mystore | gjett | helse | hvorfor <kortnavn> | lager-fra-mystore | lageravvik | analyser [settkode…] | skrivefeil | rydd | reindeks | seed | expire | sett-kurs <tall>");
+  process.exit(1);
 }
+
 process.exit(0);

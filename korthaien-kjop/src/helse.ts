@@ -30,6 +30,28 @@ export async function helsesjekk(logg: (s: string) => void = console.log): Promi
     });
   }
 
+  // Hvor gammel er beholdningen? En synk fra forrige uke er like ubrukelig
+  // som ingen synk, men den ser lik ut i en telling — og kvoten på
+  // kjøpssiden regnes fra disse tallene.
+  const alder = await db().execute("SELECT MAX(synced_at) AS sist FROM mystore_stock");
+  const sist = alder.rows[0]?.sist ? new Date(String(alder.rows[0].sist)) : null;
+  if (!sist) {
+    funn.push({ alvor: "feil", hva: "beholdningen er aldri synket", antall: 0, eksempler: [] });
+  } else {
+    const timer = Math.round((Date.now() - sist.getTime()) / 3600000);
+    if (timer > 24) {
+      funn.push({
+        alvor: timer > 72 ? "feil" : "advarsel",
+        hva: "beholdningen er utdatert",
+        antall: timer,
+        eksempler: [
+          `Sist synket ${sist.toLocaleString("nb-NO")} — ${timer} timer siden.`,
+          "Synken skal kjøre hver fjerde time. Sjekk korthaien-kjop-mystore i Render.",
+        ],
+      });
+    }
+  }
+
   // Beholdning uten produkt bak seg. Tallet oppdateres aldri.
   const foreldreløs = await db().execute(`
     SELECT COUNT(*) AS n FROM mystore_stock WHERE product_id IS NULL OR product_id = ''`);

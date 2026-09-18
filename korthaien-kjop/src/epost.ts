@@ -204,6 +204,29 @@ ${ADMIN_URL()}`,
   });
 }
 
+// ── varsel til deg når en jobb ryker ─────────────────────────────────────────
+// Cron-jobber feiler i stillhet med mindre noen ser etter. Med e-post på plass
+// koster det ingenting å få beskjed med én gang i stedet for ved en
+// tilfeldighet en uke senere.
+export async function varsleJobbfeil(jobb: string, feil: unknown): Promise<Utfall> {
+  const melding = feil instanceof Error ? feil.message : String(feil);
+  const spor = feil instanceof Error && feil.stack ? feil.stack.split("\n").slice(1, 6).join("\n") : "";
+
+  return send({
+    til: MIN_ADRESSE(),
+    emne: `Jobben «${jobb}» feilet`,
+    html: RAMME(`
+      <h1 style="font-size:20px;margin:0 0 10px">Jobben «${trygg(jobb)}» feilet</h1>
+      <p style="margin:0 0 14px;line-height:1.6">${trygg(melding)}</p>
+      ${spor ? `<pre style="background:#f6f5f2;padding:12px;border-radius:8px;font-size:12px;overflow-x:auto">${trygg(spor)}</pre>` : ""}
+      <p style="margin:14px 0 0;color:#7a746c;font-size:13px">
+        ${new Date().toLocaleString("nb-NO")}
+      </p>
+    `),
+    tekst: `Jobben «${jobb}» feilet.\n\n${melding}\n\n${spor}`,
+  });
+}
+
 // ── statusendring til kunden ─────────────────────────────────────────────────
 const STATUSTEKST: Record<string, { emne: string; tittel: string; brød: string }> = {
   received: {

@@ -160,8 +160,13 @@ export async function synkMystore(
   opts: { alleSett?: boolean } = {}
 ) {
   if (!harMystore()) {
-    logg("MYSTORE_URL/MYSTORE_KEY er ikke satt — hopper over synk. Beholdning regnes som 0.");
-    return { kategorier: 0, koblet: 0, ukoblet: 0, sett: 0 };
+    // Før meldte denne suksess og gikk videre. Cron-jobben lyste grønt i ni
+    // dager mens beholdningen sto stille, og feilen ble oppdaget ved en
+    // tilfeldighet. En jobb som ikke gjør arbeidet sitt skal feile.
+    throw new Error(
+      "MYSTORE_URL eller MYSTORE_KEY er ikke satt. Synken kan ikke kjøre, og " +
+        "beholdningen blir stående på gamle tall. Sjekk Environment på tjenesten."
+    );
   }
 
   const settRader = await db().execute("SELECT code, name FROM sets");
