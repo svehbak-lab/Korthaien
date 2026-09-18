@@ -87,7 +87,10 @@ export default function Søk({ kurv, onLegg, onFeil }) {
         <p className="dempet" style={{ marginTop: 0, marginBottom: 14 }}>
           Klikk på prisen for den tilstanden kortet ditt er i. Hvert klikk legger til
           ett kort — har du fire, klikker du fire ganger. Du kan justere antallet i
-          lista til høyre etterpå.
+          lista til høyre etterpå.{" "}
+          <button className="knapp blank" style={{ padding: 0, fontSize: "inherit" }} onClick={onTilstander}>
+            Hvilken tilstand har kortet mitt?
+          </button>
         </p>
       )}
 

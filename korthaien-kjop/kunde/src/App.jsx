@@ -8,6 +8,7 @@ import Bulk from "./views/Bulk.jsx";
 import { Kurv, Gjennomgang, Skjema, Kvittering } from "./views/Kasse.jsx";
 import Oppslag from "./views/Oppslag.jsx";
 import Vilkår from "./views/Vilkar.jsx";
+import Tilstander from "./views/Tilstander.jsx";
 
 export default function App() {
   const [steg, setSteg] = useState("velg");       // velg → gjennomgang → skjema → kvittering
@@ -96,6 +97,12 @@ export default function App() {
           <span>Innkjøp av Magic-kort</span>
           <button className="knapp blank ingen-print" onClick={() => setSteg("oppslag")}>
             Finn ordren min
+          </button>
+          <button
+            className="knapp blank ingen-print"
+            onClick={() => { setSteg("tilstander"); window.scrollTo(0, 0); }}
+          >
+            Tilstandsguide
           </button>
           {/* Den som er ferdig med å selge er også den som er mest innstilt
               på å handle. Veien tilbake bør ikke være nettleserens knapp. */}
@@ -203,7 +210,9 @@ export default function App() {
 
         {steg === "vilkar" && <Vilkår config={config} onTilbake={() => setSteg("velg")} />}
 
-        {steg !== "velg" && steg !== "kvittering" && steg !== "oppslag" && steg !== "vilkar" && tomKurv && (
+        {steg === "tilstander" && <Tilstander onTilbake={() => setSteg("velg")} />}
+
+        {steg !== "velg" && steg !== "kvittering" && steg !== "oppslag" && steg !== "vilkar" && steg !== "tilstander" && tomKurv && (
           <p className="dempet">
             Kurven er tom.{" "}
             <button className="knapp blank" onClick={() => setSteg("velg")}>Legg til kort</button>
@@ -217,6 +226,9 @@ export default function App() {
           </p>
         )}
         <footer className="ingen-print" style={{ marginTop: 40, paddingTop: 18, borderTop: "1px solid var(--strek, #eae7e1)" }}>
+          <button className="knapp blank" onClick={() => { setSteg("tilstander"); window.scrollTo(0, 0); }}>
+            Tilstandsguide
+          </button>
           <button className="knapp blank" onClick={() => { setSteg("vilkar"); window.scrollTo(0, 0); }}>
             Vilkår og personvern
           </button>

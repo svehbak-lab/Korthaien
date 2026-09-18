@@ -193,7 +193,7 @@ export async function lagOrdre(input: {
 
 export function instruksjoner(ordreNr: string, adresse: string, utløp: Date) {
   return [
-    "Sorter kortene i nøyaktig samme rekkefølge som kortlista under. Lista går sett for sett, og innenfor hvert sett fra de sjeldneste kortene til de vanligste. Gjør du dette, går mottaket raskere og du får oppgjøret fortere.",
+    "SORTER KORTENE i nøyaktig samme rekkefølge som kortlista under. Lista går sett for sett, og innenfor hvert sett fra de sjeldneste kortene til de vanligste. Dette er det viktigste punktet: en usortert bunke tar mange ganger så lang tid å gå gjennom, og oppgjøret ditt blir tilsvarende forsinket.",
     "Legg en lapp i pakken med ordrenummer " + ordreNr + ".",
     "Send til:\n" + adresse,
     "Pakken må være sendt innen " + utløp.toLocaleDateString("nb-NO") + " — etter det frigjøres kortene til andre selgere.",

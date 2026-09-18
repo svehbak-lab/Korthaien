@@ -411,7 +411,16 @@ export function Kvittering({ ordre, onNy }) {
       </div>
 
       <div className="panel">
-        <h2>Kortene, i den rekkefølgen de skal ligge</h2>
+        {/* Kvitteringen er pakkseddelen. Her står kunden med bunken foran seg,
+          og det er her beskjeden om sortering faktisk blir lest. */}
+      <div className="varsel info" style={{ marginTop: 20 }}>
+        <b>Legg bunken i samme rekkefølge som lista under.</b> Sett for sett, og
+        innenfor hvert sett fra de sjeldneste kortene til de vanligste. En sortert
+        bunke går rett gjennom kontrollen; en usortert må jeg lete meg gjennom, og
+        da tar oppgjøret vesentlig lengre tid.
+      </div>
+
+      <h2>Kortene, i den rekkefølgen de skal ligge</h2>
         <table>
           <thead>
             <tr>
