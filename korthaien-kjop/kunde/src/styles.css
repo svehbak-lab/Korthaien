@@ -320,6 +320,18 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
   overflow-x: auto; font-size: 12.5px; line-height: 1.65;
 }
 
+/* Eksempelbildene. Et bilde av slitasje sier mer enn en avsnitt om den. */
+.tilstandsbilder {
+  display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 16px;
+}
+.tilstandsbilder figure { margin: 0; width: 200px; }
+.tilstandsbilder img {
+  width: 100%; border-radius: 8px; display: block;
+  box-shadow: var(--skygge);
+}
+.tilstandsbilder figcaption { font-size: 12.5px; line-height: 1.5; margin-top: 6px; }
+@media (max-width: 620px) { .tilstandsbilder figure { width: calc(50% - 8px); } }
+
 /* To spalter side om side i tilstandsguiden, én på smal skjerm. */
 .todelt-smal { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 14px; }
 @media (max-width: 620px) { .todelt-smal { grid-template-columns: 1fr; gap: 12px; } }

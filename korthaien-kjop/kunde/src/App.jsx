@@ -98,12 +98,6 @@ export default function App() {
           <button className="knapp blank ingen-print" onClick={() => setSteg("oppslag")}>
             Finn ordren min
           </button>
-          <button
-            className="knapp blank ingen-print"
-            onClick={() => { setSteg("tilstander"); window.scrollTo(0, 0); }}
-          >
-            Tilstandsguide
-          </button>
           {/* Den som er ferdig med å selge er også den som er mest innstilt
               på å handle. Veien tilbake bør ikke være nettleserens knapp. */}
           <a
@@ -153,7 +147,9 @@ export default function App() {
         )}
 
         {steg === "velg" && (
-          <div className="todelt">
+          // Guiden har eksempelbilder i to spalter og trenger hele bredden.
+          // Kurven er uansett tom mens man leser den.
+          <div className={fane === "guide" ? undefined : "todelt"}>
             <div>
               <div className="faner" role="tablist">
                 <button role="tab" aria-selected={fane === "sok"} onClick={() => setFane("sok")}>
@@ -162,20 +158,32 @@ export default function App() {
                 <button role="tab" aria-selected={fane === "bulk"} onClick={() => setFane("bulk")}>
                   Lim inn liste
                 </button>
+                {/* Guiden hører hjemme her, ved siden av valget den handler om
+                    — ikke som en egen side kunden må lete seg fram til. */}
+                <button role="tab" aria-selected={fane === "guide"} onClick={() => setFane("guide")}>
+                  Tilstandsguide
+                </button>
               </div>
 
-              {fane === "sok"
-                ? <Søk kurv={kurv} onLegg={legg} onFeil={visFeil} />
-                : <Bulk kurv={kurv} onLegg={legg} onFeil={visFeil} />}
+              {fane === "sok" && (
+                <Søk
+                  kurv={kurv}
+                  onLegg={legg}
+                  onFeil={visFeil}
+                  onTilstander={() => setFane("guide")}
+                />
+              )}
+              {fane === "bulk" && <Bulk kurv={kurv} onLegg={legg} onFeil={visFeil} />}
+              {fane === "guide" && <Tilstander onTilbake={() => setFane("sok")} />}
             </div>
 
-            <Kurv
+            {fane !== "guide" && <Kurv
               kurv={kurv}
               minOrdreØre={config?.min_order_ore}
               onAntall={(k, n) => setKurv((c) => settAntall(c, k, n))}
               onCondition={(k, c) => setKurv((v) => settCondition(v, k, c))}
               onVidere={() => { setSteg("gjennomgang"); window.scrollTo(0, 0); }}
-            />
+            />}
           </div>
         )}
 
@@ -210,9 +218,7 @@ export default function App() {
 
         {steg === "vilkar" && <Vilkår config={config} onTilbake={() => setSteg("velg")} />}
 
-        {steg === "tilstander" && <Tilstander onTilbake={() => setSteg("velg")} />}
-
-        {steg !== "velg" && steg !== "kvittering" && steg !== "oppslag" && steg !== "vilkar" && steg !== "tilstander" && tomKurv && (
+        {steg !== "velg" && steg !== "kvittering" && steg !== "oppslag" && steg !== "vilkar" && tomKurv && (
           <p className="dempet">
             Kurven er tom.{" "}
             <button className="knapp blank" onClick={() => setSteg("velg")}>Legg til kort</button>
@@ -226,9 +232,6 @@ export default function App() {
           </p>
         )}
         <footer className="ingen-print" style={{ marginTop: 40, paddingTop: 18, borderTop: "1px solid var(--strek, #eae7e1)" }}>
-          <button className="knapp blank" onClick={() => { setSteg("tilstander"); window.scrollTo(0, 0); }}>
-            Tilstandsguide
-          </button>
           <button className="knapp blank" onClick={() => { setSteg("vilkar"); window.scrollTo(0, 0); }}>
             Vilkår og personvern
           </button>

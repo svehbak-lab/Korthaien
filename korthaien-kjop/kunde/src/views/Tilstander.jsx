@@ -20,6 +20,10 @@ const GRADER = [
       "Minimal ujevnhet i kuttet fra fabrikken",
     ],
     ikke: ["Hvite prikker på kantene", "Synlige riper", "Bøy av noe slag"],
+    bilder: [
+      { fil: "NM1.jpg", tekst: "Skarpe, jevnt svarte kanter hele veien rundt." },
+      { fil: "NM2.jpg", tekst: "Ren overflate uten riper eller merker." },
+    ],
   },
   {
     kode: "EX",
@@ -35,6 +39,10 @@ const GRADER = [
       "Helt svak bøy som forsvinner når kortet ligger flatt",
     ],
     ikke: ["Slitasje langs hele kanten", "Riper du kjenner med neglen", "Synlig bøy"],
+    bilder: [
+      { fil: "EX1.jpg", tekst: "Noen få lyse punkter langs venstre kant. Resten er ren." },
+      { fil: "EX2.jpg", tekst: "Nærbilde i skrått lys: svake trykkmerker i overflaten." },
+    ],
   },
   {
     kode: "VG",
@@ -52,6 +60,10 @@ const GRADER = [
       "Lett slitte hjørner",
     ],
     ikke: ["Fold eller knekk", "Skitt eller flekker", "Slitasje som går gjennom trykket"],
+    bilder: [
+      { fil: "VG1.jpg", tekst: "Tydelig slitasje i hjørnene og lyse partier langs kantene." },
+      { fil: "VG2.jpg", tekst: "Slitasjen går rundt flere sider, men trykket er helt." },
+    ],
   },
   {
     kode: "G",
@@ -68,6 +80,10 @@ const GRADER = [
       "Slitte hjørner",
     ],
     ikke: ["Hull, rift eller manglende biter", "Vannskade", "Skrift, tusj eller tape"],
+    bilder: [
+      { fil: "G1.jpg", tekst: "Kraftig slitte kanter og hjørner, riper i overflaten." },
+      { fil: "G2.jpg", tekst: "Slitasje hele veien rundt. Kortet er fortsatt helt." },
+    ],
   },
 ];
 
@@ -110,6 +126,21 @@ export default function Tilstander({ onTilbake }) {
           <p style={{ margin: "0 0 12px", lineHeight: 1.65, maxWidth: "62ch" }}>
             {g.beskrivelse}
           </p>
+
+          {g.bilder && (
+            <div className="tilstandsbilder">
+              {g.bilder.map((b) => (
+                <figure key={b.fil}>
+                  <img
+                    src={`/tilstander/${b.fil}`}
+                    alt={`${g.navn} — ${b.tekst}`}
+                    loading="lazy"
+                  />
+                  <figcaption className="dempet">{b.tekst}</figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
 
           <div className="todelt-smal">
             <div>
@@ -161,7 +192,7 @@ export default function Tilstander({ onTilbake }) {
       </div>
 
       <div className="rad-flex ingen-print">
-        <button className="knapp primar" onClick={onTilbake}>Tilbake</button>
+        <button className="knapp primar" onClick={onTilbake}>Tilbake til søket</button>
       </div>
     </>
   );
