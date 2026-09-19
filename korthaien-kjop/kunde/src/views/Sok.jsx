@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { api, kroner, ledig } from "../api.js";
 
-export default function Søk({ kurv, onLegg, onFeil }) {
+export default function Søk({ kurv, onLegg, onFeil, onTilstander }) {
   const [sett, setSett] = useState([]);
   const [q, setQ] = useState("");
   const [valgtSett, setValgtSett] = useState("");
