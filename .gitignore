@@ -13,3 +13,8 @@ LES-MEG.md
 sjekk.mjs
 
 *.zip
+*.bak
+*.bak.*
+LES-MEG*.txt
+oppdater*.mjs
+*.zip
