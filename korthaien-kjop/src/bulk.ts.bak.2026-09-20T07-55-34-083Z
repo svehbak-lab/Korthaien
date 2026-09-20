@@ -135,9 +135,7 @@ function tolkLinje(rå: string, nr: number): BulkLinje {
   s = s.replace(/^\s*(?:[-–—*•·]|\d{1,3}[.)])\s+/, "");
 
   // Settkode eller settnavn i parentes/klamme: «(M10) 146», «[Magic 2010]».
-  const iKlamme = s.match(
-    /[([]\s*([^\])]{1,40}?)\s*[)\]]\s*((?=[^\s]*\d)[0-9A-Za-z][0-9A-Za-z-]{0,9})?/
-  );
+  const iKlamme = s.match(/[([]\s*([^\])]{1,40}?)\s*[)\]]\s*(\d{1,4}[a-z]?)?/);
   // «Bolt (4)» er et antall, ikke et sett. Vi lar det stå og plukkes opp av
   // antallsleddet under.
   if (iKlamme && !/^\d{1,3}$/.test(iKlamme[1].trim())) {
@@ -146,17 +144,6 @@ function tolkLinje(rå: string, nr: number): BulkLinje {
     else if (inni.length >= 3) r.settNavnHint = inni;
     if (iKlamme[2]) r.nummerHint = iKlamme[2].toLowerCase();
     s = s.replace(iKlamme[0], " ");
-  }
-
-  // Archidekt legger en kategori bakerst: «[Creature]», «[Land]». Tegnene er
-  // de samme som for settnavn i klamme, men når linjen allerede har oppgitt
-  // et sett, kan det ikke være et sett til — ingen eksportformat oppgir
-  // settet to ganger. Da er det en kategori, og den skal ut av navnet.
-  if (r.settHint || r.settNavnHint) {
-    let kategori;
-    while ((kategori = s.match(/\s*\[[^\]]{1,40}\]\s*$/))) {
-      s = s.slice(0, kategori.index) + " ";
-    }
   }
 
   if (!r.condHint) s = trekkUtCondition(s, r);

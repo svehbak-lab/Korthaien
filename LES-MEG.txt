@@ -1,0 +1,32 @@
+Fiks: bulk-parser tolket Archidekt-lister feil
+==============================================
+
+Legg oppdater.mjs i /workspaces/Korthaien og kjør:
+
+    cd /workspaces/Korthaien
+    node oppdater.mjs
+    npm test
+
+To feil rettes i korthaien-kjop/src/bulk.ts:
+
+1. Kategorien bakerst ("[Creature]", "[Land]") ble en del av kortnavnet,
+   fordi iKlamme-regexen bare kjorer en gang per linje og allerede hadde
+   brukt opp treffet sitt pa "(iko)". Oppslaget sokte da etter
+   "Savai Triome [Land]". Rammet alle linjer fra Archidekt.
+
+2. Samlernummer matte starte med et siffer. The List bruker "EMA-232",
+   sa nummeret gikk tapt OG ble liggende igjen i navnet.
+
+I tillegg legges korthaien-kjop/test/archidekt.test.mjs inn med lista
+som regresjonstest.
+
+Scriptet er idempotent og tar backup som bulk.ts.bak.<tidsstempel>,
+slik at den eksisterende bulk.ts.bak fra 10. september star urort.
+Det avbryter uten a skrive hvis kildelinjene ikke ser ut som ventet.
+
+Ikke verifisert herfra:
+- Er settet "plst" importert i katalogen? Uten det treffer ikke
+  The List-linjene selv med riktig parsing.
+- "1x Scute Swarm [Creature]" uten settkode vil fortsatt tolke
+  kategorien som et settnavn. Navnet blir riktig, men fallbacken
+  avhenger av hvordan settNavnHint behandles i oppslaget.
