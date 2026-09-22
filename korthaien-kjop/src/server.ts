@@ -98,7 +98,7 @@ app.post("/api/bulk", grense(REGLER.bulk), fang(async (req: any, res: any) => {
 
 // Kurven gjenopprettes herfra. Kunden sender kort-ID-ene den husker, og får
 // dagens priser og kvoter tilbake — aldri motsatt vei.
-app.post("/api/quote", grense(REGLER.bulk), fang(async (req: any, res: any) => {
+app.post("/api/quote", grense(REGLER.pris), fang(async (req: any, res: any) => {
   const linjer = Array.isArray(req.body?.linjer) ? req.body.linjer : [];
   res.json(await tilbudFor(linjer));
 }));
