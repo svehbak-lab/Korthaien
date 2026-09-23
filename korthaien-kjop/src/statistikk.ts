@@ -129,6 +129,25 @@ export type LagerSett = {
   set_name: string;
   released_at: string | null;
   rader: LagerRad[];
+  grunnsett: Grunnsett | null;
+};
+
+// Ett eksemplar av hvert kort i standardsettet — det du ville fått om du
+// kjøpte settet komplett. Hvilke kort som hører til grunnsettet kan ikke
+// utledes trygt: Scryfalls variantmerking er ikke konsekvent nok, og
+// bonusark og Commander-sett ligger blandet inn. Derfor oppgir du selv det
+// høyeste samlernummeret per sett, og alt over regnes som varianter.
+export type Grunnsett = {
+  til: number;
+  // Antall kort funnet i intervallet. Spriker det mot «til», har settet hull
+  // eller samlernumre som ikke er rene tall — da er summen for lav.
+  antall: number;
+  // Scryfalls markedspris, omregnet med samme kurs som resten av systemet.
+  marked_ore: number;
+  // Din egen utsalgspris i Near Mint. Det er dette tallet som sier hva du
+  // kan forvente å selge settet for.
+  salg_ore: number;
+  uten_pris: number;
 };
 
 const RARITET_REKKEFØLGE = ["mythic", "rare", "uncommon", "common", "special", "bonus", "ukjent"];
@@ -168,6 +187,7 @@ export async function lagerrapport(): Promise<{ sett: LagerSett[] }> {
         set_name: String(x.set_name || kode),
         released_at: x.released_at ? String(x.released_at) : null,
         rader: [],
+        grunnsett: null,
       };
       sett.set(kode, s);
     }
@@ -203,9 +223,71 @@ export async function lagerrapport(): Promise<{ sett: LagerSett[] }> {
     });
   }
 
+  await leggTilGrunnsett(sett, opp);
+
   return {
     sett: [...sett.values()].sort((a, b) =>
       (b.released_at || "").localeCompare(a.released_at || "") || a.set_name.localeCompare(b.set_name)
     ),
   };
+}
+
+// Sett du ikke har et eneste kort fra finnes ikke i bevegelsene, men det er
+// nettopp dem du vurderer å kjøpe. De legges til her, med tomt lager.
+async function leggTilGrunnsett(sett: Map<string, LagerSett>, opp: any) {
+  const r = await db().execute(`
+    SELECT c.id, c.set_code, c.rarity, c.usd, c.usd_foil,
+           r.grunnsett_til AS til,
+           COALESCE(s.visningsnavn, s.name) AS set_name, s.released_at
+      FROM cards c
+      JOIN set_rules r ON r.set_code = c.set_code
+      LEFT JOIN sets s ON s.code = c.set_code
+     WHERE r.grunnsett_til IS NOT NULL
+       AND r.grunnsett_til > 0
+       AND c.er_token = 0
+       AND c.er_serialized = 0
+       AND CAST(c.collector_number AS INTEGER) BETWEEN 1 AND r.grunnsett_til
+  `);
+
+  // Manuell salgspris slår intervallene, på samme måte som i resten av
+  // rapporten. Uten dette ville et kort du har priset selv telle med feil sum.
+  const manuellSalg = new Map<string, number>();
+  const ms = await db().execute(
+    "SELECT card_id, nm_ore FROM card_sale_prices WHERE finish = 'nonfoil'"
+  );
+  for (const x of ms.rows as any[]) manuellSalg.set(String(x.card_id), Number(x.nm_ore));
+
+  for (const x of r.rows as any[]) {
+    const kode = String(x.set_code);
+    let s = sett.get(kode);
+    if (!s) {
+      s = {
+        set_code: kode,
+        set_name: String(x.set_name || kode),
+        released_at: x.released_at ? String(x.released_at) : null,
+        rader: [],
+        grunnsett: null,
+      };
+      sett.set(kode, s);
+    }
+    if (!s.grunnsett) {
+      s.grunnsett = {
+        til: Number(x.til),
+        antall: 0,
+        marked_ore: 0,
+        salg_ore: 0,
+        uten_pris: 0,
+      };
+    }
+
+    const g = s.grunnsett;
+    g.antall++;
+
+    const usd = Number(x.usd || 0);
+    g.marked_ore += Math.round(usd * opp.usd_nok * 100);
+
+    const salg = salgsprisØre(x, "nonfoil", "NM" as any, opp, manuellSalg.get(String(x.id)) ?? null, null);
+    if (salg > 0) g.salg_ore += salg;
+    else g.uten_pris++;
+  }
 }

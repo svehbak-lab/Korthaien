@@ -405,6 +405,25 @@ app.get("/api/admin/statistikk", krevAdmin, fang(async (_req: any, res: any) => 
   res.json(await ordreStatistikk());
 }));
 
+app.put("/api/admin/sets/:kode/grunnsett", krevAdmin, fang(async (req: any, res: any) => {
+  const kode = String(req.params.kode || "").toLowerCase();
+  const rå = req.body?.grunnsett_til;
+  const til = rå === null || rå === undefined || rå === "" ? null : Math.trunc(Number(rå));
+  if (til !== null && (!Number.isFinite(til) || til < 0 || til > 2000)) {
+    return res.status(400).json({ feil: "Ugyldig samlernummer" });
+  }
+  // Settet har ikke nødvendigvis en regel fra før — du kan vurdere å kjøpe
+  // et sett du ikke kjøper enkeltkort fra.
+  await db().execute({
+    sql: `INSERT INTO set_rules (set_code, grunnsett_til, updated_at)
+               VALUES (?, ?, ?)
+          ON CONFLICT(set_code) DO UPDATE SET grunnsett_til = excluded.grunnsett_til,
+                                              updated_at = excluded.updated_at`,
+    args: [kode, til, new Date().toISOString()],
+  });
+  res.json({ ok: true, set_code: kode, grunnsett_til: til });
+}));
+
 app.get("/api/admin/lagerrapport", krevAdmin, fang(async (_req: any, res: any) => {
   res.json(await lagerrapport());
 }));

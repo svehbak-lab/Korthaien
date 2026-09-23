@@ -100,6 +100,11 @@ export const api = {
   lagerSammendrag: () => kall("/api/admin/lager-sammendrag"),
   statistikk: () => kall("/api/admin/statistikk"),
   lagerrapport: () => kall("/api/admin/lagerrapport"),
+  settGrunnsett: (kode, grunnsett_til) =>
+    kall(`/api/admin/sets/${encodeURIComponent(kode)}/grunnsett`, {
+      method: "PUT",
+      body: { grunnsett_til },
+    }),
   lagreKortConditions: (id, conditions) =>
     kall(`/api/admin/cards/${id}/conditions`, { method: "PUT", body: { conditions } }),
   lagrePris: (id, finish, usd) =>

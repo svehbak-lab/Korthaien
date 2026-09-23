@@ -110,9 +110,15 @@ async function leggTilNyeKolonner(): Promise<void> {
     await db().execute("ALTER TABLE sets ADD COLUMN visningsnavn TEXT");
   }
 
+  const settRegler = await kolonner("set_rules");
   const regler = await kolonner("set_rules");
   if (regler.size && !regler.has("wanted_foil")) {
     await db().execute("ALTER TABLE set_rules ADD COLUMN wanted_foil INTEGER NOT NULL DEFAULT 0");
+  }
+  // Høyeste samlernummer i standardsettet. Tomt betyr at settet ikke har et
+  // grunnsett verdt å summere — Commander-sett og Art Series, for eksempel.
+  if (regler.size && !regler.has("grunnsett_til")) {
+    await db().execute("ALTER TABLE set_rules ADD COLUMN grunnsett_til INTEGER");
   }
 
   const lenker = await kolonner("mystore_links");
