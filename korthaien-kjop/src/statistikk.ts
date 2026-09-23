@@ -247,6 +247,16 @@ async function leggTilGrunnsett(sett: Map<string, LagerSett>, opp: any) {
        AND c.er_token = 0
        AND c.er_serialized = 0
        AND CAST(c.collector_number AS INTEGER) BETWEEN 1 AND r.grunnsett_til
+       -- Ett kort per nummer. Scryfall gir enkelte trykk et suffiks — «7†»
+       -- er Play Boost-utgaven av nummer 7, samme kort med egen pris. Uten
+       -- denne ville de telt som ekstra kort i grunnsettet.
+       AND c.collector_number = (
+             SELECT k.collector_number FROM cards k
+              WHERE k.set_code = c.set_code
+                AND k.er_token = 0 AND k.er_serialized = 0
+                AND CAST(k.collector_number AS INTEGER) = CAST(c.collector_number AS INTEGER)
+              ORDER BY length(k.collector_number), k.collector_number
+              LIMIT 1)
   `);
 
   // Manuell salgspris slår intervallene, på samme måte som i resten av
