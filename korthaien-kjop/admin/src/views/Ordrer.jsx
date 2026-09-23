@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api, kroner, dato, dagerTil, CONDITIONS, CONDITION_NAVN } from "../api.js";
+import Statistikk from "./Statistikk.jsx";
 
 const STATUS = {
   pending: { navn: "Venter i posten", klasse: "m-vent" },
@@ -36,6 +37,8 @@ export default function Ordrer({ onFeil, onAntall }) {
 
   return (
     <>
+      <Statistikk onFeil={onFeil} />
+
       <div className="rad-flex" style={{ marginBottom: 14 }}>
         <button className={`knapp ${!arkiv ? "primar" : ""}`} onClick={() => setArkiv(false)}>
           Aktive

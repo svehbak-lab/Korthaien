@@ -24,6 +24,7 @@ import {
 } from "./auth.js";
 import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER } from "./ratelimit.js";
+import { ordreStatistikk, lagerrapport } from "./statistikk.js";
 
 const app = express();
 // Render setter X-Forwarded-For. Uten dette ser alle brukere ut som én
@@ -400,6 +401,14 @@ app.put("/api/admin/salgspris/:cardId", krevAdmin, fang(async (req: any, res: an
 
 // ── varelager ────────────────────────────────────────────────────────────────
 // Beholdningen for ett sett, med alle tilstander og begge finisher per kort.
+app.get("/api/admin/statistikk", krevAdmin, fang(async (_req: any, res: any) => {
+  res.json(await ordreStatistikk());
+}));
+
+app.get("/api/admin/lagerrapport", krevAdmin, fang(async (_req: any, res: any) => {
+  res.json(await lagerrapport());
+}));
+
 app.get("/api/admin/lager", krevAdmin, fang(async (req: any, res: any) => {
   const sett = String(req.query.sett || "").toLowerCase();
   if (!sett) throw new HttpFeil(400, "Mangler ?sett=");

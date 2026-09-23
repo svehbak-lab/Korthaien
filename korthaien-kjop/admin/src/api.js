@@ -98,6 +98,8 @@ export const api = {
   lagerHistorikk: (id, finish) =>
     kall(`/api/admin/lager/${id}/historikk${finish ? `?finish=${finish}` : ""}`),
   lagerSammendrag: () => kall("/api/admin/lager-sammendrag"),
+  statistikk: () => kall("/api/admin/statistikk"),
+  lagerrapport: () => kall("/api/admin/lagerrapport"),
   lagreKortConditions: (id, conditions) =>
     kall(`/api/admin/cards/${id}/conditions`, { method: "PUT", body: { conditions } }),
   lagrePris: (id, finish, usd) =>
