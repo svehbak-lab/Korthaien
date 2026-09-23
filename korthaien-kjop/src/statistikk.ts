@@ -235,69 +235,71 @@ export async function lagerrapport(): Promise<{ sett: LagerSett[] }> {
 // Sett du ikke har et eneste kort fra finnes ikke i bevegelsene, men det er
 // nettopp dem du vurderer å kjøpe. De legges til her, med tomt lager.
 async function leggTilGrunnsett(sett: Map<string, LagerSett>, opp: any) {
+  // Ett sett om gangen, ikke én join over hele katalogen. Filteret på
+  // samlernummer kan ikke bruke indeks — CAST må regnes per rad — så over
+  // 100 000 kort ble spørringen aldri ferdig. Per sett treffer den
+  // idx_cards_set, og nummerfiltreringen gjøres på de få hundre radene her.
   const r = await db().execute(`
-    SELECT c.id, c.set_code, c.rarity, c.usd, c.usd_foil,
-           r.grunnsett_til AS til,
+    SELECT r.set_code, r.grunnsett_til AS til,
            COALESCE(s.visningsnavn, s.name) AS set_name, s.released_at
-      FROM cards c
-      JOIN set_rules r ON r.set_code = c.set_code
-      LEFT JOIN sets s ON s.code = c.set_code
-     WHERE r.grunnsett_til IS NOT NULL
-       AND r.grunnsett_til > 0
-       AND c.er_token = 0
-       AND c.er_serialized = 0
-       AND CAST(c.collector_number AS INTEGER) BETWEEN 1 AND r.grunnsett_til
-       -- Ett kort per nummer. Scryfall gir enkelte trykk et suffiks — «7†»
-       -- er Play Boost-utgaven av nummer 7, samme kort med egen pris. Uten
-       -- denne ville de telt som ekstra kort i grunnsettet.
-       AND c.collector_number = (
-             SELECT k.collector_number FROM cards k
-              WHERE k.set_code = c.set_code
-                AND k.er_token = 0 AND k.er_serialized = 0
-                AND CAST(k.collector_number AS INTEGER) = CAST(c.collector_number AS INTEGER)
-              ORDER BY length(k.collector_number), k.collector_number
-              LIMIT 1)
+      FROM set_rules r LEFT JOIN sets s ON s.code = r.set_code
+     WHERE r.grunnsett_til IS NOT NULL AND r.grunnsett_til > 0
   `);
+  if (!r.rows.length) return;
 
-  // Manuell salgspris slår intervallene, på samme måte som i resten av
-  // rapporten. Uten dette ville et kort du har priset selv telle med feil sum.
   const manuellSalg = new Map<string, number>();
   const ms = await db().execute(
     "SELECT card_id, nm_ore FROM card_sale_prices WHERE finish = 'nonfoil'"
   );
   for (const x of ms.rows as any[]) manuellSalg.set(String(x.card_id), Number(x.nm_ore));
 
-  for (const x of r.rows as any[]) {
-    const kode = String(x.set_code);
-    let s = sett.get(kode);
-    if (!s) {
-      s = {
+  for (const rad of r.rows as any[]) {
+    const kode = String(rad.set_code);
+    const til = Number(rad.til);
+
+    const k = await db().execute({
+      sql: `SELECT id, collector_number, rarity, usd, usd_foil
+              FROM cards
+             WHERE set_code = ? AND er_token = 0 AND er_serialized = 0`,
+      args: [kode],
+    });
+
+    // Ett kort per nummer. Scryfall gir enkelte trykk et suffiks — «7†» er
+    // Play Boost-utgaven av nummer 7, samme kort med egen pris. Uten dette
+    // ville de telt som ekstra kort i grunnsettet. Korteste nummer vinner,
+    // så «7» slår «7†» og «120» slår «120a».
+    const valgt = new Map<number, any>();
+    for (const x of k.rows as any[]) {
+      const cn = String(x.collector_number || "");
+      const n = parseInt(cn, 10);
+      if (!Number.isFinite(n) || n < 1 || n > til) continue;
+      const før = valgt.get(n);
+      if (!før || cn.length < String(før.collector_number).length) valgt.set(n, x);
+    }
+    if (!valgt.size) continue;
+
+    let s2 = sett.get(kode);
+    if (!s2) {
+      s2 = {
         set_code: kode,
-        set_name: String(x.set_name || kode),
-        released_at: x.released_at ? String(x.released_at) : null,
+        set_name: String(rad.set_name || kode),
+        released_at: rad.released_at ? String(rad.released_at) : null,
         rader: [],
         grunnsett: null,
       };
-      sett.set(kode, s);
-    }
-    if (!s.grunnsett) {
-      s.grunnsett = {
-        til: Number(x.til),
-        antall: 0,
-        marked_ore: 0,
-        salg_ore: 0,
-        uten_pris: 0,
-      };
+      sett.set(kode, s2);
     }
 
-    const g = s.grunnsett;
-    g.antall++;
-
-    const usd = Number(x.usd || 0);
-    g.marked_ore += Math.round(usd * opp.usd_nok * 100);
-
-    const salg = salgsprisØre(x, "nonfoil", "NM" as any, opp, manuellSalg.get(String(x.id)) ?? null, null);
-    if (salg > 0) g.salg_ore += salg;
-    else g.uten_pris++;
+    const g = { til, antall: 0, marked_ore: 0, salg_ore: 0, uten_pris: 0 };
+    for (const x of valgt.values()) {
+      g.antall++;
+      g.marked_ore += Math.round(Number(x.usd || 0) * opp.usd_nok * 100);
+      const salg = salgsprisØre(
+        x, "nonfoil", "NM" as any, opp, manuellSalg.get(String(x.id)) ?? null, null
+      );
+      if (salg > 0) g.salg_ore += salg;
+      else g.uten_pris++;
+    }
+    s2.grunnsett = g;
   }
 }
