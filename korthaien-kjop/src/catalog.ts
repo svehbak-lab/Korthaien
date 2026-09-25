@@ -116,13 +116,14 @@ export async function søk(opts: {
                  c.has_foil, c.has_nonfoil, c.er_token, c.er_serialized, c.released_at
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
            WHERE ${hvor.join(" AND ")}
-           ORDER BY c.name, c.released_at DESC LIMIT 300`,
+           ORDER BY c.name, CAST(c.collector_number AS INTEGER), c.collector_number
+           LIMIT 1200`,
     args,
   });
 
   const kandidater = r.rows.map(radTilKandidat);
   const tilbud = await byggTilbud(kandidater, regler, s);
-  return tilbud.slice(0, opts.limit || 100);
+  return tilbud.slice(0, opts.limit || 1500);
 }
 
 // ── gjenoppslag ──────────────────────────────────────────────────────────────
