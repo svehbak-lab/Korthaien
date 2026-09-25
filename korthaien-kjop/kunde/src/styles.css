@@ -242,7 +242,9 @@ h3 { font-size: 15.5px; margin: 20px 0 4px; }
 .m-ok { background: #e6f3ea; color: var(--ok); }
 .m-velg { background: var(--brass-svak); color: var(--brass); }
 .m-nei { background: #f2f0ef; color: var(--dempet); }
-.m-foil { background: var(--brass-svak); color: var(--brass); }
+/* Samme gule som i butikken. Foil og vanlig er samme kort med samme
+   bilde, og uten et tydelig merke bestiller kundene feil. */
+.m-foil { background: #f5d020; color: #3b2f05; font-weight: 700; }
 
 /* ── kurv ────────────────────────────────────────────────────────────────── */
 .kurv {
