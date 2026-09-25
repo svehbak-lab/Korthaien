@@ -253,6 +253,15 @@ async function leggTilGrunnsett(sett: Map<string, LagerSett>, opp: any) {
   );
   for (const x of ms.rows as any[]) manuellSalg.set(String(x.card_id), Number(x.nm_ore));
 
+  // Din egen dollarpris på kort der Scryfall er upålitelig — typisk
+  // reservelistekort. Uten denne teller Beta og Unlimited som «uten pris»
+  // enda du har priset dem, og markedskolonnen blir tilsvarende for lav.
+  const manuellUsd = new Map<string, number>();
+  const mp = await db().execute(
+    "SELECT card_id, usd FROM card_prices WHERE finish = 'nonfoil'"
+  );
+  for (const x of mp.rows as any[]) manuellUsd.set(String(x.card_id), Number(x.usd));
+
   for (const rad of r.rows as any[]) {
     const kode = String(rad.set_code);
     const til = Number(rad.til);
@@ -293,9 +302,12 @@ async function leggTilGrunnsett(sett: Map<string, LagerSett>, opp: any) {
     const g = { til, antall: 0, marked_ore: 0, salg_ore: 0, uten_pris: 0 };
     for (const x of valgt.values()) {
       g.antall++;
-      g.marked_ore += Math.round(Number(x.usd || 0) * opp.usd_nok * 100);
+      // Manuell dollarpris slår Scryfall, som ellers i systemet.
+      const egenUsd = manuellUsd.get(String(x.id)) ?? null;
+      const usd = egenUsd ?? Number(x.usd || 0);
+      g.marked_ore += Math.round(usd * opp.usd_nok * 100);
       const salg = salgsprisØre(
-        x, "nonfoil", "NM" as any, opp, manuellSalg.get(String(x.id)) ?? null, null
+        x, "nonfoil", "NM" as any, opp, manuellSalg.get(String(x.id)) ?? null, egenUsd
       );
       if (salg > 0) g.salg_ore += salg;
       else g.uten_pris++;
