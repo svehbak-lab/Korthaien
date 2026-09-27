@@ -34,7 +34,7 @@ type Rå = {
   games?: string[];
   finishes?: string[];
   released_at?: string;
-  prices?: { usd?: string | null; usd_foil?: string | null };
+  prices?: { usd?: string | null; usd_foil?: string | null; usd_etched?: string | null };
   border_color?: string;
   layout?: string;
   promo_types?: string[];
@@ -256,7 +256,12 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
         k.collector_number || null,
         (k.rarity || "").toLowerCase() || null,
         tall(k.prices?.usd),
-        tall(k.prices?.usd_foil),
+        // Etched foil har egen prisnøkkel hos Scryfall. Kort som bare finnes
+        // etched — praetorene i Multiverse Legends, Double Masters-serien —
+        // har verken usd eller usd_foil, og ble dermed liggende uten pris og
+        // usynlige i kjøpslista. Etched telles allerede som foil ellers i
+        // systemet, så prisen hører hjemme i samme kolonne.
+        tall(k.prices?.usd_foil) ?? tall(k.prices?.usd_etched),
         finishes.includes("nonfoil") ? 1 : 0,
         finishes.includes("foil") || finishes.includes("etched") ? 1 : 0,
         bilde,
