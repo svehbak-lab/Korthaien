@@ -202,10 +202,17 @@ async function* linjerFra(kropp: any): AsyncGenerator<string> {
 
 // Digitale kort og fremmedspråklige utgaver er ikke varer du kjøper over
 // disk, og de ville blåst opp katalogen til liten nytte.
+//
+// Phyrexiansk er unntaket. Noen kort er aldri trykt på engelsk — Phyrexian
+// Arena i ONE #283 finnes bare slik — og uten dette unntaket mangler de i
+// katalogen. Scryfall setter «name» til det engelske navnet uansett hvilken
+// skrift kortet er trykt i, så de er søkbare som alle andre.
+const SPRÅK = new Set(["en", "ph"]);
+
 function brukbart(k: Rå): boolean {
   if (!k?.id || !k.name || !k.set) return false;
   if (k.digital) return false;
-  if (k.lang && k.lang !== "en") return false;
+  if (k.lang && !SPRÅK.has(k.lang)) return false;
   if (k.games && !k.games.includes("paper")) return false;
   return true;
 }
