@@ -70,6 +70,8 @@ export const api = {
   søkKort: (q) => kall(`/api/admin/cards/search?q=${encodeURIComponent(q)}`),
   leggTilLinje: (ordreId, linje) =>
     kall(`/api/admin/orders/${ordreId}/lines`, { method: "POST", body: linje }),
+  leggTilAnnet: (ordreId, linje) =>
+    kall(`/api/admin/orders/${ordreId}/annet`, { method: "POST", body: linje }),
   testEpost: (id, hvilken) =>
     kall(`/api/admin/orders/${id}/testepost`, { method: "POST", body: { hvilken } }),
   byttKort: (linjeId, card_id, finish) =>

@@ -91,8 +91,10 @@ function linjetabell(linjer: any[]): string {
       <td style="padding:6px 8px;color:#7a746c;font-size:13px">${i + 1}</td>
       <td style="padding:6px 8px">${trygg(l.card_name)}</td>
       <td style="padding:6px 8px;color:#7a746c;font-size:13px">${trygg(l.set_name)}${
-        l.finish === "foil" ? " (foil)" : ""
-      }${l.rarity ? `<br><span style="font-size:11px">${trygg(l.rarity)}</span>` : ""}</td>
+        l.collector_number ? ` #${trygg(l.collector_number)}` : ""
+      }${l.finish === "foil" ? " (foil)" : ""}${
+        l.rarity ? `<br><span style="font-size:11px">${trygg(l.rarity)}</span>` : ""
+      }</td>
       <td style="padding:6px 8px">${trygg(l.condition)}</td>
       <td style="padding:6px 8px;text-align:right">${l.qty_received ?? l.qty}</td>
       <td style="padding:6px 8px;text-align:right;white-space:nowrap">${kr(
@@ -114,7 +116,11 @@ const linjetekst = (linjer: any[]) =>
   linjer
     .map(
       (l, i) =>
-        `${i + 1}. ${l.card_name} — ${l.set_name}${l.finish === "foil" ? " (foil)" : ""}${
+        // Uten samlernummeret ser fire utgaver av samme kort helt like ut
+        // i lista, med ulik pris og ingen forklaring.
+        `${i + 1}. ${l.card_name} — ${l.set_name}${
+          l.collector_number ? ` #${l.collector_number}` : ""
+        }${l.finish === "foil" ? " (foil)" : ""}${
           l.rarity ? ` [${l.rarity}]` : ""
         }, ${l.condition}, ${l.qty_received ?? l.qty} stk.`
     )

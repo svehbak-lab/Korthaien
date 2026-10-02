@@ -248,6 +248,26 @@ export async function regnOmLinje(
   const linje: any = r.rows[0];
   if (!linje) throw new HttpFeil(404, "Fant ikke linjen");
 
+  // En egendefinert linje har ingen tilstand og ingen utregnet pris. Antall
+  // kan endres, resten står — beløpet er avtalt med kunden, ikke beregnet.
+  if (String(linje.kilde) === "annet") {
+    const felt: string[] = [];
+    const args: any[] = [];
+    for (const [navn, verdi] of [["qty", endring.qty], ["qty_received", endring.qty_received]] as const) {
+      if (verdi !== undefined) {
+        const n = Math.floor(Number(verdi));
+        if (!Number.isFinite(n) || n < 0) throw new HttpFeil(400, `Ugyldig ${navn}`);
+        felt.push(`${navn} = ?`);
+        args.push(n);
+      }
+    }
+    if (felt.length) {
+      args.push(linjeId);
+      await db().execute({ sql: `UPDATE order_lines SET ${felt.join(", ")} WHERE id = ?`, args });
+    }
+    return { unit_ore: Number(linje.unit_ore || 0), condition: String(linje.condition) as Condition };
+  }
+
   const condition = (endring.condition || String(linje.condition)) as Condition;
   if (!CONDITIONS.includes(condition)) throw new HttpFeil(400, "Ukjent condition");
 
@@ -295,6 +315,41 @@ export async function oppdaterTotal(orderId: number): Promise<number> {
     args: [ore, Math.round(ore / 100), orderId],
   });
   return ore;
+}
+
+// ── egendefinerte linjer ─────────────────────────────────────────────────────
+// Noen kunder selger mer enn enkeltkort: et display, en eske bulk, en samling
+// sleeves. Slike linjer har ingen card_id og ingen tilstand, og prisen er
+// avtalt og ikke utregnet. De teller i totalen kunden får og i statistikken,
+// men føres aldri på lager — du legger varen inn i butikken selv.
+export async function leggTilAnnet(
+  orderId: number,
+  input: { tekst: string; qty: number; ore: number }
+) {
+  const tekst = String(input.tekst || "").trim();
+  if (!tekst) throw new HttpFeil(400, "Skriv hva linjen gjelder");
+  if (tekst.length > 120) throw new HttpFeil(400, "Teksten er for lang");
+
+  const qty = Math.floor(Number(input.qty));
+  if (!Number.isFinite(qty) || qty < 1) throw new HttpFeil(400, "Antall må være minst 1");
+
+  const ore = Math.round(Number(input.ore));
+  if (!Number.isFinite(ore) || ore < 0) throw new HttpFeil(400, "Ugyldig beløp");
+
+  const o = await db().execute({ sql: "SELECT id FROM orders WHERE id = ?", args: [orderId] });
+  if (!o.rows[0]) throw new HttpFeil(404, "Fant ikke ordren");
+
+  // Tom card_id er det som gjør linjen usynlig for kvote og lager: alle de
+  // spørringene slår opp mot ekte kort-ID-er.
+  await db().execute({
+    sql: `INSERT INTO order_lines
+            (order_id, card_id, finish, condition, condition_start, qty, qty_received,
+             unit_nok, unit_ore, unit_ore_start, card_name, set_code, set_name,
+             collector_number, rarity, kilde)
+          VALUES (?, '', '', '—', '—', ?, ?, ?, ?, ?, ?, '', 'Annet', NULL, NULL, 'annet')`,
+    args: [orderId, qty, qty, Math.round(ore / 100), ore, ore, tekst],
+  });
+  return oppdaterTotal(orderId);
 }
 
 // ── linjer lagt til ved mottak ───────────────────────────────────────────────

@@ -438,6 +438,32 @@ function NyLinje({ ordre, onEndret, onFeil }) {
   const [cond, setCond] = useState("NM");
   const [antall, setAntall] = useState(1);
   const [jobber, setJobber] = useState(false);
+  // «kort» søker opp et trykk og lar serveren prise det. «annet» er display,
+  // bulkesker og lignende, der beløpet er avtalt med kunden.
+  const [modus, setModus] = useState("kort");
+  const [annetTekst, setAnnetTekst] = useState("");
+  const [annetKr, setAnnetKr] = useState("");
+
+  async function leggAnnet() {
+    setJobber(true);
+    try {
+      await api.leggTilAnnet(ordre.id, {
+        tekst: annetTekst.trim(),
+        qty: Math.max(1, parseInt(antall) || 1),
+        // Kroner inn, øre ut — resten av systemet regner i øre.
+        ore: Math.round((parseFloat(String(annetKr).replace(",", ".")) || 0) * 100),
+      });
+      setÅpen(false);
+      setAnnetTekst("");
+      setAnnetKr("");
+      setAntall(1);
+      onEndret();
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setJobber(false);
+    }
+  }
 
   useEffect(() => {
     if (søk.trim().length < 3) return setTreff([]);
@@ -469,9 +495,81 @@ function NyLinje({ ordre, onEndret, onFeil }) {
 
   if (!åpen) {
     return (
-      <button className="knapp liten" style={{ marginTop: 10 }} onClick={() => setÅpen(true)}>
-        + Legg til kort
-      </button>
+      <div className="rad-flex" style={{ marginTop: 10, gap: 8 }}>
+        <button className="knapp liten" onClick={() => { setModus("kort"); setÅpen(true); }}>
+          + Legg til kort
+        </button>
+        <button className="knapp liten" onClick={() => { setModus("annet"); setÅpen(true); }}>
+          + Legg til annet
+        </button>
+      </div>
+    );
+  }
+
+  if (modus === "annet") {
+    const kr = parseFloat(String(annetKr).replace(",", ".")) || 0;
+    const stk = Math.max(1, parseInt(antall) || 1);
+    return (
+      <div className="panel" style={{ marginTop: 12, background: "var(--papir)" }}>
+        <div className="krop">
+          <strong>Legg til noe annet enn kort</strong>
+          <p className="dempet" style={{ margin: "4px 0 10px" }}>
+            Display, bulkeske, sleeves — alt som ikke er et enkeltkort. Linjen teller
+            i summen kunden får og i statistikken, men føres ikke på lager. Der legger
+            du varen inn selv.
+          </p>
+
+          <div className="rad-flex" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <label style={{ flex: "1 1 260px" }}>
+              <div className="dempet" style={{ fontSize: 12 }}>Hva er det?</div>
+              <input
+                type="text"
+                value={annetTekst}
+                onChange={(e) => setAnnetTekst(e.target.value)}
+                placeholder="F.eks. Display Foundations"
+                maxLength={120}
+                autoFocus
+                style={{ width: "100%" }}
+              />
+            </label>
+            <label>
+              <div className="dempet" style={{ fontSize: 12 }}>Antall</div>
+              <input
+                type="number"
+                min="1"
+                value={antall}
+                onChange={(e) => setAntall(e.target.value)}
+                style={{ width: 80 }}
+              />
+            </label>
+            <label>
+              <div className="dempet" style={{ fontSize: 12 }}>Pris per stk.</div>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={annetKr}
+                onChange={(e) => setAnnetKr(e.target.value)}
+                placeholder="0"
+                style={{ width: 110 }}
+              />
+            </label>
+            <span className="dempet">
+              = {(kr * stk).toLocaleString("nb-NO", { minimumFractionDigits: 0 })} kr
+            </span>
+          </div>
+
+          <div className="rad-flex" style={{ gap: 8, marginTop: 12 }}>
+            <button
+              className="knapp primar"
+              disabled={jobber || !annetTekst.trim() || kr <= 0}
+              onClick={leggAnnet}
+            >
+              {jobber ? "Legger til…" : "Legg til"}
+            </button>
+            <button className="knapp liten" onClick={() => setÅpen(false)}>Avbryt</button>
+          </div>
+        </div>
+      </div>
     );
   }
 

@@ -120,7 +120,8 @@ export async function bokførOrdre(orderId: number): Promise<{ ført: number; gr
 
   const l = await db().execute({
     sql: `SELECT card_id, finish, condition, qty, qty_received
-            FROM order_lines WHERE order_id = ? AND fjernet_at IS NULL`,
+            FROM order_lines
+             WHERE order_id = ? AND fjernet_at IS NULL AND kilde <> 'annet'`,
     args: [orderId],
   });
 
@@ -224,22 +225,54 @@ export async function åpningsbeholdningFraMystore(
 // ── sammenligning ────────────────────────────────────────────────────────────
 // Så lenge Mystore er fasit, er avviket det som forteller om modellen holder.
 export async function avvikMotMystore(maks = 100) {
-  const r = await db().execute({
-    sql: `SELECT COALESCE(m.card_id, b.card_id) AS card_id,
-                 COALESCE(m.finish, b.finish)   AS finish,
-                 COALESCE(m.qty, 0)             AS mystore,
-                 COALESCE(b.n, 0)               AS eget,
-                 c.name, c.set_code
-            FROM mystore_stock m
-            FULL OUTER JOIN (
-              SELECT card_id, finish, SUM(antall) AS n
-                FROM lager_bevegelser GROUP BY card_id, finish
-            ) b ON b.card_id = m.card_id AND b.finish = m.finish
-            LEFT JOIN cards c ON c.id = COALESCE(m.card_id, b.card_id)
-           WHERE COALESCE(m.qty, 0) <> COALESCE(b.n, 0)
-           ORDER BY ABS(COALESCE(m.qty, 0) - COALESCE(b.n, 0)) DESC
-           LIMIT ?`,
-    args: [maks],
+  // Var en FULL OUTER JOIN mellom mystore_stock og en gruppering av hele
+  // lager_bevegelser. SQLite har ingen indeks å bruke på den, så den endte
+  // som et kryssprodukt: 1,27 milliarder leste rader per kjøring, og ruta
+  // kalles hver gang lagersammendraget åpnes. To besøk spiste månedskvoten.
+  //
+  // Nå hentes de to sidene hver for seg — to indekserte skanninger på noen
+  // titusen rader — og sammenligningen gjøres her.
+  const [m, b] = await Promise.all([
+    db().execute("SELECT card_id, finish, qty FROM mystore_stock WHERE qty <> 0"),
+    db().execute(`SELECT card_id, finish, SUM(antall) AS n
+                    FROM lager_bevegelser GROUP BY card_id, finish HAVING n <> 0`),
+  ]);
+
+  const nøkkel = (c: string, f: string) => `${c}:${f}`;
+  const kart = new Map<string, { card_id: string; finish: string; mystore: number; eget: number }>();
+
+  for (const x of m.rows as any[]) {
+    kart.set(nøkkel(String(x.card_id), String(x.finish)), {
+      card_id: String(x.card_id),
+      finish: String(x.finish),
+      mystore: Number(x.qty || 0),
+      eget: 0,
+    });
+  }
+  for (const x of b.rows as any[]) {
+    const k = nøkkel(String(x.card_id), String(x.finish));
+    const rad = kart.get(k);
+    if (rad) rad.eget = Number(x.n || 0);
+    else kart.set(k, { card_id: String(x.card_id), finish: String(x.finish), mystore: 0, eget: Number(x.n || 0) });
+  }
+
+  const avvik = [...kart.values()]
+    .filter((r) => r.mystore !== r.eget)
+    .sort((a, b2) => Math.abs(b2.mystore - b2.eget) - Math.abs(a.mystore - a.eget))
+    .slice(0, maks);
+  if (!avvik.length) return [];
+
+  // Navn hentes bare for de få radene som faktisk vises.
+  const ider = [...new Set(avvik.map((a) => a.card_id))];
+  const n = await db().execute({
+    sql: `SELECT id, name, set_code FROM cards WHERE id IN (${ider.map(() => "?").join(",")})`,
+    args: ider,
   });
-  return r.rows;
+  const navn = new Map((n.rows as any[]).map((x) => [String(x.id), x]));
+
+  return avvik.map((a) => ({
+    ...a,
+    name: navn.get(a.card_id)?.name ?? null,
+    set_code: navn.get(a.card_id)?.set_code ?? null,
+  }));
 }

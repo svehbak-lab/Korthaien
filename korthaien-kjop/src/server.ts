@@ -12,7 +12,8 @@ import {
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
   lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal,
-  leggTilLinje, fjernLinje, byttKort, endringslogg, instruksjoner, SORTERING,
+  leggTilLinje,
+  leggTilAnnet, fjernLinje, byttKort, endringslogg, instruksjoner, SORTERING,
   settRabattkode, markerKredittSendt, HttpFeil,
 } from "./orders.js";
 import { hentSetRule } from "./pricing.js";
@@ -299,6 +300,17 @@ app.post("/api/admin/orders/:id/lines", krevAdmin, fang(async (req: any, res: an
     finish: finish === "foil" ? "foil" : "nonfoil",
     condition,
     qty: Number(qty || 1),
+  });
+  res.json({ ok: true, total_ore: total });
+}));
+
+// Egendefinert linje: display, bulkeske, eller annet som ikke er et kort.
+app.post("/api/admin/orders/:id/annet", krevAdmin, fang(async (req: any, res: any) => {
+  const { tekst, qty, ore } = req.body || {};
+  const total = await leggTilAnnet(Number(req.params.id), {
+    tekst: String(tekst || ""),
+    qty: Number(qty || 1),
+    ore: Number(ore || 0),
   });
   res.json({ ok: true, total_ore: total });
 }));
