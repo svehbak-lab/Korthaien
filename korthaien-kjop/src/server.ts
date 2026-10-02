@@ -1008,9 +1008,13 @@ app.post("/api/admin/jobs/:navn", krevAdmin, fang(async (req: any, res: any) => 
     gjettKategorier().catch((e) => console.error("Gjetting feilet:", e));
     return;
   }
-  if (navn === "mystore") {
-    res.json({ ok: true, melding: "Synk startet." });
-    synkMystore().catch((e) => console.error("Mystore-synk feilet:", e));
+  if (navn === "mystore" || navn === "mystore-alle") {
+    // Vanlig synk henter bare sett du kjøper fra — det er alt kvoten
+    // trenger. Lagerrapporten viser derimot hele butikken, og da må også
+    // settene du bare selger fra være med. «mystore-alle» henter alt.
+    const alleSett = navn === "mystore-alle";
+    res.json({ ok: true, melding: alleSett ? "Full synk startet." : "Synk startet." });
+    synkMystore(undefined, { alleSett }).catch((e) => console.error("Mystore-synk feilet:", e));
     return;
   }
   if (navn === "expire") {

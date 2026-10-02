@@ -183,6 +183,9 @@ export default function Innstillinger({ onFeil, onMelding }) {
             <button className="knapp" onClick={() => kjør("mystore", "Lagersynken")}>
               Synk beholdning fra Mystore
             </button>
+            <button className="knapp" onClick={() => kjør("mystore-alle", "Den fulle lagersynken")}>
+              Full lagersynk (alle sett)
+            </button>
             <button className="knapp" onClick={() => kjør("expire", "Opprydningen")}>
               Rydd utløpte ordrer
             </button>
