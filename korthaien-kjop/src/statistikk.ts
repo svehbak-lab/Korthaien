@@ -155,15 +155,21 @@ const RARITET_REKKEFØLGE = ["mythic", "rare", "uncommon", "common", "special", 
 export async function lagerrapport(): Promise<{ sett: LagerSett[] }> {
   const opp = await hentSalgsOppsett();
 
+  // Beholdningen leses fra Mystore-speilet, ikke fra lager_bevegelser.
+  // Bevegelsene ble fylt én gang som åpningsbeholdning og har stått stille
+  // siden, så rapporten viste et øyeblikksbilde fra den dagen. Speilet
+  // oppdateres av nattsynken og er i takt med butikken.
+  //
+  // Mystore fører ikke tilstand på produktnivå, så alt prises som Near Mint.
+  // Det stemmer for praktisk talt hele lageret.
   const r = await db().execute(`
-    SELECT b.card_id, b.finish, b.condition, SUM(b.antall) AS n,
+    SELECT m.card_id, m.finish, m.qty AS n,
            c.rarity, c.set_code, c.usd, c.usd_foil,
            COALESCE(s.visningsnavn, s.name) AS set_name, s.released_at
-      FROM lager_bevegelser b
-      JOIN cards c ON c.id = b.card_id
+      FROM mystore_stock m
+      JOIN cards c ON c.id = m.card_id
       LEFT JOIN sets s ON s.code = c.set_code
-     GROUP BY b.card_id, b.finish, b.condition
-    HAVING n > 0
+     WHERE m.qty > 0
   `);
 
   // Begge overstyringstabellene er små nok til å hentes i sin helhet. Ett
@@ -205,7 +211,7 @@ export async function lagerrapport(): Promise<{ sett: LagerSett[] }> {
     const stk = salgsprisØre(
       x,
       finish,
-      String(x.condition) as any,
+      "NM" as any,
       opp,
       manuellSalg.get(nøkkel) ?? null,
       manuellUsd.get(nøkkel) ?? null
