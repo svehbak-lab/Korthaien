@@ -5,7 +5,7 @@ process.env.DATABASE_URL = "file:./test-korthaien.db";
 
 const { migrate, db } = await import("../src/db.ts");
 const { beregnØre } = await import("../src/pricing.ts");
-const { parseBulk } = await import("../src/bulk.ts");
+const { parseBulk, MAX_LINJER } = await import("../src/bulk.ts");
 const { regnLedig } = await import("../src/quota.ts");
 
 await migrate();
@@ -99,9 +99,11 @@ test("bulkparser takler formatene folk faktisk skriver", () => {
   assert.equal(l[6].qty, 1); // uten antall er det ett kort
 });
 
-test("bulklista stopper på 50 linjer", () => {
-  const mange = Array.from({ length: 80 }, (_, i) => `1 Kort ${i}`).join("\n");
-  assert.equal(parseBulk(mange).length, 50);
+test("bulklista stopper på grensen", () => {
+  // Grensen leses fra koden, ikke skrives inn på nytt her. Ellers brekker
+  // testen hver gang MAX_LINJER justeres, uten at noe faktisk er galt.
+  const mange = Array.from({ length: MAX_LINJER + 30 }, (_, i) => `1 Kort ${i}`).join("\n");
+  assert.equal(parseBulk(mange).length, MAX_LINJER);
 });
 
 test("tomme og ugyldige linjer merkes i stedet for å krasje", () => {

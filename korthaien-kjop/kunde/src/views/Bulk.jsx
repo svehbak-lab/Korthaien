@@ -47,7 +47,7 @@ export default function Bulk({ kurv, onLegg, onFeil }) {
       <p className="ingress">
         Lim inn lista di, én linje per kort. Antall foran navnet. Har du settkode,
         tilstand eller samlernummer med, tar jeg det med — ellers spør jeg. Inntil
-        50 linjer om gangen.
+        100 linjer om gangen.
       </p>
 
       <details className="hjelp">
@@ -84,13 +84,13 @@ Lightning Bolt x4 foil`}</pre>
         </button>
         <span className="dempet">
           {linjeAntall} {linjeAntall === 1 ? "linje" : "linjer"}
-          {linjeAntall > 50 && " — bare de 50 første tas med"}
+          {linjeAntall > 100 && " — bare de 50 første tas med"}
         </span>
       </div>
 
       {svar?.kuttet > 0 && (
         <div className="varsel info">
-          Lista var lengre enn 50 linjer. De siste {svar.kuttet} ble ikke tatt med —
+          Lista var lengre enn 100 linjer. De siste {svar.kuttet} ble ikke tatt med —
           send dem i en runde til.
         </div>
       )}

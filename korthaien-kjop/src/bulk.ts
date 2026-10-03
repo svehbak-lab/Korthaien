@@ -45,7 +45,7 @@ export type BulkLinje = {
   feil?: string;
 };
 
-export const MAX_LINJER = 50;
+export const MAX_LINJER = 100;
 
 // ── tilstand ─────────────────────────────────────────────────────────────────
 // Folk skriver tilstand på engelsk butikkstandard. Skalaen min har fire trinn,
