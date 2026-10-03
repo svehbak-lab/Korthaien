@@ -84,7 +84,7 @@ Lightning Bolt x4 foil`}</pre>
         </button>
         <span className="dempet">
           {linjeAntall} {linjeAntall === 1 ? "linje" : "linjer"}
-          {linjeAntall > 100 && " — bare de 50 første tas med"}
+          {linjeAntall > 100 && " — bare de 100 første tas med"}
         </span>
       </div>
 
