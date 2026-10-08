@@ -254,7 +254,12 @@ export async function synkMystore(
     }
 
     for (const p of produkter) {
-      const foil = /\bfoil\b/i.test(p.navn) || /\bfoil\b/i.test(kat.navn);
+      // «non-foil» inneholder «foil», og bindestreken er en ordgrense — så
+      // \bfoil\b traff dem også, og kortene ble koblet som foil-utgaver.
+      // Beholdningen havnet på feil rad, og kvoten for vanlige ble null.
+      const erFoil = (t: string) =>
+        /\bfoil\b/i.test(t) && !/\bnon[\s-]?foil\b/i.test(t);
+      const foil = erFoil(p.navn) || erFoil(kat.navn);
       // Varianten leses ut av navnet før parentesene kastes — det er nettopp
       // der den står: «Bold Plagiarist (Extended Art)».
       const variant = variantFraNavn(p.navn);
