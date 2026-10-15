@@ -124,16 +124,40 @@ export function antallKort(kurv) {
   return Object.values(kurv).reduce((n, l) => n + l.qty, 0);
 }
 
-// Samme sortering som ordrebekreftelsen: sett, så kortnavn. Kunden ser lista i
-// den rekkefølgen hen skal legge bunken, hele veien fra kurv til kvittering.
+// Raritetsrekkefølgen finnes tre steder: RARITET og CASE-uttrykket i SORTERING,
+// begge i src/orders.ts, og her. Klienten kan ikke importere fra serveren, så
+// kopien er uunngåelig — kommer en ny raritet, må alle tre endres.
+const RARITET = ["mythic", "rare", "uncommon", "common"];
+const raritetsRang = (r) => {
+  const i = RARITET.indexOf(String(r || "").toLowerCase());
+  return i === -1 ? RARITET.length : i;
+};
+
+// Tilstanden rangeres etter plassen i tilbudets egen conditions-liste, som
+// serveren leverer i rekkefølgen NM, EX, VG, G. Alfabetisk sortering ga
+// EX, G, NM, VG — en fjerde rekkefølge å holde i takt, og feil.
+const condRang = (l) => {
+  const i = l.tilbud.conditions.findIndex((c) => c.condition === l.condition);
+  return i < 0 ? 99 : i;
+};
+
+// Samme rekkefølge som pakkelista i src/orders.ts: sett, så sjeldenhet, så
+// kortnavn, så finish og tilstand. Kunden ser lista i den rekkefølgen hen skal
+// legge bunken, hele veien fra kurv til kvittering.
+//
+// Sjeldenheten manglet her, mens både SQL-sorteringen og pakkelista hadde den.
+// Kurven lever i nettleseren og har aldri vært innom databasen, så den fulgte
+// sin egen regel — og kunden måtte stokke om på bunken etter å ha godkjent.
 export function sortert(kurv) {
   return Object.entries(kurv)
     .map(([k, l]) => ({ k, ...l }))
     .sort(
       (a, b) =>
         a.tilbud.set_name.localeCompare(b.tilbud.set_name, "nb") ||
+        raritetsRang(a.tilbud.rarity) - raritetsRang(b.tilbud.rarity) ||
         a.tilbud.name.localeCompare(b.tilbud.name, "nb") ||
-        a.condition.localeCompare(b.condition)
+        a.tilbud.finish.localeCompare(b.tilbud.finish) ||
+        condRang(a) - condRang(b)
     );
 }
 

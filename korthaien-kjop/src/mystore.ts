@@ -35,7 +35,30 @@ async function hent(sti: string, forsøk = 0): Promise<any> {
   if (vent > 0) await pause(vent);
   sistKall = Date.now();
 
-  const r = await fetch(process.env.MYSTORE_URL + sti, { headers: HODER() });
+  // Mystore lukker forbindelsen av og til midt i en lang kjøring — etter
+  // flere tusen kall og noen megabyte svarer serveren med å kutte socketen
+  // (UND_ERR_SOCKET). Da kaster fetch, og uten dette tok én slik kutt livet
+  // av en jobb som var 85 % ferdig. Kallene er GET, så det er trygt å
+  // gjenta dem. Teller deles med 429-grenen, så samlet antall forsøk er
+  // begrenset uansett hvilken av dem som slår til.
+  let r: Awaited<ReturnType<typeof fetch>>;
+  try {
+    r = await fetch(process.env.MYSTORE_URL + sti, { headers: HODER() });
+  } catch (e: any) {
+    if (forsøk >= 6) {
+      throw new Error(
+        `Mystore brøt forbindelsen seks ganger på ${sti} (${e?.cause?.code || e?.message}). ` +
+          `Arbeidet som er gjort er lagret — kjør synken på nytt.`
+      );
+    }
+    const ventetid = Math.min(30000, 1000 * 2 ** forsøk);
+    console.log(
+      `  · Forbindelsen brøt på ${sti} (${e?.cause?.code || "nettverksfeil"}). ` +
+        `Prøver igjen om ${Math.round(ventetid / 1000)} s.`
+    );
+    await pause(ventetid);
+    return hent(sti, forsøk + 1);
+  }
 
   if (r.status === 429) {
     if (forsøk >= 6) {
