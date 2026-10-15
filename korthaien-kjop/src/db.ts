@@ -226,6 +226,40 @@ async function leggTilNyeKolonner(): Promise<void> {
     await db().execute("ALTER TABLE card_prices_ny RENAME TO card_prices");
   }
 
+  // Kuppjakten. Egne tabeller og ikke kolonner på cards, fordi dette er
+  // opplysninger om andre butikker — ikke om kortene.
+  await db().execute(`CREATE TABLE IF NOT EXISTS kupp_sjekk (
+    card_id TEXT NOT NULL,
+    finish TEXT NOT NULL,
+    sist_sjekket TEXT,
+    siste_status TEXT,
+    PRIMARY KEY (card_id, finish))`);
+
+  await db().execute(`CREATE TABLE IF NOT EXISTS kupp_treff (
+    card_id TEXT NOT NULL,
+    finish TEXT NOT NULL,
+    shop TEXT NOT NULL,
+    url TEXT NOT NULL,
+    shop_name TEXT,
+    tittel TEXT,
+    pris_ore INTEGER NOT NULL,
+    frakt_ore INTEGER,
+    condition TEXT,
+    collector_number TEXT,
+    in_stock INTEGER,
+    salg_ore INTEGER NOT NULL,
+    marked_ore INTEGER,
+    avvik_pct INTEGER NOT NULL,
+    usikker INTEGER NOT NULL DEFAULT 0,
+    forst_sett TEXT NOT NULL,
+    sist_sett TEXT NOT NULL,
+    borte_at TEXT,
+    PRIMARY KEY (card_id, finish, shop, url))`);
+
+  await db().execute(
+    "CREATE INDEX IF NOT EXISTS idx_kupp_avvik ON kupp_treff (borte_at, avvik_pct DESC)"
+  );
+
   const um = await kolonner("mystore_unmatched");
   if (um.size && !um.has("category")) {
     await db().execute("ALTER TABLE mystore_unmatched ADD COLUMN category TEXT");

@@ -312,3 +312,39 @@ CREATE TABLE IF NOT EXISTS mystore_links (
   kilde       TEXT,
   updated_at  TEXT NOT NULL
 );
+
+-- Hvilke kort som er sjekket, og når. Rotasjonen leser denne: aldri sjekkede
+-- først, så de som har ventet lengst.
+CREATE TABLE IF NOT EXISTS kupp_sjekk (
+  card_id       TEXT NOT NULL,
+  finish        TEXT NOT NULL,
+  sist_sjekket  TEXT,
+  siste_status  TEXT,
+  PRIMARY KEY (card_id, finish)
+);
+
+-- Funnene. Et tilbud som forsvinner slettes ikke, det får borte_at — at et
+-- kupp ble tatt er også opplysning. forst_sett viser hvor lenge det har ligget.
+CREATE TABLE IF NOT EXISTS kupp_treff (
+  card_id          TEXT NOT NULL,
+  finish           TEXT NOT NULL,
+  shop             TEXT NOT NULL,
+  url              TEXT NOT NULL,
+  shop_name        TEXT,
+  tittel           TEXT,
+  pris_ore         INTEGER NOT NULL,
+  frakt_ore        INTEGER,
+  condition        TEXT,
+  collector_number TEXT,
+  in_stock         INTEGER,
+  salg_ore         INTEGER NOT NULL,
+  marked_ore       INTEGER,
+  avvik_pct        INTEGER NOT NULL,
+  usikker          INTEGER NOT NULL DEFAULT 0,
+  forst_sett       TEXT NOT NULL,
+  sist_sett        TEXT NOT NULL,
+  borte_at         TEXT,
+  PRIMARY KEY (card_id, finish, shop, url)
+);
+
+CREATE INDEX IF NOT EXISTS idx_kupp_avvik ON kupp_treff (borte_at, avvik_pct DESC);
