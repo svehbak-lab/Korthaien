@@ -10,6 +10,7 @@ import { utløpGamleOrdrer } from "./orders.js";
 import { hvorfor } from "./hvorfor.js";
 import { varsleJobbfeil } from "./epost.js";
 import { åpningsbeholdningFraMystore, avvikMotMystore } from "./lager.js";
+import { kjørKuppjakt, hentKuppOppsett } from "./kupp.js";
 
 // Kommandolinje for jobbene. Render kjører disse som cron.
 
@@ -75,7 +76,7 @@ await migrate();
 // Cron-jobber feiler i stillhet med mindre noen ser etter. De som kjører
 // uten tilsyn sender nå en e-post når de ryker, og avslutter med feilkode så
 // Render også melder fra.
-const UTEN_TILSYN = new Set(["import", "mystore", "expire"]);
+const UTEN_TILSYN = new Set(["import", "mystore", "expire", "kupp"]);
 
 try {
   switch (kommando) {
@@ -140,6 +141,17 @@ try {
     case "hvorfor":
       await hvorfor(process.argv.slice(3).join(" "));
       break;
+    case "kupp": {
+      // Står den av i admin, skal jobben si fra og gå ut uten feil —
+      // ellers ville cron sendt deg en e-post hver natt om at den nektet.
+      const oppsett = await hentKuppOppsett();
+      if (!oppsett.aktiv) {
+        console.log("Kuppjakten er slått av i admin. Hopper over.");
+        break;
+      }
+      await kjørKuppjakt();
+      break;
+    }
     case "expire":
       console.log(`${await utløpGamleOrdrer()} ordrer utløpt.`);
       break;
@@ -151,7 +163,7 @@ try {
       break;
     }
     default:
-      console.log("Bruk: import | sett | mystore | gjett | helse | hvorfor <kortnavn> | lager-fra-mystore | lageravvik | analyser [settkode…] | skrivefeil | rydd | reindeks | seed | expire | sett-kurs <tall>");
+      console.log("Bruk: kupp | import | sett | mystore | gjett | helse | hvorfor <kortnavn> | lager-fra-mystore | lageravvik | analyser [settkode…] | skrivefeil | rydd | reindeks | seed | expire | sett-kurs <tall>");
   }
 } catch (feil) {
   console.error(feil);

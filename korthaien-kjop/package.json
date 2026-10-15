@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "import": "tsx src/cli.ts import",
     "mystore": "tsx src/cli.ts mystore",
+    "kupp": "tsx src/cli.ts kupp",
     "seed": "tsx src/cli.ts seed",
     "test": "tsx --test test/*.test.mjs",
     "reindeks": "tsx src/cli.ts reindeks",
