@@ -1014,6 +1014,22 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
 
 app.post("/api/admin/jobs/:navn", krevAdmin, fang(async (req: any, res: any) => {
   const navn = String(req.params.navn);
+  // Kuppjakten tar timer — ett oppslag hvert tiende sekund — så den svarer
+  // med én gang og går i bakgrunnen, som importen.
+  if (navn === "kupp") {
+    res.json({ ok: true, melding: "Kuppjakten er startet — følg med i loggen." });
+    kjørKuppjakt().catch((e) => console.error("Kuppjakt feilet:", e));
+    return;
+  }
+  // Ti kort, uten å slå jobben på. Nok til å se at koblingen mot Kortjakt
+  // virker, lite nok til at ingen merker det.
+  if (navn === "kupp-prove") {
+    res.json({ ok: true, melding: "Prøven er startet — ti kort, følg med i loggen." });
+    kjørKuppjakt(console.log, { antall: 10, tørr: true }).catch((e) =>
+      console.error("Kuppprøve feilet:", e)
+    );
+    return;
+  }
   // Importen tar minutter. Vi svarer med én gang og lar den gå i bakgrunnen,
   // ellers ryker forespørselen på timeout hos Render.
   if (navn === "import") {
