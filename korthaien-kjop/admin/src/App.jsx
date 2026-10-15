@@ -6,6 +6,7 @@ import Kort from "./views/Kort.jsx";
 import Kobling from "./views/Kobling.jsx";
 import Butikk from "./views/Butikk.jsx";
 import Lagerrapport from "./views/Lagerrapport.jsx";
+import Kupp from "./views/Kupp.jsx";
 import Innstillinger from "./views/Innstillinger.jsx";
 
 const SIDER = [
@@ -16,6 +17,7 @@ const SIDER = [
   // Midlertidig: forhåndsvisning av butikken. Flyttes ut når salgssiden bygges.
   { id: "butikk", navn: "Butikk" },
   { id: "lagerrapport", navn: "Lagerrapport" },
+  { id: "kupp", navn: "Kupp" },
   { id: "innstillinger", navn: "Innstillinger" },
 ];
 
@@ -109,6 +111,7 @@ export default function App() {
         {side === "kobling" && <Kobling onFeil={håndterFeil} onAntall={setAntallUkoblede} />}
         {side === "butikk" && <Butikk onFeil={håndterFeil} />}
         {side === "lagerrapport" && <Lagerrapport onFeil={håndterFeil} />}
+        {side === "kupp" && <Kupp onFeil={håndterFeil} />}
         {side === "innstillinger" && <Innstillinger onFeil={håndterFeil} onMelding={visMelding} />}
       </main>
     </div>

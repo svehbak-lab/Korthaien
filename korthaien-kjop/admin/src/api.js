@@ -102,6 +102,11 @@ export const api = {
   lagerSammendrag: () => kall("/api/admin/lager-sammendrag"),
   statistikk: () => kall("/api/admin/statistikk"),
   lagerrapport: () => kall("/api/admin/lagerrapport"),
+  kupp: ({ minAvvik = 0, visBorte = false } = {}) =>
+    kall(`/api/admin/kupp?minAvvik=${minAvvik}&visBorte=${visBorte ? 1 : 0}`),
+  kuppVakteliste: () => kall("/api/admin/kupp/vakteliste"),
+  settKuppOppsett: (endringer) =>
+    kall("/api/admin/kupp/oppsett", { method: "POST", body: endringer }),
   settGrunnsett: (kode, grunnsett_til) =>
     kall(`/api/admin/sets/${encodeURIComponent(kode)}/grunnsett`, {
       method: "PUT",
