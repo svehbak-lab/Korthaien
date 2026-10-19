@@ -5,7 +5,7 @@ const CONDITIONS = ["MT", "NM", "EX", "GD", "LP", "PL", "PO"];
 
 const dag = (iso) => (iso ? iso.slice(0, 10).split("-").reverse().slice(0, 2).join(".") : "");
 
-// Hvor lenge et kupp har ligget. Et tilbud som har stått i tre uker er noe
+// Hvor lenge et tilbud har ligget. Et kupp som har stått i tre uker er noe
 // annet enn ett som dukket opp i natt — da vet du at ingen andre tok det.
 function alder(iso) {
   const d = Math.floor((Date.now() - Date.parse(iso)) / 86400000);
@@ -16,6 +16,196 @@ function alder(iso) {
 }
 
 export default function Kupp({ onFeil }) {
+  const [fane, setFane] = useState("andre");
+
+  return (
+    <>
+      {/* To lister av samme slag, men med motsatt formål: den ene finner
+          andres feilpriser, den andre dine egne. De deler data og jobb, men
+          ingenting annet — derfor hver sin fane i stedet for et filter. */}
+      <div className="rad-flex" style={{ gap: 8, marginBottom: 16 }}>
+        <Fane valgt={fane === "andre"} onKlikk={() => setFane("andre")}>
+          Andre butikker
+        </Fane>
+        <Fane valgt={fane === "egen"} onKlikk={() => setFane("egen")}>
+          Korthaien
+        </Fane>
+      </div>
+
+      {fane === "andre" ? <Andre onFeil={onFeil} /> : <Egen onFeil={onFeil} />}
+    </>
+  );
+}
+
+function Fane({ valgt, onKlikk, children }) {
+  return (
+    <button
+      className={`knapp${valgt ? " primar" : ""}`}
+      aria-pressed={valgt}
+      onClick={onKlikk}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Korthaien ────────────────────────────────────────────────────────────────
+
+const RETNINGER = [
+  { id: "under", navn: "Priset for lavt" },
+  { id: "over", navn: "Priset for høyt" },
+  { id: "begge", navn: "Begge retninger" },
+];
+
+function Egen({ onFeil }) {
+  const [data, setData] = useState(null);
+  const [laster, setLaster] = useState(true);
+  const [retning, setRetning] = useState("under");
+  const [minAvvik, setMinAvvik] = useState(0);
+  const [visRyddet, setVisRyddet] = useState(false);
+
+  useEffect(() => {
+    let avbrutt = false;
+    api
+      .kuppEgne({ retning, minAvvik, visRyddet })
+      .then((d) => !avbrutt && setData(d))
+      .catch(onFeil)
+      .finally(() => !avbrutt && setLaster(false));
+    return () => {
+      avbrutt = true;
+    };
+  }, [retning, minAvvik, visRyddet]);
+
+  if (laster && !data) return <p className="dempet">Henter dine egne priser…</p>;
+  if (!data) return null;
+
+  return (
+    <>
+      <p className="ingress" style={{ marginTop: 0 }}>
+        Dine egne priser målt mot det <code>salgspris.ts</code> mener kortet er verdt.
+        Tallene kommer fra samme nattjobb som den andre fanen — Korthaien ligger i
+        Kortjakts sammenligning, så prisen din følger med i hvert svar uten at noen
+        spør butikken din ekstra.
+      </p>
+
+      <div className="panel" style={{ marginBottom: 16, padding: "16px 18px" }}>
+        <div className="rad-flex" style={{ gap: 28, flexWrap: "wrap" }}>
+          <Tall navn="Priset for lavt" verdi={data.status.for_lavt} />
+          <Tall navn="Priset for høyt" verdi={data.status.for_hoyt} />
+          <Tall
+            navn="Sist oppdatert"
+            verdi={data.status.sist_sett ? dag(data.status.sist_sett) : "aldri"}
+          />
+        </div>
+      </div>
+
+      <div className="rad-flex" style={{ gap: 16, marginBottom: 12, alignItems: "center" }}>
+        <select value={retning} onChange={(e) => setRetning(e.target.value)} style={{ width: 170 }}>
+          {RETNINGER.map((r) => (
+            <option key={r.id} value={r.id}>{r.navn}</option>
+          ))}
+        </select>
+        <select
+          value={minAvvik}
+          onChange={(e) => setMinAvvik(Number(e.target.value))}
+          style={{ width: 150 }}
+        >
+          {[0, 30, 40, 50, 60].map((n) => (
+            <option key={n} value={n}>{n ? `Minst ${n} %` : "Alle avvik"}</option>
+          ))}
+        </select>
+        <label style={{ fontSize: 13 }}>
+          <input type="checkbox" checked={visRyddet} onChange={(e) => setVisRyddet(e.target.checked)} />{" "}
+          Vis rettede
+        </label>
+      </div>
+
+      {!data.rader.length ? (
+        <div className="panel">
+          <div className="tom">
+            <b>Ingen avvik i denne retningen</b>
+            {data.status.sist_sett
+              ? "Prisene dine ligger innenfor grensen på de kortene som er sjekket."
+              : "Nattjobben har ikke rukket innom noen kort ennå."}
+          </div>
+        </div>
+      ) : (
+        <table className="tabell" style={{ width: "100%" }}>
+          <thead>
+            <tr>
+              <th>Kort</th>
+              <th style={{ textAlign: "right", width: 110 }}>Din pris</th>
+              <th style={{ textAlign: "right", width: 110 }}>Burde vært</th>
+              <th style={{ textAlign: "right", width: 90 }}>Avvik</th>
+              <th style={{ textAlign: "right", width: 70 }}>Antall</th>
+              <th style={{ textAlign: "right", width: 90 }}>Ligget</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.rader.map((r) => (
+              <tr key={`${r.card_id}:${r.finish}:${r.url}`} style={r.borte_at ? { opacity: 0.45 } : null}>
+                <td>
+                  <div>
+                    {r.url ? (
+                      <a href={r.url} target="_blank" rel="noreferrer noopener">{r.name}</a>
+                    ) : (
+                      r.name
+                    )}
+                    {r.finish === "foil" && (
+                      <span className="merkelapp m-foil" style={{ marginLeft: 6 }}>Foil</span>
+                    )}
+                    {r.usikker && (
+                      <span
+                        className="merkelapp"
+                        style={{ marginLeft: 6 }}
+                        title="Kortjakt oppga ikke samlernummer for denne raden. Sjekk at det er samme utgave."
+                      >
+                        usikker utgave
+                      </span>
+                    )}
+                  </div>
+                  <div className="dempet" style={{ fontSize: 12 }}>
+                    {r.set_name || r.set_code}
+                    {r.collector_number ? ` #${r.collector_number}` : ""}
+                    {r.condition ? ` · ${r.condition}` : ""}
+                  </div>
+                </td>
+                <td style={{ textAlign: "right", fontWeight: 600 }}>{kroner(r.pris_ore)}</td>
+                <td style={{ textAlign: "right" }}>
+                  {kroner(r.salg_ore)}
+                  <div className="dempet" style={{ fontSize: 11 }}>marked {kroner(r.marked_ore)}</div>
+                </td>
+                <td style={{ textAlign: "right", fontWeight: 600 }}>
+                  {r.avvik_pct > 0 ? `${r.avvik_pct} % lavt` : `${-r.avvik_pct} % høyt`}
+                </td>
+                <td style={{ textAlign: "right" }} className="dempet">
+                  {r.antall ?? ""}
+                </td>
+                <td style={{ textAlign: "right" }} className="dempet">
+                  {r.borte_at ? (
+                    <span title={`Rettet ${dag(r.borte_at)}`}>rettet</span>
+                  ) : (
+                    <span title={`Først sett ${dag(r.forst_sett)}`}>{alder(r.forst_sett)}</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <p className="dempet" style={{ fontSize: 12, marginTop: 14 }}>
+        Mystore kan ikke skrives til herfra, så prisene må rettes i butikken. Raden
+        forsvinner av seg selv neste gang kortet er innom rotasjonen — det kan ta opptil
+        en uke.
+      </p>
+    </>
+  );
+}
+
+// ── andre butikker ───────────────────────────────────────────────────────────
+
+function Andre({ onFeil }) {
   const [data, setData] = useState(null);
   const [sammendrag, setSammendrag] = useState(null);
   const [laster, setLaster] = useState(true);
@@ -25,10 +215,7 @@ export default function Kupp({ onFeil }) {
 
   async function last() {
     try {
-      const [d, s] = await Promise.all([
-        api.kupp({ minAvvik, visBorte }),
-        api.kuppVakteliste(),
-      ]);
+      const [d, s] = await Promise.all([api.kupp({ minAvvik, visBorte }), api.kuppVakteliste()]);
       setData(d);
       setSammendrag(s);
     } catch (e) {
@@ -54,7 +241,7 @@ export default function Kupp({ onFeil }) {
     }
   }
 
-  if (laster) return <p className="dempet">Henter kupplista…</p>;
+  if (laster && !data) return <p className="dempet">Henter kupplista…</p>;
   if (!data) return null;
 
   const o = data.oppsett;
@@ -102,11 +289,18 @@ export default function Kupp({ onFeil }) {
             onLagre={(v) => lagre({ min_ore: Math.max(0, v) * 100 })}
           />
           <Felt
-            navn="Grense"
-            hjelp="Hvor langt under din salgspris tilbudet må ligge."
+            navn="Grense, andre"
+            hjelp="Hvor langt under din salgspris et annet tilbud må ligge."
             verdi={o.pct}
             etter="%"
             onLagre={(v) => lagre({ pct: Math.min(99, Math.max(1, v)) })}
+          />
+          <Felt
+            navn="Grense, egne"
+            hjelp="Hvor mye din egen pris må avvike, i begge retninger, for å havne i Korthaien-fanen."
+            verdi={o.egen_pct}
+            etter="%"
+            onLagre={(v) => lagre({ egen_pct: Math.min(99, Math.max(1, v)) })}
           />
           <Felt
             navn="Kort per kjøring"
@@ -159,7 +353,7 @@ export default function Kupp({ onFeil }) {
             onClick={async () => {
               try {
                 await api.jobb("kupp-prove");
-                alert("Prøven er startet — følg med i loggen. Ti kort, ti sekunder mellom hvert.");
+                alert("Prøven er startet. Ti kort, ti sekunder mellom hvert — se loggen for api-tjenesten i Render.");
               } catch (e) {
                 onFeil(e);
               }
@@ -251,9 +445,7 @@ export default function Kupp({ onFeil }) {
                 <td style={{ textAlign: "right", fontWeight: 600 }}>{kroner(t.pris_ore)}</td>
                 <td style={{ textAlign: "right" }}>
                   {kroner(t.salg_ore)}
-                  <div className="dempet" style={{ fontSize: 11 }}>
-                    marked {kroner(t.marked_ore)}
-                  </div>
+                  <div className="dempet" style={{ fontSize: 11 }}>marked {kroner(t.marked_ore)}</div>
                 </td>
                 <td style={{ textAlign: "right", fontWeight: 600 }}>{t.avvik_pct} %</td>
                 <td style={{ textAlign: "right" }} className="dempet">
@@ -284,8 +476,8 @@ function Tall({ navn, verdi }) {
 // Lagres når feltet forlates, ikke ved hvert tastetrykk — ellers ville «650»
 // utløst tre omregninger av hele vaktelista.
 function Felt({ navn, hjelp, verdi, etter, onLagre }) {
-  const [tekst, setTekst] = useState(String(verdi));
-  useEffect(() => setTekst(String(verdi)), [verdi]);
+  const [tekst, setTekst] = useState(String(verdi ?? ""));
+  useEffect(() => setTekst(String(verdi ?? "")), [verdi]);
 
   return (
     <label style={{ fontSize: 13 }} title={hjelp}>

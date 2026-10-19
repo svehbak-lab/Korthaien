@@ -26,7 +26,7 @@ import {
 import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER } from "./ratelimit.js";
 import { ordreStatistikk, lagerrapport } from "./statistikk.js";
-import { kuppliste, vaktelisteSammendrag, settKuppOppsett, kjørKuppjakt } from "./kupp.js";
+import { kuppliste, vaktelisteSammendrag, settKuppOppsett, kjørKuppjakt, egenliste } from "./kupp.js";
 
 const app = express();
 // Render setter X-Forwarded-For. Uten dette ser alle brukere ut som én
@@ -441,6 +441,16 @@ app.get("/api/admin/kupp", krevAdmin, fang(async (req: any, res: any) => {
   res.json(
     await kuppliste({
       visBorte: String(req.query.visBorte || "") === "1",
+      minAvvik: Number(req.query.minAvvik || 0),
+    })
+  );
+}));
+
+app.get("/api/admin/kupp/egne", krevAdmin, fang(async (req: any, res: any) => {
+  res.json(
+    await egenliste({
+      retning: String(req.query.retning || "begge") as any,
+      visRyddet: String(req.query.visRyddet || "") === "1",
       minAvvik: Number(req.query.minAvvik || 0),
     })
   );
