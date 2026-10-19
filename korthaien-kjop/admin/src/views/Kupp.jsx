@@ -15,37 +15,68 @@ function alder(iso) {
   return `${Math.floor(d / 7)} uker`;
 }
 
+// Visningsvalg huskes i nettleseren. De styrer ingenting i jobben — de
+// bestemmer bare hva du ser — men å måtte sette dem på nytt hver gang du
+// bytter side er irriterende, og fikk dem til å ligne innstillinger som
+// lagres. Private vinduer og blokkert lagring skal ikke velte siden, derfor
+// try/catch rundt begge veier.
+function useHusket(nøkkel, standard) {
+  const [verdi, setVerdi] = useState(() => {
+    try {
+      const lagret = localStorage.getItem(`kupp.${nøkkel}`);
+      return lagret === null ? standard : JSON.parse(lagret);
+    } catch {
+      return standard;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(`kupp.${nøkkel}`, JSON.stringify(verdi));
+    } catch {
+      /* ikke noe å gjøre, og ikke verdt å si fra om */
+    }
+  }, [nøkkel, verdi]);
+  return [verdi, setVerdi];
+}
+
 export default function Kupp({ onFeil }) {
-  const [fane, setFane] = useState("andre");
+  const [fane, setFane] = useHusket("fane", "egen");
 
   return (
     <>
       {/* To lister av samme slag, men med motsatt formål: den ene finner
-          andres feilpriser, den andre dine egne. De deler data og jobb, men
-          ingenting annet — derfor hver sin fane i stedet for et filter. */}
+          andres feilpriser, den andre dine egne. De har ulike kilder og ulik
+          oppdatering, så de holdes fra hverandre. */}
       <div className="rad-flex" style={{ gap: 8, marginBottom: 16 }}>
-        <Fane valgt={fane === "andre"} onKlikk={() => setFane("andre")}>
-          Andre butikker
-        </Fane>
-        <Fane valgt={fane === "egen"} onKlikk={() => setFane("egen")}>
-          Korthaien
-        </Fane>
+        <Fane valgt={fane === "egen"} onKlikk={() => setFane("egen")}>Korthaien</Fane>
+        <Fane valgt={fane === "andre"} onKlikk={() => setFane("andre")}>Andre butikker</Fane>
       </div>
 
-      {fane === "andre" ? <Andre onFeil={onFeil} /> : <Egen onFeil={onFeil} />}
+      {fane === "egen" ? <Egen onFeil={onFeil} /> : <Andre onFeil={onFeil} />}
     </>
   );
 }
 
 function Fane({ valgt, onKlikk, children }) {
   return (
-    <button
-      className={`knapp${valgt ? " primar" : ""}`}
-      aria-pressed={valgt}
-      onClick={onKlikk}
-    >
+    <button className={`knapp${valgt ? " primar" : ""}`} aria-pressed={valgt} onClick={onKlikk}>
       {children}
     </button>
+  );
+}
+
+// Slår et kall feil, skal ruta si fra. Før returnerte komponenten null, og
+// da forsvant hele siden uten et ord — det så ut som om funksjonen manglet.
+function Feil({ feil, onPrøvIgjen }) {
+  return (
+    <div className="varsel info">
+      <b>Klarte ikke hente lista.</b> {feil}
+      {onPrøvIgjen && (
+        <button className="knapp" style={{ marginLeft: 12 }} onClick={onPrøvIgjen}>
+          Prøv igjen
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -57,76 +88,92 @@ const RETNINGER = [
   { id: "begge", navn: "Begge retninger" },
 ];
 
+const BELØP = [0, 100, 250, 500, 1000, 2500];
+
 function Egen({ onFeil }) {
   const [data, setData] = useState(null);
+  const [feil, setFeil] = useState(null);
   const [laster, setLaster] = useState(true);
-  const [retning, setRetning] = useState("under");
-  const [minAvvik, setMinAvvik] = useState(0);
-  const [visRyddet, setVisRyddet] = useState(false);
+  const [retning, setRetning] = useHusket("retning", "under");
+  const [minKr, setMinKr] = useHusket("minKr", 0);
+  const [teller, setTeller] = useState(0);
 
   useEffect(() => {
     let avbrutt = false;
+    setLaster(true);
     api
-      .kuppEgne({ retning, minAvvik, visRyddet })
-      .then((d) => !avbrutt && setData(d))
-      .catch(onFeil)
+      .kuppEgne({ retning, minKr })
+      .then((d) => {
+        if (avbrutt) return;
+        setData(d);
+        setFeil(null);
+      })
+      .catch((e) => {
+        if (avbrutt) return;
+        setFeil(e?.message || String(e));
+        onFeil(e);
+      })
       .finally(() => !avbrutt && setLaster(false));
     return () => {
       avbrutt = true;
     };
-  }, [retning, minAvvik, visRyddet]);
+  }, [retning, minKr, teller]);
 
-  if (laster && !data) return <p className="dempet">Henter dine egne priser…</p>;
-  if (!data) return null;
+  if (feil) return <Feil feil={feil} onPrøvIgjen={() => setTeller((n) => n + 1)} />;
+  if (!data) return <p className="dempet">Henter dine egne priser…</p>;
 
   return (
     <>
       <p className="ingress" style={{ marginTop: 0 }}>
-        Dine egne priser målt mot det <code>salgspris.ts</code> mener kortet er verdt.
-        Tallene kommer fra samme nattjobb som den andre fanen — Korthaien ligger i
-        Kortjakts sammenligning, så prisen din følger med i hvert svar uten at noen
-        spør butikken din ekstra.
+        Dine egne priser fra Mystore, målt mot det kortet er verdt etter prismodellen din.
+        Hele katalogen, oppdatert av nattsynken — ikke bare kortene i kuppjaktens rotasjon.
       </p>
 
       <div className="panel" style={{ marginBottom: 16, padding: "16px 18px" }}>
         <div className="rad-flex" style={{ gap: 28, flexWrap: "wrap" }}>
           <Tall navn="Priset for lavt" verdi={data.status.for_lavt} />
           <Tall navn="Priset for høyt" verdi={data.status.for_hoyt} />
+          <Tall navn="Produkter med pris" verdi={data.status.med_pris.toLocaleString("nb-NO")} />
           <Tall
-            navn="Sist oppdatert"
-            verdi={data.status.sist_sett ? dag(data.status.sist_sett) : "aldri"}
+            navn="Sist synket"
+            verdi={data.status.sist_synket ? dag(data.status.sist_synket) : "aldri"}
           />
         </div>
       </div>
 
+      {!data.status.med_pris && (
+        <div className="varsel info" style={{ marginBottom: 16 }}>
+          <b>Ingen priser hentet ennå.</b> Prisene kommer inn med lagersynken. Kjør den fra
+          Innstillinger, eller vent til i natt.
+        </div>
+      )}
+
       <div className="rad-flex" style={{ gap: 16, marginBottom: 12, alignItems: "center" }}>
+        <span className="dempet" style={{ fontSize: 12 }}>Vis</span>
         <select value={retning} onChange={(e) => setRetning(e.target.value)} style={{ width: 170 }}>
           {RETNINGER.map((r) => (
             <option key={r.id} value={r.id}>{r.navn}</option>
           ))}
         </select>
         <select
-          value={minAvvik}
-          onChange={(e) => setMinAvvik(Number(e.target.value))}
-          style={{ width: 150 }}
+          value={minKr}
+          onChange={(e) => setMinKr(Number(e.target.value))}
+          style={{ width: 170 }}
         >
-          {[0, 30, 40, 50, 60].map((n) => (
-            <option key={n} value={n}>{n ? `Minst ${n} %` : "Alle avvik"}</option>
+          {BELØP.map((n) => (
+            <option key={n} value={n}>{n ? `Minst ${n} kr i avvik` : "Alle beløp"}</option>
           ))}
         </select>
-        <label style={{ fontSize: 13 }}>
-          <input type="checkbox" checked={visRyddet} onChange={(e) => setVisRyddet(e.target.checked)} />{" "}
-          Vis rettede
-        </label>
+        <span className="dempet" style={{ marginLeft: "auto", fontSize: 12 }}>
+          Grensen i prosent står under Innstillinger og er på {data.oppsett.egen_pct} %.
+        </span>
       </div>
 
       {!data.rader.length ? (
         <div className="panel">
           <div className="tom">
-            <b>Ingen avvik i denne retningen</b>
-            {data.status.sist_sett
-              ? "Prisene dine ligger innenfor grensen på de kortene som er sjekket."
-              : "Nattjobben har ikke rukket innom noen kort ennå."}
+            <b>Ingen avvik her</b>
+            Prisene dine ligger innenfor grensene på det som er synket.
           </div>
         </div>
       ) : (
@@ -134,40 +181,25 @@ function Egen({ onFeil }) {
           <thead>
             <tr>
               <th>Kort</th>
-              <th style={{ textAlign: "right", width: 110 }}>Din pris</th>
+              <th style={{ textAlign: "right", width: 100 }}>Din pris</th>
               <th style={{ textAlign: "right", width: 110 }}>Burde vært</th>
-              <th style={{ textAlign: "right", width: 90 }}>Avvik</th>
+              <th style={{ textAlign: "right", width: 110 }}>Avvik</th>
               <th style={{ textAlign: "right", width: 70 }}>Antall</th>
-              <th style={{ textAlign: "right", width: 90 }}>Ligget</th>
             </tr>
           </thead>
           <tbody>
             {data.rader.map((r) => (
-              <tr key={`${r.card_id}:${r.finish}:${r.url}`} style={r.borte_at ? { opacity: 0.45 } : null}>
+              <tr key={`${r.card_id}:${r.finish}`}>
                 <td>
                   <div>
-                    {r.url ? (
-                      <a href={r.url} target="_blank" rel="noreferrer noopener">{r.name}</a>
-                    ) : (
-                      r.name
-                    )}
+                    {r.name}
                     {r.finish === "foil" && (
                       <span className="merkelapp m-foil" style={{ marginLeft: 6 }}>Foil</span>
-                    )}
-                    {r.usikker && (
-                      <span
-                        className="merkelapp"
-                        style={{ marginLeft: 6 }}
-                        title="Kortjakt oppga ikke samlernummer for denne raden. Sjekk at det er samme utgave."
-                      >
-                        usikker utgave
-                      </span>
                     )}
                   </div>
                   <div className="dempet" style={{ fontSize: 12 }}>
                     {r.set_name || r.set_code}
                     {r.collector_number ? ` #${r.collector_number}` : ""}
-                    {r.condition ? ` · ${r.condition}` : ""}
                   </div>
                 </td>
                 <td style={{ textAlign: "right", fontWeight: 600 }}>{kroner(r.pris_ore)}</td>
@@ -175,19 +207,16 @@ function Egen({ onFeil }) {
                   {kroner(r.salg_ore)}
                   <div className="dempet" style={{ fontSize: 11 }}>marked {kroner(r.marked_ore)}</div>
                 </td>
+                {/* Beløpet uten fortegn. Undertittelen sier hvilken vei det
+                    går, og et minustegn i tillegg leses like gjerne som at
+                    avviket er negativt. */}
                 <td style={{ textAlign: "right", fontWeight: 600 }}>
-                  {r.avvik_pct > 0 ? `${r.avvik_pct} % lavt` : `${-r.avvik_pct} % høyt`}
+                  {kroner(Math.abs(r.avvik_ore))}
+                  <div className="dempet" style={{ fontSize: 11, fontWeight: 400 }}>
+                    {r.avvik_pct > 0 ? `${r.avvik_pct} % for lavt` : `${-r.avvik_pct} % for høyt`}
+                  </div>
                 </td>
-                <td style={{ textAlign: "right" }} className="dempet">
-                  {r.antall ?? ""}
-                </td>
-                <td style={{ textAlign: "right" }} className="dempet">
-                  {r.borte_at ? (
-                    <span title={`Rettet ${dag(r.borte_at)}`}>rettet</span>
-                  ) : (
-                    <span title={`Først sett ${dag(r.forst_sett)}`}>{alder(r.forst_sett)}</span>
-                  )}
-                </td>
+                <td style={{ textAlign: "right" }} className="dempet">{r.antall}</td>
               </tr>
             ))}
           </tbody>
@@ -195,9 +224,8 @@ function Egen({ onFeil }) {
       )}
 
       <p className="dempet" style={{ fontSize: 12, marginTop: 14 }}>
-        Mystore kan ikke skrives til herfra, så prisene må rettes i butikken. Raden
-        forsvinner av seg selv neste gang kortet er innom rotasjonen — det kan ta opptil
-        en uke.
+        Avviket er per kort, ikke ganget med antall. Mystore kan ikke skrives til herfra, så
+        prisene rettes i butikken — raden forsvinner etter neste lagersynk.
       </p>
     </>
   );
@@ -208,9 +236,9 @@ function Egen({ onFeil }) {
 function Andre({ onFeil }) {
   const [data, setData] = useState(null);
   const [sammendrag, setSammendrag] = useState(null);
-  const [laster, setLaster] = useState(true);
-  const [minAvvik, setMinAvvik] = useState(0);
-  const [visBorte, setVisBorte] = useState(false);
+  const [feil, setFeil] = useState(null);
+  const [minAvvik, setMinAvvik] = useHusket("andreMinAvvik", 0);
+  const [visBorte, setVisBorte] = useHusket("andreVisBorte", false);
   const [lagrer, setLagrer] = useState(false);
 
   async function last() {
@@ -218,10 +246,10 @@ function Andre({ onFeil }) {
       const [d, s] = await Promise.all([api.kupp({ minAvvik, visBorte }), api.kuppVakteliste()]);
       setData(d);
       setSammendrag(s);
+      setFeil(null);
     } catch (e) {
+      setFeil(e?.message || String(e));
       onFeil(e);
-    } finally {
-      setLaster(false);
     }
   }
 
@@ -241,8 +269,8 @@ function Andre({ onFeil }) {
     }
   }
 
-  if (laster && !data) return <p className="dempet">Henter kupplista…</p>;
-  if (!data) return null;
+  if (feil) return <Feil feil={feil} onPrøvIgjen={last} />;
+  if (!data) return <p className="dempet">Henter kupplista…</p>;
 
   const o = data.oppsett;
   const treff = data.treff;
@@ -252,8 +280,8 @@ function Andre({ onFeil }) {
       <p className="ingress" style={{ marginTop: 0 }}>
         Kort andre norske butikker selger for mindre enn du selger dem for selv. Prisene
         hentes fra MTG Kortjakt, som spør butikkene live — ett oppslag her blir én
-        forespørsel til hver butikk. Derfor går jobben i rotasjon, ikke som en
-        gjennomgang av hele katalogen.
+        forespørsel til hver butikk. Derfor går jobben i rotasjon, ikke som en gjennomgang
+        av hele katalogen.
       </p>
 
       <div className="panel" style={{ marginBottom: 16, padding: "16px 18px" }}>
@@ -271,19 +299,19 @@ function Andre({ onFeil }) {
 
       {!o.aktiv && (
         <div className="varsel info" style={{ marginBottom: 16 }}>
-          <b>Kuppjakten er av.</b> Kortjakt ber om at endepunktet ikke kalles i løkke, og
-          tjenesten drives gratis av én person. Avklar med dem før du slår den på —
-          e-post står på <code>mtgkortjakt.no/vilkar</code>. Du kan kjøre en prøve på ti
-          kort uten å slå den på.
+          <b>Kuppjakten er av.</b> Kortjakt krever nå innlogging med en gratis konto, og
+          jobben har ingen. Den trenger et token før den kan kjøre igjen.
         </div>
       )}
 
       <details className="panel" style={{ marginBottom: 16, padding: "14px 18px" }}>
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>Innstillinger</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+          Innstillinger <span className="dempet" style={{ fontWeight: 400, fontSize: 12 }}>— styrer jobben, lagres</span>
+        </summary>
         <div className="rad-flex" style={{ gap: 18, flexWrap: "wrap", marginTop: 14 }}>
           <Felt
             navn="Minste salgspris"
-            hjelp="Kort du selv tar mindre enn dette for, følges ikke."
+            hjelp="Kort du selv tar mindre enn dette for, følges ikke av kuppjakten."
             verdi={Math.round(o.min_ore / 100)}
             etter="kr"
             onLagre={(v) => lagre({ min_ore: Math.max(0, v) * 100 })}
@@ -353,7 +381,7 @@ function Andre({ onFeil }) {
             onClick={async () => {
               try {
                 await api.jobb("kupp-prove");
-                alert("Prøven er startet. Ti kort, ti sekunder mellom hvert — se loggen for api-tjenesten i Render.");
+                alert("Prøven er startet. Ti kort — se loggen for api-tjenesten i Render.");
               } catch (e) {
                 onFeil(e);
               }
@@ -365,6 +393,7 @@ function Andre({ onFeil }) {
       </details>
 
       <div className="rad-flex" style={{ gap: 16, marginBottom: 12, alignItems: "center" }}>
+        <span className="dempet" style={{ fontSize: 12 }}>Vis</span>
         <select
           value={minAvvik}
           onChange={(e) => setMinAvvik(Number(e.target.value))}
@@ -379,18 +408,18 @@ function Andre({ onFeil }) {
           Vis solgte
         </label>
         <span className="dempet" style={{ marginLeft: "auto", fontSize: 12 }}>
-          Frakt er ikke trukket fra. Den er den samme om du kjøper ett kort eller tretti
-          fra samme butikk.
+          Frakt er ikke trukket fra. Den er den samme om du kjøper ett kort eller tretti fra
+          samme butikk.
         </span>
       </div>
 
       {!treff.length ? (
         <div className="panel">
           <div className="tom">
-            <b>Ingen treff ennå</b>
+            <b>Ingen treff</b>
             {data.status.sist_kjørt
-              ? "Jobben har gått, men ingen butikk ligger under grensen din. Prøv en lavere prosent."
-              : "Jobben har ikke kjørt. Kjør «Prøv ti kort» for å se at den virker."}
+              ? "Ingen butikk ligger under grensen din på det som er sjekket."
+              : "Jobben har ikke kjørt."}
           </div>
         </div>
       ) : (

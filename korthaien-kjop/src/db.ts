@@ -133,6 +133,10 @@ async function leggTilNyeKolonner(): Promise<void> {
   if (lager.size && !lager.has("category")) {
     await db().execute("ALTER TABLE mystore_stock ADD COLUMN category TEXT");
   }
+  // Din egen utsalgspris, i øre. Står tom til neste lagersynk har kjørt.
+  if (lager.size && !lager.has("pris_ore")) {
+    await db().execute("ALTER TABLE mystore_stock ADD COLUMN pris_ore INTEGER");
+  }
 
   // Beløp gikk fra hele kroner til øre. De gamle kolonnene blir stående —
   // de er NOT NULL, og å bygge om tabellen for å bli kvitt dem er ikke verdt

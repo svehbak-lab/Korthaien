@@ -449,9 +449,8 @@ app.get("/api/admin/kupp", krevAdmin, fang(async (req: any, res: any) => {
 app.get("/api/admin/kupp/egne", krevAdmin, fang(async (req: any, res: any) => {
   res.json(
     await egenliste({
-      retning: String(req.query.retning || "begge") as any,
-      visRyddet: String(req.query.visRyddet || "") === "1",
-      minAvvik: Number(req.query.minAvvik || 0),
+      retning: String(req.query.retning || "under") as any,
+      minKr: Number(req.query.minKr || 0),
     })
   );
 }));

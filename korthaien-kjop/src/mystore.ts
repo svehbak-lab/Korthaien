@@ -152,7 +152,15 @@ function knyttTilSett(
 }
 
 // ── produkter i én kategori ──────────────────────────────────────────────────
-export type Produkt = { id: string; navn: string; lager: number; sku: string };
+export type Produkt = {
+  id: string;
+  navn: string;
+  lager: number;
+  sku: string;
+  // price fra Mystore er prisen kunden ser, med moms, som desimaltall i
+  // kroner: «10.0000». Alt annet i systemet regnes i øre.
+  pris_ore: number | null;
+};
 
 export async function hentProdukter(katId: string, maksSider = 40): Promise<Produkt[]> {
   const ut: Produkt[] = [];
@@ -169,6 +177,7 @@ export async function hentProdukter(katId: string, maksSider = 40): Promise<Prod
         // trukket ned av reserverte ordrer som ennå ikke er plukket.
         lager: Number(a.quantity_physical ?? a.quantity ?? 0) || 0,
         sku: String(a.sku || ""),
+        pris_ore: a.price == null ? null : Math.round(Number(a.price) * 100) || null,
       });
     }
     if (side === 1) sider = sisteSide(d.links);
@@ -360,13 +369,14 @@ export async function synkMystore(
         args: [p.id, String(treff.rows[0].id), foil ? "foil" : "nonfoil"],
       });
       stockRader.push({
-        sql: `INSERT INTO mystore_stock (card_id, finish, qty, product_id, product_name, category, synced_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?)
+        sql: `INSERT INTO mystore_stock (card_id, finish, qty, product_id, product_name, category, pris_ore, synced_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(card_id, finish) DO UPDATE SET
                 qty = excluded.qty, product_id = excluded.product_id,
                 product_name = excluded.product_name, category = excluded.category,
+                pris_ore = excluded.pris_ore,
                 synced_at = excluded.synced_at`,
-        args: [String(treff.rows[0].id), foil ? "foil" : "nonfoil", p.lager, p.id, p.navn, kat.navn, nå],
+        args: [String(treff.rows[0].id), foil ? "foil" : "nonfoil", p.lager, p.id, p.navn, kat.navn, p.pris_ore, nå],
       });
     }
     if ((i + 1) % 25 === 0) logg(`  ${i + 1}/${skalHentes.length} kategorier — ${koblet} koblet`);

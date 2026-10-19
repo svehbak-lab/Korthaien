@@ -338,6 +338,7 @@ export async function kjørKuppjakt(
   // Fem tomme svar på rad betyr at Kortjakt er tom for budsjett. Da er det
   // ingen vits i å mase videre — vi tar resten neste gang.
   let påRad = 0;
+  let feilPåRad = 0;
 
   for (const [i, kort] of bolk.entries()) {
     if (i) await pause(o.pause_ms);
@@ -363,12 +364,7 @@ export async function kjørKuppjakt(
       await markerBorte(kort, funnet.map((t) => t.tilbud.url || ""), nå);
       treff += funnet.length;
 
-      // Samme svar inneholder Korthaiens egen pris på kortet. Den ble kastet
-      // før, fordi du ikke er din egen konkurrent — men den sier om du har
-      // priset kortet feil, og den koster ingenting ekstra å plukke opp.
-      const egne = finnEgneAvvik(svar, kort, o.egen_pct);
-      await lagreEgne(egne, nå);
-      await markerEgneRyddet(kort, egne.map((e) => e.tilbud.url || ""), nå);
+      // Egne priser leses fra Mystore, ikke herfra. Se egenliste() nederst.
 
       if (funnet.length) {
         const b = funnet[0];
@@ -377,11 +373,20 @@ export async function kjørKuppjakt(
             `${(b.tilbud.pris_ore / 100).toFixed(0)} kr hos ${b.shop_name} — ${b.avvik_pct} % under.`
         );
       }
+      feilPåRad = 0;
       await merkSjekket(kort, svar.usjekkede.length ? "delvis" : "ok", nå);
     } catch (e: any) {
       hoppet++;
+      feilPåRad++;
       logg(`  ${kort.name} (${kort.set_code}): ${e?.message || e}`);
       await merkSjekket(kort, "feil", new Date().toISOString());
+      // Sikringen over teller bare svar som kom gjennom. Et kastet kall
+      // havner her, og uten dette fortsatte jobben i tusen forsøk — tre timer
+      // på å få 401 igjen og igjen, hver natt.
+      if (feilPåRad >= 10) {
+        logg(`  Ti feil på rad. Stopper — noe er galt med forbindelsen til Kortjakt.`);
+        break;
+      }
     }
   }
 
@@ -474,138 +479,129 @@ export async function vaktelisteSammendrag() {
 }
 
 // ── egne priser ──────────────────────────────────────────────────────────────
-// Korthaien ligger i Kortjakts sammenligning, så hvert eneste søk vi allerede
-// gjør inneholder vår egen pris på kortet. Den ble kastet, fordi du ikke er
-// din egen konkurrent. Men den forteller noe annet og like nyttig: om du har
-// priset kortet feil.
+// Dine egne priser kommer fra Mystore, ikke fra Kortjakt.
 //
-// Derfor koster denne lista ingenting ekstra — ingen nye kall, ingen ny nøkkel,
-// ingen ny jobb. Den plukker opp en rad vi uansett fikk tilsendt.
+// Første utgave leste dem ut av Kortjakt-svarene, fordi Korthaien ligger i
+// sammenligningen deres og prisen fulgte med gratis. Det var riktig så lenge
+// Kortjakt var åpen. Da den fikk innlogging, falt begrunnelsen bort — og da
+// er det uansett bedre å lese egne tall fra egen kilde: hele katalogen i
+// stedet for de 9 328 i rotasjon, hver natt i stedet for hver uke, og ingen
+// avhengighet til en tjeneste som kan stenge igjen.
 //
-// Avviket er fortegnsbærende: positivt betyr at du tar mindre enn kortet er
-// verdt etter din egen prismodell, negativt at du tar mer. Det første koster
-// deg penger med én gang noen oppdager det. Det andre koster deg bare tid.
+// price fra Mystore er prisen kunden ser, med moms. Den sammenlignes mot det
+// salgspris.ts mener kortet er verdt i Near Mint.
 
-export type EgenAvvik = {
-  kort: VaktKort;
-  tilbud: Tilbud;
+export type EgenRad = {
+  card_id: string;
+  finish: string;
+  name: string;
+  set_code: string;
+  set_name: string | null;
+  collector_number: string | null;
+  rarity: string | null;
+  product_name: string | null;
+  antall: number;
+  pris_ore: number;
+  salg_ore: number;
+  marked_ore: number;
+  // Positivt = du tar mindre enn kortet er verdt. Negativt = du tar mer.
+  avvik_ore: number;
   avvik_pct: number;
-  usikker: boolean;
 };
 
-export function finnEgneAvvik(svar: SøkSvar, kort: VaktKort, pct: number): EgenAvvik[] {
-  const b = svar.butikker.find((x) => x.shop === EGEN_BUTIKK);
-  // Ble ikke butikken spurt, vet vi ingenting — det er noe annet enn at
-  // prisen er riktig, og skal ikke rydde bort gamle funn.
-  if (!b || !b.spurt || !kort.salg_ore) return [];
-
-  const ut: EgenAvvik[] = [];
-  for (const t of b.tilbud) {
-    if (!passerTrykk(t, kort)) continue;
-    const avvik = Math.round((1 - t.pris_ore / kort.salg_ore) * 100);
-    if (Math.abs(avvik) < pct) continue;
-    ut.push({ kort, tilbud: t, avvik_pct: avvik, usikker: erUsikkert(t, kort) });
-  }
-  // Størst avvik først, uansett retning.
-  return ut.sort((a, b2) => Math.abs(b2.avvik_pct) - Math.abs(a.avvik_pct));
-}
-
-export async function lagreEgne(rader: EgenAvvik[], nå = new Date().toISOString()): Promise<void> {
-  if (!rader.length) return;
-  const sql = `INSERT INTO kupp_egen
-      (card_id, finish, url, tittel, pris_ore, salg_ore, marked_ore, condition,
-       collector_number, antall, avvik_pct, usikker, forst_sett, sist_sett, borte_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
-    ON CONFLICT(card_id, finish, url) DO UPDATE SET
-      tittel = excluded.tittel, pris_ore = excluded.pris_ore,
-      salg_ore = excluded.salg_ore, marked_ore = excluded.marked_ore,
-      condition = excluded.condition, antall = excluded.antall,
-      avvik_pct = excluded.avvik_pct, usikker = excluded.usikker,
-      sist_sett = excluded.sist_sett, borte_at = NULL`;
-  const batch = rader.map((r) => ({
-    sql,
-    args: [
-      r.kort.card_id, r.kort.finish, r.tilbud.url || "", r.tilbud.tittel,
-      r.tilbud.pris_ore, r.kort.salg_ore, r.kort.marked_ore, r.tilbud.condition,
-      r.tilbud.collector_number, r.tilbud.antall, r.avvik_pct, r.usikker ? 1 : 0, nå, nå,
-    ],
-  }));
-  for (let i = 0; i < batch.length; i += 200) await db().batch(batch.slice(i, i + 200), "write");
-}
-
-// En rad som ikke lenger spriker markeres som ryddet i stedet for å slettes.
-// Da ser du at du faktisk rettet den, og den forsvinner ikke sporløst.
-export async function markerEgneRyddet(
-  kort: VaktKort,
-  beholdte: string[],
-  nå: string
-): Promise<void> {
-  const utenom = beholdte.length ? ` AND url NOT IN (${beholdte.map(() => "?").join(",")})` : "";
-  await db().execute({
-    sql: `UPDATE kupp_egen SET borte_at = ?
-           WHERE card_id = ? AND finish = ? AND borte_at IS NULL${utenom}`,
-    args: [nå, kort.card_id, kort.finish, ...beholdte],
-  });
-}
-
 export async function egenliste(
-  opts: { retning?: "under" | "over" | "begge"; visRyddet?: boolean; minAvvik?: number } = {}
+  opts: { retning?: "under" | "over" | "begge"; minKr?: number; minPct?: number } = {}
 ) {
-  const retning = opts.retning || "begge";
-  const min = Math.max(0, opts.minAvvik ?? 0);
-  // Fortegnet bærer retningen, så filteret er to tall og ikke en CASE.
-  const fra = retning === "over" ? -100000 : min;
-  const til = retning === "under" ? 100000 : -min;
+  const o = await hentKuppOppsett();
+  const salg = await hentSalgsOppsett();
+  const retning = opts.retning || "under";
+  const minØre = Math.max(0, Math.round((opts.minKr ?? 0) * 100));
+  const minPct = opts.minPct ?? o.egen_pct;
 
-  const r = await db().execute({
-    sql: `SELECT e.*, c.name, c.set_code, c.rarity, c.image_uri,
-                 COALESCE(s.visningsnavn, s.name) AS set_name
-            FROM kupp_egen e
-            JOIN cards c ON c.id = e.card_id
-            LEFT JOIN sets s ON s.code = c.set_code
-           WHERE (? OR e.borte_at IS NULL)
-             AND (e.avvik_pct >= ? OR e.avvik_pct <= ?)
-             AND ABS(e.avvik_pct) >= ?
-           ORDER BY e.borte_at IS NOT NULL, ABS(e.avvik_pct) DESC, e.sist_sett DESC
-           LIMIT 500`,
-    args: [opts.visRyddet ? 1 : 0, fra, til, min],
-  });
+  // Bare det som faktisk ligger i hylla med en pris. Et utsolgt produkt kan
+  // ingen kjøpe billig, og et uten pris er ikke til salgs.
+  const r = await db().execute(`
+    SELECT m.card_id, m.finish, m.qty, m.pris_ore, m.product_name,
+           c.name, c.set_code, c.collector_number, c.rarity, c.usd, c.usd_foil,
+           COALESCE(s.visningsnavn, s.name) AS set_name
+      FROM mystore_stock m
+      JOIN cards c ON c.id = m.card_id
+      LEFT JOIN sets s ON s.code = c.set_code
+     WHERE m.qty > 0 AND m.pris_ore IS NOT NULL AND m.pris_ore > 0
+  `);
 
-  const t = await db().execute(
-    `SELECT SUM(CASE WHEN avvik_pct > 0 THEN 1 ELSE 0 END) AS under,
-            SUM(CASE WHEN avvik_pct < 0 THEN 1 ELSE 0 END) AS over,
-            MAX(sist_sett) AS siste
-       FROM kupp_egen WHERE borte_at IS NULL`
-  );
-  const s = (t.rows[0] || {}) as any;
+  const rader = r.rows as any[];
+  const manuell = await hentManuellSalgIBolker([...new Set(rader.map((x) => String(x.card_id)))]);
+  const manuellUsd = await manuelleDollarpriser();
 
-  return {
-    oppsett: await hentKuppOppsett(),
-    status: {
-      for_lavt: Number(s.under || 0),
-      for_hoyt: Number(s.over || 0),
-      sist_sett: s.siste ? String(s.siste) : null,
-    },
-    rader: (r.rows as any[]).map((x) => ({
+  const ut: EgenRad[] = [];
+  let under = 0;
+  let over = 0;
+
+  for (const x of rader) {
+    const finish = String(x.finish);
+    const nøkkel = `${x.card_id}:${finish}`;
+    const salgOre = salgsprisØre(
+      x,
+      finish,
+      "NM" as any,
+      salg,
+      manuell.get(nøkkel) ?? null,
+      manuellUsd.get(nøkkel) ?? null
+    );
+    // Uten salgspris finnes det ingen fasit å måle mot. Det er ikke det samme
+    // som at prisen er riktig, så kortet holdes utenfor i stedet for å telle
+    // som et avvik på hundre prosent.
+    if (!salgOre || salgOre <= 0) continue;
+
+    const pris = Number(x.pris_ore);
+    const avvikØre = salgOre - pris;
+    const avvikPct = Math.round((avvikØre / salgOre) * 100);
+    if (Math.abs(avvikPct) < minPct) continue;
+    if (Math.abs(avvikØre) < minØre) continue;
+
+    if (avvikØre > 0) under++;
+    else over++;
+    if (retning === "under" && avvikØre <= 0) continue;
+    if (retning === "over" && avvikØre >= 0) continue;
+
+    const usd = finish === "foil" ? x.usd_foil : x.usd;
+    ut.push({
       card_id: String(x.card_id),
-      finish: String(x.finish),
+      finish,
       name: String(x.name),
       set_code: String(x.set_code),
       set_name: x.set_name ? String(x.set_name) : null,
+      collector_number: x.collector_number == null ? null : String(x.collector_number),
       rarity: x.rarity ? String(x.rarity) : null,
-      tittel: x.tittel ? String(x.tittel) : null,
-      pris_ore: Number(x.pris_ore),
-      salg_ore: Number(x.salg_ore),
-      marked_ore: Number(x.marked_ore || 0),
-      condition: x.condition ? String(x.condition) : null,
-      collector_number: x.collector_number ? String(x.collector_number) : null,
-      antall: x.antall == null ? null : Number(x.antall),
-      avvik_pct: Number(x.avvik_pct),
-      usikker: !!Number(x.usikker),
-      url: x.url ? String(x.url) : null,
-      forst_sett: String(x.forst_sett),
-      sist_sett: String(x.sist_sett),
-      borte_at: x.borte_at ? String(x.borte_at) : null,
-    })),
+      product_name: x.product_name ? String(x.product_name) : null,
+      antall: Number(x.qty),
+      pris_ore: pris,
+      salg_ore: salgOre,
+      marked_ore: Math.round(Number(usd || 0) * salg.usd_nok * 100),
+      avvik_ore: avvikØre,
+      avvik_pct: avvikPct,
+    });
+  }
+
+  // Kroner, ikke prosent. Et kort priset 87 % for lavt der differansen er
+  // seksti kroner, haster mindre enn ett priset 30 % for lavt med 2 400 i
+  // differanse — og prosenten setter det første øverst.
+  ut.sort((a, b) => Math.abs(b.avvik_ore) - Math.abs(a.avvik_ore));
+
+  const synk = await db().execute(
+    "SELECT MAX(synced_at) AS siste, COUNT(*) AS n FROM mystore_stock WHERE pris_ore IS NOT NULL"
+  );
+  const s = (synk.rows[0] || {}) as any;
+
+  return {
+    oppsett: o,
+    status: {
+      for_lavt: under,
+      for_hoyt: over,
+      med_pris: Number(s.n || 0),
+      sist_synket: s.siste ? String(s.siste) : null,
+    },
+    rader: ut.slice(0, 500),
   };
 }
