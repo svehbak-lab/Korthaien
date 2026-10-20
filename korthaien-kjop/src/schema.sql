@@ -370,3 +370,15 @@ CREATE TABLE IF NOT EXISTS kupp_egen (
   PRIMARY KEY (card_id, finish, url));
 
 CREATE INDEX IF NOT EXISTS idx_kupp_egen ON kupp_egen (borte_at, avvik_pct);
+
+-- Daglig øyeblikksbilde av lageret, skrevet av lagersynken. Grunnlaget for
+-- utviklingskurven i Lagerrapport. Beløp i øre, som alt annet.
+CREATE TABLE IF NOT EXISTS lager_historikk (
+  dato TEXT PRIMARY KEY,
+  antall INTEGER NOT NULL DEFAULT 0,
+  antall_foil INTEGER NOT NULL DEFAULT 0,
+  verdi_ore INTEGER NOT NULL DEFAULT 0,
+  verdi_foil_ore INTEGER NOT NULL DEFAULT 0,
+  butikk_kort INTEGER NOT NULL DEFAULT 0,
+  butikk_ore INTEGER NOT NULL DEFAULT 0,
+  malt_at TEXT);

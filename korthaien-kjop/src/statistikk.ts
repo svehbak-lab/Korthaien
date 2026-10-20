@@ -338,3 +338,97 @@ async function leggTilGrunnsett(sett: Map<string, LagerSett>, opp: any) {
     s2.grunnsett = g;
   }
 }
+
+// ── lagerhistorikk ───────────────────────────────────────────────────────────
+// Lagerrapporten viser hva du har nå. Den sier ingenting om retningen, og
+// retningen er det som avgjør om beholdningen vokser raskere enn du selger.
+// Derfor én måling per dag, skrevet av lagersynken.
+//
+// Daglig og ikke månedlig: du kan alltid regne opp fra dager til måneder,
+// aldri motsatt vei. Grafen grupperer selv etter hvor lang periode du ser på.
+//
+// Tallene hentes fra lagerrapport() og ikke fra egne spørringer. Ble de
+// regnet ut to steder, ville grafen og rapporten før eller siden vist to
+// ulike summer, og da er ingen av dem til å stole på.
+//
+// Begge verdiene lagres: modellens og din egen. De spriker med rundt 15 %,
+// og det er utviklingen i forskjellen mellom dem som sier om prismodellen
+// henger med.
+
+export type Lagermåling = {
+  dato: string;
+  antall: number;
+  antall_foil: number;
+  verdi_ore: number;
+  verdi_foil_ore: number;
+  butikk_kort: number;
+  butikk_ore: number;
+};
+
+// Datoen må være norsk. Serveren står i UTC, og en synk som kjører 02:30
+// norsk tid ville ellers blitt bokført på dagen før.
+function osloDag(d = new Date()): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(d);
+}
+
+export async function lagreLagermåling(dato = osloDag()): Promise<Lagermåling> {
+  const rapport = await lagerrapport();
+
+  const m: Lagermåling = {
+    dato,
+    antall: 0,
+    antall_foil: 0,
+    verdi_ore: 0,
+    verdi_foil_ore: 0,
+    butikk_kort: rapport.butikk?.kort ?? 0,
+    butikk_ore: rapport.butikk?.verdi_ore ?? 0,
+  };
+  for (const s of rapport.sett) {
+    for (const r of s.rader) {
+      const foil = r.finish === "foil";
+      m[foil ? "antall_foil" : "antall"] += r.antall;
+      m[foil ? "verdi_foil_ore" : "verdi_ore"] += r.verdi_ore;
+    }
+  }
+
+  // Kjører synken to ganger samme dag, skal den siste gjelde — ikke bli en
+  // ekstra rad som gjør dagen til to punkter i kurven.
+  await db().execute({
+    sql: `INSERT INTO lager_historikk
+            (dato, antall, antall_foil, verdi_ore, verdi_foil_ore, butikk_kort, butikk_ore, malt_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(dato) DO UPDATE SET
+            antall = excluded.antall,
+            antall_foil = excluded.antall_foil,
+            verdi_ore = excluded.verdi_ore,
+            verdi_foil_ore = excluded.verdi_foil_ore,
+            butikk_kort = excluded.butikk_kort,
+            butikk_ore = excluded.butikk_ore,
+            malt_at = excluded.malt_at`,
+    args: [
+      m.dato, m.antall, m.antall_foil, m.verdi_ore, m.verdi_foil_ore,
+      m.butikk_kort, m.butikk_ore, new Date().toISOString(),
+    ],
+  });
+  return m;
+}
+
+// Hele serien. Én rad per dag er lite i mange år, og filtreringen på periode
+// gjøres i visningen — da kan du bytte periode og mål uten et nytt kall.
+export async function lagerhistorikk(): Promise<{ rader: Lagermåling[] }> {
+  const r = await db().execute(
+    `SELECT dato, antall, antall_foil, verdi_ore, verdi_foil_ore, butikk_kort, butikk_ore
+       FROM lager_historikk ORDER BY dato`
+  );
+  return {
+    rader: (r.rows as any[]).map((x) => ({
+      dato: String(x.dato),
+      antall: Number(x.antall),
+      antall_foil: Number(x.antall_foil),
+      verdi_ore: Number(x.verdi_ore),
+      verdi_foil_ore: Number(x.verdi_foil_ore),
+      butikk_kort: Number(x.butikk_kort || 0),
+      butikk_ore: Number(x.butikk_ore || 0),
+    })),
+  };
+}

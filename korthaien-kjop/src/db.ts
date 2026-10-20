@@ -297,6 +297,20 @@ async function leggTilNyeKolonner(): Promise<void> {
     "CREATE INDEX IF NOT EXISTS idx_kupp_avvik ON kupp_treff (borte_at, avvik_pct DESC)"
   );
 
+  // Ett øyeblikksbilde av lageret per dag. Egen tabell og ikke kolonner,
+  // fordi dette er den eneste serien i basen som skal vokse for alltid.
+  // Datoen er nøkkel: kjører synken to ganger samme dag, skal den siste
+  // gjelde og ikke bli et ekstra punkt i kurven.
+  await db().execute(`CREATE TABLE IF NOT EXISTS lager_historikk (
+    dato TEXT PRIMARY KEY,
+    antall INTEGER NOT NULL DEFAULT 0,
+    antall_foil INTEGER NOT NULL DEFAULT 0,
+    verdi_ore INTEGER NOT NULL DEFAULT 0,
+    verdi_foil_ore INTEGER NOT NULL DEFAULT 0,
+    butikk_kort INTEGER NOT NULL DEFAULT 0,
+    butikk_ore INTEGER NOT NULL DEFAULT 0,
+    malt_at TEXT)`);
+
   const um = await kolonner("mystore_unmatched");
   if (um.size && !um.has("category")) {
     await db().execute("ALTER TABLE mystore_unmatched ADD COLUMN category TEXT");

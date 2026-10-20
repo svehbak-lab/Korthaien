@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api, kroner } from "../api.js";
+import LagerGraf from "./LagerGraf.jsx";
 
 const RARITET_NAVN = {
   mythic: "Mythic",
@@ -124,6 +125,9 @@ export default function Lagerrapport({ onFeil }) {
           </div>
         )}
       </div>
+
+      {/* Under totalen, over settlista: først hva du har, så hvor det går. */}
+      <LagerGraf onFeil={onFeil} />
 
       {!vanlig && !foil && <div className="varsel info">Huk av vanlig eller foil for å se noe.</div>}
 

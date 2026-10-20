@@ -25,7 +25,7 @@ import {
 } from "./auth.js";
 import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER } from "./ratelimit.js";
-import { ordreStatistikk, lagerrapport } from "./statistikk.js";
+import { ordreStatistikk, lagerrapport, lagerhistorikk, lagreLagermåling } from "./statistikk.js";
 import { kuppliste, vaktelisteSammendrag, settKuppOppsett, kjørKuppjakt, egenliste, settRettet } from "./kupp.js";
 
 const app = express();
@@ -475,6 +475,10 @@ app.get("/api/admin/kupp/vakteliste", krevAdmin, fang(async (_req: any, res: any
 
 app.post("/api/admin/kupp/oppsett", krevAdmin, fang(async (req: any, res: any) => {
   res.json(await settKuppOppsett(req.body || {}));
+}));
+
+app.get("/api/admin/lagerhistorikk", krevAdmin, fang(async (_req: any, res: any) => {
+  res.json(await lagerhistorikk());
 }));
 
 app.get("/api/admin/lagerrapport", krevAdmin, fang(async (_req: any, res: any) => {
@@ -1037,6 +1041,16 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
 
 app.post("/api/admin/jobs/:navn", krevAdmin, fang(async (req: any, res: any) => {
   const navn = String(req.params.navn);
+  // Målingen skjer normalt til slutt i lagersynken. Denne er for å fylle
+  // dagens punkt uten å hente hele butikken på nytt — og for å få et første
+  // punkt i kurven uten å vente til natten.
+  if (navn === "maaling") {
+    res.json({ ok: true, melding: "Måler lageret — følg med i loggen." });
+    lagreLagermåling()
+      .then((m) => console.log(`Måling lagret for ${m.dato}: ${m.antall + m.antall_foil} kort.`))
+      .catch((e) => console.error("Måling feilet:", e));
+    return;
+  }
   // Kuppjakten tar timer — ett oppslag hvert tiende sekund — så den svarer
   // med én gang og går i bakgrunnen, som importen.
   if (navn === "kupp") {

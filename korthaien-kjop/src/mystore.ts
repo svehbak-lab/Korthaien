@@ -460,6 +460,20 @@ export async function synkMystore(
     logg(`  eksempler: ${uløste.slice(0, 5).map((u) => `${u.p.navn} (${u.setCode})`).join(", ")}`);
     logg("  Koble dem i admin under Kobling.");
   }
+  // Dagens punkt i utviklingskurven. Dynamisk import, så modulene ikke
+  // peker på hverandre. Feiler målingen, skal synken likevel stå som
+  // fullført — beholdningen er oppdatert, det er bare punktet som mangler.
+  try {
+    const { lagreLagermåling } = await import("./statistikk.js");
+    const m = await lagreLagermåling();
+    logg(
+      `  måling lagret: ${m.antall + m.antall_foil} kort, ` +
+        `${Math.round(m.butikk_ore / 100)} kr i butikken.`
+    );
+  } catch (e: any) {
+    logg(`  (lagermålingen feilet: ${e?.message || e})`);
+  }
+
   return { kategorier: kategorier.length, koblet, ukoblet: uløste.length, sett: settSett.size };
 }
 

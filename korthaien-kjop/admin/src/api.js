@@ -102,6 +102,7 @@ export const api = {
   lagerSammendrag: () => kall("/api/admin/lager-sammendrag"),
   statistikk: () => kall("/api/admin/statistikk"),
   lagerrapport: () => kall("/api/admin/lagerrapport"),
+  lagerhistorikk: () => kall("/api/admin/lagerhistorikk"),
   kupp: ({ minAvvik = 0, visBorte = false } = {}) =>
     kall(`/api/admin/kupp?minAvvik=${minAvvik}&visBorte=${visBorte ? 1 : 0}`),
   kuppVakteliste: () => kall("/api/admin/kupp/vakteliste"),
