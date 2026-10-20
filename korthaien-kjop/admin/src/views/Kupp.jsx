@@ -97,6 +97,7 @@ function Egen({ onFeil }) {
   const [retning, setRetning] = useHusket("retning", "under");
   const [minKr, setMinKr] = useHusket("minKr", 0);
   const [visFerdige, setVisFerdige] = useHusket("visFerdige", false);
+  const [sortering, setSortering] = useHusket("sortering", "kr");
   const [teller, setTeller] = useState(0);
 
   // Hentes én gang per besøk, med alle avvikene i begge retninger. Filtrene
@@ -127,14 +128,21 @@ function Egen({ onFeil }) {
   const rader = useMemo(() => {
     if (!data) return [];
     const minØre = minKr * 100;
-    return data.rader.filter((r) => {
+    const ut = data.rader.filter((r) => {
       if (r.ferdig && !visFerdige) return false;
       if (Math.abs(r.avvik_ore) < minØre) return false;
       if (retning === "under" && r.avvik_ore <= 0) return false;
       if (retning === "over" && r.avvik_ore >= 0) return false;
       return true;
     });
-  }, [data, retning, minKr, visFerdige]);
+    // Begge målene er nyttige, og de er ikke enige. Kroner sier hva det
+    // koster deg; prosent sier hvor grovt det bommer. Et kort 90 % for lavt
+    // til seksti kroner er en liten sak, et kort 30 % for lavt til tre tusen
+    // er ikke det — men det siste er også det som avslører en pris satt helt
+    // uten tanke.
+    const n = (r) => (sortering === "pct" ? Math.abs(r.avvik_pct) : Math.abs(r.avvik_ore));
+    return [...ut].sort((a, b) => n(b) - n(a));
+  }, [data, retning, minKr, visFerdige, sortering]);
 
   // Raden fjernes med én gang du huker av, og legges tilbake hvis lagringen
   // feiler. En arbeidsliste som henger etter hvert klikk er en arbeidsliste
@@ -252,7 +260,16 @@ function Egen({ onFeil }) {
               <th>Kort</th>
               <th style={{ textAlign: "right", width: 100 }}>Din pris</th>
               <th style={{ textAlign: "right", width: 110 }}>Burde vært</th>
-              <th style={{ textAlign: "right", width: 110 }}>Avvik</th>
+              <th style={{ textAlign: "right", width: 110 }}>
+                <Sorter aktiv={sortering === "kr"} onKlikk={() => setSortering("kr")}>
+                  Avvik
+                </Sorter>
+              </th>
+              <th style={{ textAlign: "right", width: 90 }}>
+                <Sorter aktiv={sortering === "pct"} onKlikk={() => setSortering("pct")}>
+                  Prosent
+                </Sorter>
+              </th>
               <th style={{ textAlign: "right", width: 70 }}>Antall</th>
             </tr>
           </thead>
@@ -295,8 +312,11 @@ function Egen({ onFeil }) {
                 <td style={{ textAlign: "right", fontWeight: 600 }}>
                   {kroner(Math.abs(r.avvik_ore))}
                   <div className="dempet" style={{ fontSize: 11, fontWeight: 400 }}>
-                    {r.avvik_pct > 0 ? `${r.avvik_pct} % for lavt` : `${-r.avvik_pct} % for høyt`}
+                    {r.avvik_pct > 0 ? "for lavt" : "for høyt"}
                   </div>
+                </td>
+                <td style={{ textAlign: "right", fontWeight: 600 }}>
+                  {Math.abs(r.avvik_pct)} %
                 </td>
                 <td style={{ textAlign: "right" }} className="dempet">{r.antall}</td>
               </tr>
@@ -573,6 +593,31 @@ function Andre({ onFeil }) {
         </table>
       )}
     </>
+  );
+}
+
+// Overskriften er knappen. To mål å sortere på, og ingen av dem er riktigst
+// hele tiden — derfor et valg og ikke en beslutning tatt på dine vegne.
+function Sorter({ aktiv, onKlikk, children }) {
+  return (
+    <button
+      className="knapp blank"
+      onClick={onKlikk}
+      aria-pressed={aktiv}
+      title="Sorter på denne"
+      style={{
+        padding: 0,
+        font: "inherit",
+        color: "inherit",
+        fontWeight: aktiv ? 700 : "inherit",
+        cursor: "pointer",
+        background: "none",
+        border: "none",
+      }}
+    >
+      {children}
+      <span className="dempet" style={{ marginLeft: 4, fontSize: 10 }}>{aktiv ? "▼" : "↕"}</span>
+    </button>
   );
 }
 

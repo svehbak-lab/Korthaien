@@ -84,6 +84,19 @@ export default function Lagerrapport({ onFeil }) {
               {kroner(total.verdi_ore)}
             </div>
           </div>
+          {/* Modellens tall over, dine egne priser her. Justerer du priser i
+              butikken, flytter det dette tallet og ikke det andre. */}
+          {data.butikk && (
+            <div>
+              <div className="dempet" style={{ fontSize: 12 }}>Priset i butikken</div>
+              <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>
+                {kroner(data.butikk.verdi_ore)}
+              </div>
+              <div className="dempet" style={{ fontSize: 11 }}>
+                {data.butikk.kort.toLocaleString("nb-NO")} kort med pris
+              </div>
+            </div>
+          )}
 
           <div style={{ marginLeft: "auto", alignSelf: "center" }}>
             <label style={{ marginRight: 14 }}>

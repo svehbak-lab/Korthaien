@@ -542,7 +542,13 @@ async function manuelleSalgspriser(): Promise<Map<string, number>> {
   return new Map((r.rows as any[]).map((x) => [`${x.card_id}:${x.finish}`, Number(x.nm_ore)]));
 }
 
-export async function egenliste(_opts: Record<string, unknown> = {}) {
+export async function egenliste(
+  // Nye klienter filtrerer selv og sender ingenting. Gamle sender filtrene
+  // hit. Å ta imot begge koster ingenting, og fjerner vinduet der api og
+  // admin er deployet i utakt og ingen av dem filtrerer — da viser siden feil
+  // uten å si fra, og det skjedde.
+  opts: { retning?: string; minKr?: number; visFerdige?: boolean } = {}
+) {
   const o = await hentKuppOppsett();
   const salg = await hentSalgsOppsett();
   const minPct = o.egen_pct;
@@ -629,6 +635,21 @@ export async function egenliste(_opts: Record<string, unknown> = {}) {
   );
   const s = (synk.rows[0] || {}) as any;
 
+  // Tellerne gjelder alt, uansett hva som vises. Derfor filtreres det
+  // først her, etter at de er talt opp.
+  const filtrer =
+    opts.retning !== undefined || opts.minKr !== undefined || opts.visFerdige !== undefined;
+  const minØre = Math.max(0, Math.round((opts.minKr ?? 0) * 100));
+  const vist = !filtrer
+    ? ut
+    : ut.filter((r) => {
+        if (r.ferdig && !opts.visFerdige) return false;
+        if (Math.abs(r.avvik_ore) < minØre) return false;
+        if (opts.retning === "under" && r.avvik_ore <= 0) return false;
+        if (opts.retning === "over" && r.avvik_ore >= 0) return false;
+        return true;
+      });
+
   return {
     oppsett: o,
     status: {
@@ -638,11 +659,11 @@ export async function egenliste(_opts: Record<string, unknown> = {}) {
       // Kuttet er på det samlede antallet, sortert etter størrelsen på
       // avviket. Er det flere enn taket, er det de minste som faller ut —
       // og de minste er de du uansett tar sist.
-      kuttet: Math.max(0, ut.length - EGEN_TAK),
+      kuttet: Math.max(0, vist.length - EGEN_TAK),
       med_pris: Number(s.n || 0),
       sist_synket: s.siste ? String(s.siste) : null,
     },
-    rader: ut.slice(0, EGEN_TAK),
+    rader: vist.slice(0, EGEN_TAK),
   };
 }
 

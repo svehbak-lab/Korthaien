@@ -152,7 +152,7 @@ export type Grunnsett = {
 
 const RARITET_REKKEFØLGE = ["mythic", "rare", "uncommon", "common", "special", "bonus", "ukjent"];
 
-export async function lagerrapport(): Promise<{ sett: LagerSett[] }> {
+export async function lagerrapport(): Promise<{ sett: LagerSett[]; butikk: { kort: number; verdi_ore: number } }> {
   const opp = await hentSalgsOppsett();
 
   // Beholdningen leses fra Mystore-speilet, ikke fra lager_bevegelser.
@@ -231,10 +231,27 @@ export async function lagerrapport(): Promise<{ sett: LagerSett[] }> {
 
   await leggTilGrunnsett(sett, opp);
 
+  // Hva lageret er priset til hos deg, ikke hva modellen mener det er
+  // verdt. De to er ulike tall, og uten begge er det lett å tro at man ser
+  // det ene når man ser det andre — prisjusteringer i butikken flytter ikke
+  // modellens sum i det hele tatt.
+  //
+  // Bare koblede produkter med pris er med. Tilbehør, esker og de ukoblede
+  // ligger utenfor, så dette er verdien av kortlageret, ikke av butikken.
+  const b = await db().execute(
+    `SELECT SUM(qty) AS kort, SUM(pris_ore * qty) AS ore
+       FROM mystore_stock WHERE qty > 0 AND pris_ore IS NOT NULL`
+  );
+  const br = (b.rows[0] || {}) as any;
+
   return {
-    sett: [...sett.values()].sort((a, b) =>
-      (b.released_at || "").localeCompare(a.released_at || "") || a.set_name.localeCompare(b.set_name)
+    sett: [...sett.values()].sort((a, b2) =>
+      (b2.released_at || "").localeCompare(a.released_at || "") || a.set_name.localeCompare(b2.set_name)
     ),
+    butikk: {
+      kort: Number(br.kort || 0),
+      verdi_ore: Number(br.ore || 0),
+    },
   };
 }
 
