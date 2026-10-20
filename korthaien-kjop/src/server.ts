@@ -26,7 +26,7 @@ import {
 import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER } from "./ratelimit.js";
 import { ordreStatistikk, lagerrapport } from "./statistikk.js";
-import { kuppliste, vaktelisteSammendrag, settKuppOppsett, kjørKuppjakt, egenliste } from "./kupp.js";
+import { kuppliste, vaktelisteSammendrag, settKuppOppsett, kjørKuppjakt, egenliste, settRettet } from "./kupp.js";
 
 const app = express();
 // Render setter X-Forwarded-For. Uten dette ser alle brukere ut som én
@@ -446,11 +446,19 @@ app.get("/api/admin/kupp", krevAdmin, fang(async (req: any, res: any) => {
   );
 }));
 
+app.post("/api/admin/kupp/rettet", krevAdmin, fang(async (req: any, res: any) => {
+  const b = req.body || {};
+  if (!b.card_id || !b.finish) throw new HttpFeil(400, "card_id og finish må være med");
+  await settRettet(String(b.card_id), String(b.finish), Number(b.pris_ore || 0), !!b.på);
+  res.json({ ok: true });
+}));
+
 app.get("/api/admin/kupp/egne", krevAdmin, fang(async (req: any, res: any) => {
   res.json(
     await egenliste({
       retning: String(req.query.retning || "under") as any,
       minKr: Number(req.query.minKr || 0),
+      visFerdige: String(req.query.visFerdige || "") === "1",
     })
   );
 }));

@@ -241,6 +241,15 @@ async function leggTilNyeKolonner(): Promise<void> {
 
   // Dine egne priser der de spriker fra salgsprisen din. Avviket er
   // fortegnsbærende: positivt = priset for lavt, negativt = for høyt.
+  // Kort du har huket av i arbeidslista. Prisen lagres med, så merket
+  // bare gjelder den prisen — endrer den seg, er det en ny vurdering.
+  await db().execute(`CREATE TABLE IF NOT EXISTS kupp_rettet (
+    card_id TEXT NOT NULL,
+    finish TEXT NOT NULL,
+    pris_ore INTEGER NOT NULL,
+    rettet_at TEXT NOT NULL,
+    PRIMARY KEY (card_id, finish))`);
+
   await db().execute(`CREATE TABLE IF NOT EXISTS kupp_egen (
     card_id TEXT NOT NULL,
     finish TEXT NOT NULL,

@@ -96,13 +96,46 @@ function Egen({ onFeil }) {
   const [laster, setLaster] = useState(true);
   const [retning, setRetning] = useHusket("retning", "under");
   const [minKr, setMinKr] = useHusket("minKr", 0);
+  const [visFerdige, setVisFerdige] = useHusket("visFerdige", false);
   const [teller, setTeller] = useState(0);
+
+  // Raden fjernes med én gang du huker av, og legges tilbake hvis lagringen
+  // feiler. Å hente hele lista på nytt tar et par sekunder, og en arbeidsliste
+  // som henger etter hvert klikk er en arbeidsliste man slutter å bruke.
+  async function merk(rad, på) {
+    const før = data;
+    setData((d) => ({
+      ...d,
+      status: {
+        ...d.status,
+        ferdige: d.status.ferdige + (på ? 1 : -1),
+        for_lavt: d.status.for_lavt + (rad.avvik_ore > 0 ? (på ? -1 : 1) : 0),
+        for_hoyt: d.status.for_hoyt + (rad.avvik_ore < 0 ? (på ? -1 : 1) : 0),
+      },
+      rader: visFerdige
+        ? d.rader.map((r) =>
+            r.card_id === rad.card_id && r.finish === rad.finish ? { ...r, ferdig: på } : r
+          )
+        : d.rader.filter((r) => !(r.card_id === rad.card_id && r.finish === rad.finish)),
+    }));
+    try {
+      await api.settKuppRettet({
+        card_id: rad.card_id,
+        finish: rad.finish,
+        pris_ore: rad.pris_ore,
+        på,
+      });
+    } catch (e) {
+      setData(før);
+      onFeil(e);
+    }
+  }
 
   useEffect(() => {
     let avbrutt = false;
     setLaster(true);
     api
-      .kuppEgne({ retning, minKr })
+      .kuppEgne({ retning, minKr, visFerdige })
       .then((d) => {
         if (avbrutt) return;
         setData(d);
@@ -117,7 +150,7 @@ function Egen({ onFeil }) {
     return () => {
       avbrutt = true;
     };
-  }, [retning, minKr, teller]);
+  }, [retning, minKr, visFerdige, teller]);
 
   if (feil) return <Feil feil={feil} onPrøvIgjen={() => setTeller((n) => n + 1)} />;
   if (!data) return <p className="dempet">Henter dine egne priser…</p>;
@@ -133,6 +166,7 @@ function Egen({ onFeil }) {
         <div className="rad-flex" style={{ gap: 28, flexWrap: "wrap" }}>
           <Tall navn="Priset for lavt" verdi={data.status.for_lavt} />
           <Tall navn="Priset for høyt" verdi={data.status.for_hoyt} />
+          <Tall navn="Huket av" verdi={data.status.ferdige} />
           <Tall navn="Produkter med pris" verdi={data.status.med_pris.toLocaleString("nb-NO")} />
           <Tall
             navn="Sist synket"
@@ -164,6 +198,14 @@ function Egen({ onFeil }) {
             <option key={n} value={n}>{n ? `Minst ${n} kr i avvik` : "Alle beløp"}</option>
           ))}
         </select>
+        <label style={{ fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={visFerdige}
+            onChange={(e) => setVisFerdige(e.target.checked)}
+          />{" "}
+          Vis huket av
+        </label>
         <span className="dempet" style={{ marginLeft: "auto", fontSize: 12 }}>
           Grensen i prosent står under Innstillinger og er på {data.oppsett.egen_pct} %.
         </span>
@@ -173,13 +215,16 @@ function Egen({ onFeil }) {
         <div className="panel">
           <div className="tom">
             <b>Ingen avvik her</b>
-            Prisene dine ligger innenfor grensene på det som er synket.
+            {data.status.ferdige
+              ? `Du har huket av ${data.status.ferdige} kort. De kommer tilbake hvis prisen endrer seg.`
+              : "Prisene dine ligger innenfor grensene på det som er synket."}
           </div>
         </div>
       ) : (
         <table className="tabell" style={{ width: "100%" }}>
           <thead>
             <tr>
+              <th style={{ width: 34 }} title="Huk av når du har sett på kortet" />
               <th>Kort</th>
               <th style={{ textAlign: "right", width: 100 }}>Din pris</th>
               <th style={{ textAlign: "right", width: 110 }}>Burde vært</th>
@@ -189,7 +234,20 @@ function Egen({ onFeil }) {
           </thead>
           <tbody>
             {data.rader.map((r) => (
-              <tr key={`${r.card_id}:${r.finish}`}>
+              <tr key={`${r.card_id}:${r.finish}`} style={r.ferdig ? { opacity: 0.45 } : null}>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={!!r.ferdig}
+                    onChange={(e) => merk(r, e.target.checked)}
+                    aria-label={`Huk av ${r.name}`}
+                    title={
+                      r.ferdig
+                        ? `Huket av ${dag(r.ferdig_at)}. Kommer tilbake hvis prisen endrer seg.`
+                        : "Huk av når du har sett på kortet"
+                    }
+                  />
+                </td>
                 <td>
                   <div>
                     {r.name}
@@ -225,7 +283,8 @@ function Egen({ onFeil }) {
 
       <p className="dempet" style={{ fontSize: 12, marginTop: 14 }}>
         Avviket er per kort, ikke ganget med antall. Mystore kan ikke skrives til herfra, så
-        prisene rettes i butikken — raden forsvinner etter neste lagersynk.
+        prisene rettes i butikken. Huker du av, hviler raden så lenge prisen står stille —
+        endrer den seg, kommer kortet tilbake til ny vurdering.
       </p>
     </>
   );

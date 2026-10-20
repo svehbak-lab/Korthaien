@@ -490,6 +490,16 @@ export async function vaktelisteSammendrag() {
 //
 // price fra Mystore er prisen kunden ser, med moms. Den sammenlignes mot det
 // salgspris.ts mener kortet er verdt i Near Mint.
+//
+// Lista er en arbeidsliste. Du huker av et kort når du har sett på det, og da
+// skal det forsvinne — ikke for alltid, men til det er noe nytt å vurdere.
+// Derfor lagres prisen kortet hadde da du huket av, og merket gjelder bare så
+// lenge prisen står stille. Endrer den seg, er premisset et annet, og raden
+// kommer tilbake til ny vurdering.
+//
+// Det gir en bieffekt som er verdt å kjenne til: et kort du med vilje priser
+// lavt — signert, skadet, lokkevare — blir borte for godt når du huker det av,
+// nettopp fordi prisen aldri endrer seg.
 
 export type EgenRad = {
   card_id: string;
@@ -507,10 +517,17 @@ export type EgenRad = {
   // Positivt = du tar mindre enn kortet er verdt. Negativt = du tar mer.
   avvik_ore: number;
   avvik_pct: number;
+  ferdig: boolean;
+  ferdig_at: string | null;
 };
 
 export async function egenliste(
-  opts: { retning?: "under" | "over" | "begge"; minKr?: number; minPct?: number } = {}
+  opts: {
+    retning?: "under" | "over" | "begge";
+    minKr?: number;
+    minPct?: number;
+    visFerdige?: boolean;
+  } = {}
 ) {
   const o = await hentKuppOppsett();
   const salg = await hentSalgsOppsett();
@@ -523,10 +540,12 @@ export async function egenliste(
   const r = await db().execute(`
     SELECT m.card_id, m.finish, m.qty, m.pris_ore, m.product_name,
            c.name, c.set_code, c.collector_number, c.rarity, c.usd, c.usd_foil,
-           COALESCE(s.visningsnavn, s.name) AS set_name
+           COALESCE(s.visningsnavn, s.name) AS set_name,
+           f.pris_ore AS ferdig_pris, f.rettet_at
       FROM mystore_stock m
       JOIN cards c ON c.id = m.card_id
       LEFT JOIN sets s ON s.code = c.set_code
+      LEFT JOIN kupp_rettet f ON f.card_id = m.card_id AND f.finish = m.finish
      WHERE m.qty > 0 AND m.pris_ore IS NOT NULL AND m.pris_ore > 0
   `);
 
@@ -537,6 +556,7 @@ export async function egenliste(
   const ut: EgenRad[] = [];
   let under = 0;
   let over = 0;
+  let ferdige = 0;
 
   for (const x of rader) {
     const finish = String(x.finish);
@@ -560,8 +580,14 @@ export async function egenliste(
     if (Math.abs(avvikPct) < minPct) continue;
     if (Math.abs(avvikØre) < minØre) continue;
 
-    if (avvikØre > 0) under++;
+    // Merket gjelder bare prisen det ble satt på. Står prisen stille, har du
+    // sett på kortet og raden hviler. Er den endret, er det noe nytt.
+    const ferdig = x.ferdig_pris != null && Number(x.ferdig_pris) === pris;
+    if (ferdig) ferdige++;
+    else if (avvikØre > 0) under++;
     else over++;
+
+    if (ferdig && !opts.visFerdige) continue;
     if (retning === "under" && avvikØre <= 0) continue;
     if (retning === "over" && avvikØre >= 0) continue;
 
@@ -581,6 +607,8 @@ export async function egenliste(
       marked_ore: Math.round(Number(usd || 0) * salg.usd_nok * 100),
       avvik_ore: avvikØre,
       avvik_pct: avvikPct,
+      ferdig,
+      ferdig_at: ferdig && x.rettet_at ? String(x.rettet_at) : null,
     });
   }
 
@@ -599,9 +627,34 @@ export async function egenliste(
     status: {
       for_lavt: under,
       for_hoyt: over,
+      ferdige,
       med_pris: Number(s.n || 0),
       sist_synket: s.siste ? String(s.siste) : null,
     },
     rader: ut.slice(0, 500),
   };
+}
+
+// Prisen lagres sammen med merket. Uten den ville et avhuket kort blitt borte
+// for alltid, også når du retter prisen til noe annet feil.
+export async function settRettet(
+  cardId: string,
+  finish: string,
+  prisØre: number,
+  på: boolean
+): Promise<void> {
+  if (!på) {
+    await db().execute({
+      sql: "DELETE FROM kupp_rettet WHERE card_id = ? AND finish = ?",
+      args: [cardId, finish],
+    });
+    return;
+  }
+  await db().execute({
+    sql: `INSERT INTO kupp_rettet (card_id, finish, pris_ore, rettet_at)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(card_id, finish) DO UPDATE SET
+            pris_ore = excluded.pris_ore, rettet_at = excluded.rettet_at`,
+    args: [cardId, finish, Math.round(prisØre), new Date().toISOString()],
+  });
 }
