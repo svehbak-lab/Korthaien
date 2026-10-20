@@ -170,6 +170,12 @@ export async function hentProdukter(katId: string, maksSider = 40): Promise<Prod
     const d = await hent(`/categories/${katId}/products?page[number]=${side}&page[size]=50`);
     for (const p of d.data || []) {
       const a = p.attributes || {};
+      // Et produkt du har skrudd av i butikken er ikke til salgs, og verken
+      // lageret eller prisen hører hjemme i noe regnestykke. Verre: et avskrudd
+      // produkt kunne overskrive et aktivt som peker på samme kort.
+      // Mangler feltet, tas produktet med — vi skal ikke tømme lageret fordi
+      // Mystore en dag slutter å sende status.
+      if (a.status != null && Number(a.status) !== 1) continue;
       ut.push({
         id: String(p.id),
         navn: String(a.name?.no || a.name || ""),
@@ -221,6 +227,16 @@ export async function synkMystore(
   logg("Henter kategorier fra Mystore…");
   const kategorier = await hentKategorier(logg);
   const kobling = knyttTilSett(kategorier, indeks, overstyringer);
+  // mystore_stock har én rad per kort og trykk. Lander to produkter på samme
+  // rad, vant før det siste synken kom over — uten et ord, og med både lager
+  // og pris. Et kunstkort til fire kroner tok plassen til et kort til flere
+  // hundre, og ingenting pekte på det.
+  //
+  // Nå beholdes det første, og det andre havner blant de ukoblede der du kan
+  // se det. Hvilket av to produkter som er det riktige, kan ingen regel
+  // gjette — men den kan la være å late som om den vet.
+  const settKort = new Map<string, string>();
+  let kollisjoner = 0;
   const nå = new Date().toISOString();
 
   for (let i = 0; i < kategorier.length; i += 200) {
@@ -315,6 +331,15 @@ export async function synkMystore(
       // Uten dette treffer ingen av dem, og de blir liggende i lista over
       // ukoblede produkter for alltid.
       const erToken = /\b(token|emblem)\b/i.test(p.navn);
+      // «Wrenn and Six Emblem» mister «Emblem» i linjen under, og står da
+      // igjen som «Wrenn and Six» — navnet på et ekte kort til over tusen
+      // kroner. Det koblet seg dit og skrev lagertallet sitt over.
+      //
+      // Kravet går bare én vei: er produktet et token, må kortet være det
+      // også. Omvendt holder ikke, for et token-kort kan hete hva som helst
+      // uten at produktnavnet røper det.
+      const tokenKrav = erToken ? " AND er_token = 1" : "";
+      const tokenKravC = erToken ? " AND c.er_token = 1" : "";
       if (erToken) rent = rent.replace(/\b(token|emblem)\b/gi, "").replace(/\s{2,}/g, " ").trim();
 
       const n = normaliser(rent);
@@ -331,7 +356,7 @@ export async function synkMystore(
         treff = await db().execute({
           sql: `SELECT id FROM cards
                  WHERE set_code IN (${plass}) AND lower(collector_number) = ?
-                   AND (name_norm = ? OR front_norm = ? OR back_norm = ?)
+                   AND (name_norm = ? OR front_norm = ? OR back_norm = ?)${tokenKrav}
                  LIMIT 1`,
           args: [...sett, nummer, n, n, n],
         });
@@ -344,7 +369,7 @@ export async function synkMystore(
         treff = await db().execute({
           sql: `SELECT c.id FROM cards c LEFT JOIN sets s ON s.code = c.set_code
                  WHERE c.set_code IN (${plass})
-                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)
+                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}
                  ORDER BY (c.variant = ?) DESC,
                           (c.set_code = ?) DESC,
                           (c.name_norm = ? OR c.name_norm = ?) DESC,
@@ -363,6 +388,16 @@ export async function synkMystore(
       // variantmatchingen ble bedre, eller fordi du rettet et navn — må den
       // gamle raden bort. Ellers står beholdningen igjen på et kort som ikke
       // lenger peker noe sted, og kvoten der blir feil uten at noe varsler.
+      const kortNøkkel = `${String(treff.rows[0].id)}:${foil ? "foil" : "nonfoil"}`;
+      const alt = settKort.get(kortNøkkel);
+      if (alt) {
+        kollisjoner++;
+        logg(`  ! «${p.navn}» peker på samme kort som «${alt}». Hopper over.`);
+        uløste.push({ p, kat: `${kat.navn} — kollisjon med «${alt}»`, setCode });
+        continue;
+      }
+      settKort.set(kortNøkkel, p.navn);
+
       stockRader.push({
         sql: `DELETE FROM mystore_stock
                WHERE product_id = ? AND NOT (card_id = ? AND finish = ?)`,
@@ -417,6 +452,10 @@ export async function synkMystore(
   }
 
   logg(`Synk ferdig: ${koblet} produkter koblet i ${settSett.size} sett, ${uløste.length} uten treff.`);
+  if (kollisjoner) {
+    logg(`  ${kollisjoner} produkter pekte på et kort et annet produkt allerede hadde tatt.`);
+    logg("  De står under Kobling, merket «kollisjon».");
+  }
   if (uløste.length) {
     logg(`  eksempler: ${uløste.slice(0, 5).map((u) => `${u.p.navn} (${u.setCode})`).join(", ")}`);
     logg("  Koble dem i admin under Kobling.");
