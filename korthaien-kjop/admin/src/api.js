@@ -105,10 +105,7 @@ export const api = {
   kupp: ({ minAvvik = 0, visBorte = false } = {}) =>
     kall(`/api/admin/kupp?minAvvik=${minAvvik}&visBorte=${visBorte ? 1 : 0}`),
   kuppVakteliste: () => kall("/api/admin/kupp/vakteliste"),
-  kuppEgne: ({ retning = "under", minKr = 0, visFerdige = false } = {}) =>
-    kall(
-      `/api/admin/kupp/egne?retning=${retning}&minKr=${minKr}&visFerdige=${visFerdige ? 1 : 0}`
-    ),
+  kuppEgne: () => kall("/api/admin/kupp/egne"),
   settKuppRettet: (felt) => kall("/api/admin/kupp/rettet", { method: "POST", body: felt }),
   settKuppOppsett: (endringer) =>
     kall("/api/admin/kupp/oppsett", { method: "POST", body: endringer }),

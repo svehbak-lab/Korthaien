@@ -454,13 +454,9 @@ app.post("/api/admin/kupp/rettet", krevAdmin, fang(async (req: any, res: any) =>
 }));
 
 app.get("/api/admin/kupp/egne", krevAdmin, fang(async (req: any, res: any) => {
-  res.json(
-    await egenliste({
-      retning: String(req.query.retning || "under") as any,
-      minKr: Number(req.query.minKr || 0),
-      visFerdige: String(req.query.visFerdige || "") === "1",
-    })
-  );
+  // Filtrene ligger i nettleseren nå. Lar vi dem stå her, blir hvert
+  // klikk en ny fullskanning av lageret.
+  res.json(await egenliste());
 }));
 
 app.get("/api/admin/kupp/vakteliste", krevAdmin, fang(async (_req: any, res: any) => {

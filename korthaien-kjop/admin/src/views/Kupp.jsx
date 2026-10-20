@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { api, kroner } from "../api.js";
 
 const CONDITIONS = ["MT", "NM", "EX", "GD", "LP", "PL", "PO"];
@@ -99,43 +99,15 @@ function Egen({ onFeil }) {
   const [visFerdige, setVisFerdige] = useHusket("visFerdige", false);
   const [teller, setTeller] = useState(0);
 
-  // Raden fjernes med én gang du huker av, og legges tilbake hvis lagringen
-  // feiler. Å hente hele lista på nytt tar et par sekunder, og en arbeidsliste
-  // som henger etter hvert klikk er en arbeidsliste man slutter å bruke.
-  async function merk(rad, på) {
-    const før = data;
-    setData((d) => ({
-      ...d,
-      status: {
-        ...d.status,
-        ferdige: d.status.ferdige + (på ? 1 : -1),
-        for_lavt: d.status.for_lavt + (rad.avvik_ore > 0 ? (på ? -1 : 1) : 0),
-        for_hoyt: d.status.for_hoyt + (rad.avvik_ore < 0 ? (på ? -1 : 1) : 0),
-      },
-      rader: visFerdige
-        ? d.rader.map((r) =>
-            r.card_id === rad.card_id && r.finish === rad.finish ? { ...r, ferdig: på } : r
-          )
-        : d.rader.filter((r) => !(r.card_id === rad.card_id && r.finish === rad.finish)),
-    }));
-    try {
-      await api.settKuppRettet({
-        card_id: rad.card_id,
-        finish: rad.finish,
-        pris_ore: rad.pris_ore,
-        på,
-      });
-    } catch (e) {
-      setData(før);
-      onFeil(e);
-    }
-  }
-
+  // Hentes én gang per besøk, med alle avvikene i begge retninger. Filtrene
+  // under jobber på det som allerede ligger i nettleseren, så et bytte er
+  // øyeblikkelig. Før kostet hvert klikk en ny gjennomgang av hele lageret
+  // på serveren, og det tok sekunder uten at noe på siden sa fra.
   useEffect(() => {
     let avbrutt = false;
     setLaster(true);
     api
-      .kuppEgne({ retning, minKr, visFerdige })
+      .kuppEgne()
       .then((d) => {
         if (avbrutt) return;
         setData(d);
@@ -150,10 +122,59 @@ function Egen({ onFeil }) {
     return () => {
       avbrutt = true;
     };
-  }, [retning, minKr, visFerdige, teller]);
+  }, [teller]);
+
+  const rader = useMemo(() => {
+    if (!data) return [];
+    const minØre = minKr * 100;
+    return data.rader.filter((r) => {
+      if (r.ferdig && !visFerdige) return false;
+      if (Math.abs(r.avvik_ore) < minØre) return false;
+      if (retning === "under" && r.avvik_ore <= 0) return false;
+      if (retning === "over" && r.avvik_ore >= 0) return false;
+      return true;
+    });
+  }, [data, retning, minKr, visFerdige]);
+
+  // Raden fjernes med én gang du huker av, og legges tilbake hvis lagringen
+  // feiler. En arbeidsliste som henger etter hvert klikk er en arbeidsliste
+  // man slutter å bruke.
+  async function merk(rad, på) {
+    const før = data;
+    setData((d) => ({
+      ...d,
+      status: {
+        ...d.status,
+        ferdige: d.status.ferdige + (på ? 1 : -1),
+        for_lavt: d.status.for_lavt + (rad.avvik_ore > 0 ? (på ? -1 : 1) : 0),
+        for_hoyt: d.status.for_hoyt + (rad.avvik_ore < 0 ? (på ? -1 : 1) : 0),
+      },
+      rader: d.rader.map((r) =>
+        r.card_id === rad.card_id && r.finish === rad.finish ? { ...r, ferdig: på } : r
+      ),
+    }));
+    try {
+      await api.settKuppRettet({
+        card_id: rad.card_id,
+        finish: rad.finish,
+        pris_ore: rad.pris_ore,
+        på,
+      });
+    } catch (e) {
+      setData(før);
+      onFeil(e);
+    }
+  }
 
   if (feil) return <Feil feil={feil} onPrøvIgjen={() => setTeller((n) => n + 1)} />;
-  if (!data) return <p className="dempet">Henter dine egne priser…</p>;
+  if (!data) {
+    return (
+      <p className="dempet">
+        Henter dine egne priser… Første gang tar et par sekunder — hele lageret regnes
+        gjennom.
+      </p>
+    );
+  }
 
   return (
     <>
@@ -164,8 +185,8 @@ function Egen({ onFeil }) {
 
       <div className="panel" style={{ marginBottom: 16, padding: "16px 18px" }}>
         <div className="rad-flex" style={{ gap: 28, flexWrap: "wrap" }}>
-          <Tall navn="Priset for lavt" verdi={data.status.for_lavt} />
-          <Tall navn="Priset for høyt" verdi={data.status.for_hoyt} />
+          <Tall navn="Priset for lavt" verdi={data.status.for_lavt.toLocaleString("nb-NO")} />
+          <Tall navn="Priset for høyt" verdi={data.status.for_hoyt.toLocaleString("nb-NO")} />
           <Tall navn="Huket av" verdi={data.status.ferdige} />
           <Tall navn="Produkter med pris" verdi={data.status.med_pris.toLocaleString("nb-NO")} />
           <Tall
@@ -207,15 +228,18 @@ function Egen({ onFeil }) {
           Vis huket av
         </label>
         <span className="dempet" style={{ marginLeft: "auto", fontSize: 12 }}>
-          Grensen i prosent står under Innstillinger og er på {data.oppsett.egen_pct} %.
+          {rader.length.toLocaleString("nb-NO")} av {data.rader.length.toLocaleString("nb-NO")}
+          {data.status.kuttet > 0 && ` · ${data.status.kuttet.toLocaleString("nb-NO")} minste avvik utelatt`}
+          {" · grensen er "}
+          {data.oppsett.egen_pct} %
         </span>
       </div>
 
-      {!data.rader.length ? (
+      {!rader.length ? (
         <div className="panel">
           <div className="tom">
             <b>Ingen avvik her</b>
-            {data.status.ferdige
+            {data.status.ferdige && !visFerdige
               ? `Du har huket av ${data.status.ferdige} kort. De kommer tilbake hvis prisen endrer seg.`
               : "Prisene dine ligger innenfor grensene på det som er synket."}
           </div>
@@ -233,7 +257,7 @@ function Egen({ onFeil }) {
             </tr>
           </thead>
           <tbody>
-            {data.rader.map((r) => (
+            {rader.map((r) => (
               <tr key={`${r.card_id}:${r.finish}`} style={r.ferdig ? { opacity: 0.45 } : null}>
                 <td>
                   <input

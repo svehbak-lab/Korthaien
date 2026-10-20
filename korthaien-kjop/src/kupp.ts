@@ -500,6 +500,20 @@ export async function vaktelisteSammendrag() {
 // Det gir en bieffekt som er verdt å kjenne til: et kort du med vilje priser
 // lavt — signert, skadet, lokkevare — blir borte for godt når du huker det av,
 // nettopp fordi prisen aldri endrer seg.
+//
+// ── om farten ────────────────────────────────────────────────────────────────
+// Funksjonen svarer med ALLE avvikene, begge retninger, i ett svar. Retning og
+// beløp filtreres i nettleseren.
+//
+// Første utgave filtrerte her inne, og da kostet hvert klikk på et nedtrekk en
+// ny gjennomgang av 55 000 rader pluss 139 oppslag mot card_sale_prices i
+// bolker på 400. Det tok sekunder, så ut som om siden hang, og var dessuten
+// nøyaktig den slags gjentatte fullskanning som ga 263 dollar i Turso-regning
+// i september.
+//
+// Nå er det tre spørringer per besøk, uansett hvor mye du klikker.
+
+const EGEN_TAK = 2000;
 
 export type EgenRad = {
   card_id: string;
@@ -521,44 +535,42 @@ export type EgenRad = {
   ferdig_at: string | null;
 };
 
-export async function egenliste(
-  opts: {
-    retning?: "under" | "over" | "begge";
-    minKr?: number;
-    minPct?: number;
-    visFerdige?: boolean;
-  } = {}
-) {
+// Begge overstyringstabellene er små — bare kortene du har rørt selv — så de
+// leses hele. Å filtrere dem på id-lista var det som kostet 139 spørringer.
+async function manuelleSalgspriser(): Promise<Map<string, number>> {
+  const r = await db().execute("SELECT card_id, finish, nm_ore FROM card_sale_prices");
+  return new Map((r.rows as any[]).map((x) => [`${x.card_id}:${x.finish}`, Number(x.nm_ore)]));
+}
+
+export async function egenliste(_opts: Record<string, unknown> = {}) {
   const o = await hentKuppOppsett();
   const salg = await hentSalgsOppsett();
-  const retning = opts.retning || "under";
-  const minØre = Math.max(0, Math.round((opts.minKr ?? 0) * 100));
-  const minPct = opts.minPct ?? o.egen_pct;
+  const minPct = o.egen_pct;
 
   // Bare det som faktisk ligger i hylla med en pris. Et utsolgt produkt kan
   // ingen kjøpe billig, og et uten pris er ikke til salgs.
-  const r = await db().execute(`
-    SELECT m.card_id, m.finish, m.qty, m.pris_ore, m.product_name,
-           c.name, c.set_code, c.collector_number, c.rarity, c.usd, c.usd_foil,
-           COALESCE(s.visningsnavn, s.name) AS set_name,
-           f.pris_ore AS ferdig_pris, f.rettet_at
-      FROM mystore_stock m
-      JOIN cards c ON c.id = m.card_id
-      LEFT JOIN sets s ON s.code = c.set_code
-      LEFT JOIN kupp_rettet f ON f.card_id = m.card_id AND f.finish = m.finish
-     WHERE m.qty > 0 AND m.pris_ore IS NOT NULL AND m.pris_ore > 0
-  `);
-
-  const rader = r.rows as any[];
-  const manuell = await hentManuellSalgIBolker([...new Set(rader.map((x) => String(x.card_id)))]);
-  const manuellUsd = await manuelleDollarpriser();
+  const [r, manuell, manuellUsd] = await Promise.all([
+    db().execute(`
+      SELECT m.card_id, m.finish, m.qty, m.pris_ore, m.product_name,
+             c.name, c.set_code, c.collector_number, c.rarity, c.usd, c.usd_foil,
+             COALESCE(s.visningsnavn, s.name) AS set_name,
+             f.pris_ore AS ferdig_pris, f.rettet_at
+        FROM mystore_stock m
+        JOIN cards c ON c.id = m.card_id
+        LEFT JOIN sets s ON s.code = c.set_code
+        LEFT JOIN kupp_rettet f ON f.card_id = m.card_id AND f.finish = m.finish
+       WHERE m.qty > 0 AND m.pris_ore IS NOT NULL AND m.pris_ore > 0
+    `),
+    manuelleSalgspriser(),
+    manuelleDollarpriser(),
+  ]);
 
   const ut: EgenRad[] = [];
   let under = 0;
   let over = 0;
   let ferdige = 0;
 
-  for (const x of rader) {
+  for (const x of r.rows as any[]) {
     const finish = String(x.finish);
     const nøkkel = `${x.card_id}:${finish}`;
     const salgOre = salgsprisØre(
@@ -578,7 +590,6 @@ export async function egenliste(
     const avvikØre = salgOre - pris;
     const avvikPct = Math.round((avvikØre / salgOre) * 100);
     if (Math.abs(avvikPct) < minPct) continue;
-    if (Math.abs(avvikØre) < minØre) continue;
 
     // Merket gjelder bare prisen det ble satt på. Står prisen stille, har du
     // sett på kortet og raden hviler. Er den endret, er det noe nytt.
@@ -586,10 +597,6 @@ export async function egenliste(
     if (ferdig) ferdige++;
     else if (avvikØre > 0) under++;
     else over++;
-
-    if (ferdig && !opts.visFerdige) continue;
-    if (retning === "under" && avvikØre <= 0) continue;
-    if (retning === "over" && avvikØre >= 0) continue;
 
     const usd = finish === "foil" ? x.usd_foil : x.usd;
     ut.push({
@@ -628,10 +635,14 @@ export async function egenliste(
       for_lavt: under,
       for_hoyt: over,
       ferdige,
+      // Kuttet er på det samlede antallet, sortert etter størrelsen på
+      // avviket. Er det flere enn taket, er det de minste som faller ut —
+      // og de minste er de du uansett tar sist.
+      kuttet: Math.max(0, ut.length - EGEN_TAK),
       med_pris: Number(s.n || 0),
       sist_synket: s.siste ? String(s.siste) : null,
     },
-    rader: ut.slice(0, 500),
+    rader: ut.slice(0, EGEN_TAK),
   };
 }
 
