@@ -1,7 +1,7 @@
 import { db, normaliser } from "./db.js";
 import { byggIndeks, finnSett } from "./settnavn.js";
 import { gjettSett } from "./gjett.js";
-import { variantFraNavn, skillUtNummer, skillUtBokstav } from "./varianter.js";
+import { variantFraNavn, skillUtNummer, skillUtBokstav, nummerFraParentes } from "./varianter.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MYSTORE
@@ -312,13 +312,19 @@ export async function synkMystore(
       // der den står: «Bold Plagiarist (Extended Art)».
       const variant = variantFraNavn(p.navn);
       const utenFoil = p.navn.replace(/\bfoil\b/gi, "");
+      // Må leses her, ikke etter linjen under: den kaster parentesene, og da
+      // er «Zombie Army Token (009)» blitt «Zombie Army Token» og nummeret
+      // finnes ikke lenger å lete etter.
+      const parentesNummer = nummerFraParentes(utenFoil);
       let rent = utenFoil.replace(/\([^)]*\)/g, "").trim();
 
       // Samlernummer eller bokstav i navnet: «Island 267», «Swamp B».
       // Basic lands finnes i mange like utgaver, og dette er det eneste som
       // skiller dem — Scryfall kaller dem alle bare «Island».
       const medNummer = skillUtNummer(rent);
-      let nummer: string | null = medNummer.nummer;
+      // Et nummer bakerst i navnet vinner. Det er den gamle veien, og den er
+      // mer presis — parentesen kan inneholde hva som helst.
+      let nummer: string | null = medNummer.nummer ?? parentesNummer;
       rent = medNummer.navn;
       let posisjon: number | null = null;
       if (!nummer) {
@@ -355,10 +361,10 @@ export async function synkMystore(
         // Nummeret er entydig. Da trenger vi verken variant eller navn.
         treff = await db().execute({
           sql: `SELECT id FROM cards
-                 WHERE set_code IN (${plass}) AND lower(collector_number) = ?
+                 WHERE set_code IN (${plass}) AND (lower(collector_number) = ? OR ltrim(lower(collector_number), '0') = ?)
                    AND (name_norm = ? OR front_norm = ? OR back_norm = ?)${tokenKrav}
                  LIMIT 1`,
-          args: [...sett, nummer, n, n, n],
+          args: [...sett, nummer, nummer, n, n, n],
         });
         // Feil nummer skal ikke gi feil kort. Bommer det, faller vi tilbake
         // til vanlig navneoppslag under.

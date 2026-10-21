@@ -64,7 +64,7 @@ export function skillUtNummer(navn: string): { navn: string; nummer: string | nu
   // Et tall som er en del av kortnavnet skal ikke strippes. Kort som slutter
   // på siffer er sjeldne, men de finnes.
   if (/\b(ii|iii|iv|v|vi|vii|viii|ix|x)\s*$/i.test(m[1])) return { navn, nummer: null };
-  return { navn: m[1].trim(), nummer: (m[2] + (m[3] || "")).toLowerCase() };
+  return { navn: m[1].trim(), nummer: normaliserNummer(m[2] + (m[3] || "")) };
 }
 
 // Revised og andre eldre sett skiller basic lands med bokstav: «Swamp A»,
@@ -80,4 +80,41 @@ export function skillUtBokstav(navn: string): { navn: string; posisjon: number |
   // Bare for basic lands. «Ajani A» ville ellers blitt tolket som variant.
   if (!BASIC.test(rent)) return { navn, posisjon: null };
   return { navn: rent, posisjon: m[2].toLowerCase().charCodeAt(0) - 97 };
+}
+
+// ── nummer i parentes ────────────────────────────────────────────────────────
+// Matcheren kastet parentesene før den lette etter samlernummeret, og da var
+// nummeret allerede borte: «Zombie Army Token (009)» ble «Zombie Army Token»,
+// «Swamp (0277)» ble «Swamp». Produktet med nummer og produktet uten ble
+// identiske, begge landet på samme kort, og det andre havnet som uløst.
+//
+// Derfor leses nummeret ut av parentesen først, på samme måte som varianten.
+//
+// Formene som faktisk finnes i butikken:
+//   (009)            token nummerert med ledende nuller
+//   (#297)           firkanttegn foran
+//   (250 A)          nummer og bokstav, gamle basic lands
+//   (333 - Manga)    nummer med en kvalifikator etter
+//
+// Og like viktig, formene som IKKE er numre og må gå klar:
+//   (Extended Art)  (FOIL)  (Bound/Determined)  (Not Tournament Legal)
+// Derfor er mønsteret forankret i begge ender. Begynner innholdet med noe
+// annet enn et tall, er det ikke et nummer.
+const I_PARENTES = /^#?\s*(\d{1,4})\s*([a-z])?\s*(?:[-–—][^)]*)?$/i;
+
+// Scryfall skriver «16», butikken skriver «0016». Uten dette sammenligner vi
+// to skrivemåter av samme tall og får aldri treff.
+export function normaliserNummer(n: string): string {
+  return n.toLowerCase().replace(/^0+(?=\d)/, "");
+}
+
+// Første parentes som inneholder et nummer og ikke noe annet. Et navn kan ha
+// flere — «Forest (#297) (Retro Frame)» — og bare den ene er et nummer.
+export function nummerFraParentes(navn: string): string | null {
+  for (const m of navn.matchAll(/\(([^)]*)\)/g)) {
+    const t = m[1].trim();
+    const n = t.match(I_PARENTES);
+    if (n) return normaliserNummer(n[1] + (n[2] || ""));
+  }
+  return null;
 }
