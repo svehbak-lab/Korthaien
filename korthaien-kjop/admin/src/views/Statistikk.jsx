@@ -45,7 +45,8 @@ export default function Statistikk({ onFeil }) {
       {avlyst > 0 && (
         <div className="dempet" style={{ fontSize: 12, marginTop: 10 }}>
           I tillegg {avlyst} {avlyst === 1 ? "ordre" : "ordrer"} kansellert eller utløpt i år,
-          til sammen {kroner(hittilIÅr.avlyst_ore)}. Ikke medregnet i tallene over.
+          til sammen {kroner(hittilIÅr.avlyst_ore)} og{" "}
+          {(hittilIÅr.avlyst_kort ?? 0).toLocaleString("nb-NO")} kort. Ikke medregnet i tallene over.
         </div>
       )}
 
@@ -60,7 +61,7 @@ function Tall({ merke, m }) {
       <div className="dempet" style={{ fontSize: 12 }}>{merke}</div>
       <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>{kroner(m.sum_ore)}</div>
       <div className="dempet" style={{ fontSize: 12 }}>
-        {m.antall} {m.antall === 1 ? "ordre" : "ordrer"}
+        {m.antall} {m.antall === 1 ? "ordre" : "ordrer"} · {(m.kort ?? 0).toLocaleString("nb-NO")} kort
       </div>
     </div>
   );
@@ -89,7 +90,8 @@ function Historikk({ data }) {
             <div className="rad-flex" style={{ justifyContent: "space-between", fontWeight: 700 }}>
               <span>{år}</span>
               <span>
-                {sum?.antall ?? 0} {sum?.antall === 1 ? "ordre" : "ordrer"} — {kroner(sum?.sum_ore ?? 0)}
+                {sum?.antall ?? 0} {sum?.antall === 1 ? "ordre" : "ordrer"},{" "}
+                {(sum?.kort ?? 0).toLocaleString("nb-NO")} kort — {kroner(sum?.sum_ore ?? 0)}
               </span>
             </div>
             <table className="tabell" style={{ width: "100%", marginTop: 6 }}>
@@ -100,6 +102,8 @@ function Historikk({ data }) {
                     <td style={{ textAlign: "right", width: 110 }} className="dempet">
                       {m.antall} {m.antall === 1 ? "ordre" : "ordrer"}
                     </td>
+                    <td style={{ textAlign: "right", width: 95 }} className="dempet">
+                      {(m.kort ?? 0).toLocaleString("nb-NO")} kort</td>
                     <td style={{ textAlign: "right", width: 130 }}>{kroner(m.sum_ore)}</td>
                   </tr>
                 ))}

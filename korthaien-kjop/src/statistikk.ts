@@ -23,6 +23,10 @@ export type Måned = {
   sum_ore: number;
   avlyst: number;
   avlyst_ore: number;
+  // Antall kort, ikke antall linjer. En linje er «4 stk Lightning Bolt i NM»,
+  // og det er fire kort — det er volumet du håndterer, ikke antall rader.
+  kort: number;
+  avlyst_kort: number;
 };
 
 // Måneden en ordre hører til avgjøres av norsk tid, ikke UTC. En ordre som
@@ -40,7 +44,7 @@ export function osloMåned(iso: string): string {
   return deler.slice(0, 7);
 }
 
-type Rad = { created_at: string; status: string; total_ore: number };
+type Rad = { created_at: string; status: string; total_ore: number; kort?: number };
 
 // Skilt ut som egen funksjon fordi den er verdt å teste for seg: det er her
 // måneden bestemmes og de avlyste holdes utenfor omsetningen.
@@ -50,22 +54,26 @@ export function grupper(rader: Rad[]): Måned[] {
     const mnd = osloMåned(r.created_at);
     let m = kart.get(mnd);
     if (!m) {
-      m = { mnd, antall: 0, sum_ore: 0, avlyst: 0, avlyst_ore: 0 };
+      m = { mnd, antall: 0, sum_ore: 0, avlyst: 0, avlyst_ore: 0, kort: 0, avlyst_kort: 0 };
       kart.set(mnd, m);
     }
     const ore = Number(r.total_ore || 0);
+    const kort = Number(r.kort || 0);
     if (TELLER_MED.includes(r.status)) {
       m.antall++;
       m.sum_ore += ore;
+      m.kort += kort;
     } else if (AVLYST.includes(r.status)) {
       m.avlyst++;
       m.avlyst_ore += ore;
+      m.avlyst_kort += kort;
     }
   }
   return [...kart.values()].sort((a, b) => (a.mnd < b.mnd ? 1 : -1));
 }
 
-const nullMåned = (mnd: string): Måned => ({ mnd, antall: 0, sum_ore: 0, avlyst: 0, avlyst_ore: 0 });
+const nullMåned = (mnd: string): Måned =>
+  ({ mnd, antall: 0, sum_ore: 0, avlyst: 0, avlyst_ore: 0, kort: 0, avlyst_kort: 0 });
 
 export function summer(måneder: Måned[], prefiks: string): Måned {
   const ut = nullMåned(prefiks);
@@ -75,6 +83,8 @@ export function summer(måneder: Måned[], prefiks: string): Måned {
     ut.sum_ore += m.sum_ore;
     ut.avlyst += m.avlyst;
     ut.avlyst_ore += m.avlyst_ore;
+    ut.kort += m.kort;
+    ut.avlyst_kort += m.avlyst_kort;
   }
   return ut;
 }
@@ -89,7 +99,11 @@ export async function ordreStatistikk() {
   // gjør at måneden kan avgjøres i norsk tid, som SQLite ikke kan på egen
   // hånd uten å anta sommertid.
   const r = await db().execute(
-    "SELECT created_at, status, total_ore FROM orders ORDER BY created_at DESC"
+    `SELECT o.created_at, o.status, o.total_ore,
+            COALESCE(SUM(l.qty), 0) AS kort
+       FROM orders o LEFT JOIN order_lines l ON l.order_id = o.id
+      GROUP BY o.id
+      ORDER BY o.created_at DESC`
   );
   const måneder = grupper(r.rows as any[]);
 
