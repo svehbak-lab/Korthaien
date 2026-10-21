@@ -310,7 +310,11 @@ export async function synkMystore(
       const foil = erFoil(p.navn) || erFoil(kat.navn);
       // Varianten leses ut av navnet før parentesene kastes — det er nettopp
       // der den står: «Bold Plagiarist (Extended Art)».
-      const variant = variantFraNavn(p.navn);
+      // Varianten kan stå i kategorien i stedet for i navnet — «Retro
+      // Artifacts», «Basicland (Fullart)» — nøyaktig som foil gjør to linjer
+      // under. Navnet går foran: det er mer spesifikt enn hyllen kortet står i.
+      const variantINavn = variantFraNavn(p.navn);
+      const variant = variantINavn !== "vanlig" ? variantINavn : variantFraNavn(kat.navn);
       const utenFoil = p.navn.replace(/\bfoil\b/gi, "");
       // Må leses her, ikke etter linjen under: den kaster parentesene, og da
       // er «Zombie Army Token (009)» blitt «Zombie Army Token» og nummeret
@@ -369,6 +373,27 @@ export async function synkMystore(
         // Feil nummer skal ikke gi feil kort. Bommer det, faller vi tilbake
         // til vanlig navneoppslag under.
         if (!treff.rows[0]) treff = null as any;
+      }
+
+      // Står varianten i navnet eller kategorien, er den et krav — ikke bare
+      // en sorteringsnøkkel slik den er i det frie oppslaget under. Uten dette
+      // faller «Timeless Dragon (Retro Frame)» ned på grunnkortet, kolliderer
+      // med det vanlige produktet, og begge blir uløste.
+      //
+      // Bommer det strenge oppslaget, prøves det frie som før. Å la kortet bli
+      // uløst ville vært å bytte én feil mot en annen.
+      if (!treff?.rows?.[0] && variant !== "vanlig") {
+        const streng = await db().execute({
+          sql: `SELECT c.id FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+                 WHERE c.set_code IN (${plass}) AND c.variant = ?
+                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}
+                 ORDER BY (c.set_code = ?) DESC,
+                          CAST(c.collector_number AS INTEGER) ASC,
+                          s.released_at ASC
+                 LIMIT 1 OFFSET ?`,
+          args: [...sett, variant, n, helt, n, n, setCode, posisjon || 0],
+        });
+        if (streng.rows[0]) treff = streng;
       }
 
       if (!treff?.rows?.[0]) {

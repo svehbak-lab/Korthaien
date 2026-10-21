@@ -16,20 +16,30 @@ export type Variant = "vanlig" | "extended" | "borderless" | "showcase" | "retro
 // samtidig, og vi vil ha det mest spesifikke.
 export function variantFraScryfall(k: {
   border_color?: string;
+  frame?: string;
   frame_effects?: string[];
   finishes?: string[];
   full_art?: boolean;
   textless?: boolean;
+  released_at?: string;
 }): Variant {
   const rammer = new Set(k.frame_effects || []);
   if (rammer.has("etched") || (k.finishes || []).includes("etched")) return "etched";
   if (k.border_color === "borderless") return "borderless";
   if (rammer.has("showcase")) return "showcase";
   if (rammer.has("extendedart")) return "extended";
-  if (rammer.has("legendary") && k.border_color === "borderless") return "borderless";
-  // Retro-rammen brukes for gamle kortdesign i nye sett, f.eks. Retro
-  // Artifacts i The Brothers' War.
-  if (rammer.has("showcase") || k.frame_effects?.includes("shatteredglass")) return "showcase";
+  if (rammer.has("shatteredglass")) return "showcase";
+  // Retrorammen er ikke en frame_effect hos Scryfall — den finnes ikke i den
+  // listen i det hele tatt. Den er `frame: "1997"`, den klassiske rammen fra
+  // Mirage, brukt på et kort utgitt lenge etter at den moderne rammen kom i
+  // 2003. Et ekte 1997-kort er ingen variant, det er bare gammelt, så det er
+  // utgivelsesdatoen som skiller de to.
+  //
+  // Uten denne linjen kunne funksjonen aldri returnere "retro", mens
+  // produktnavnet «(Retro Frame)» gjorde det hver gang. De to sidene kunne
+  // ikke møtes, og retroproduktene kolliderte med grunnkortene sine fra
+  // første synk.
+  if (k.frame === "1997" && (k.released_at || "") >= "2004-01-01") return "retro";
   if (k.full_art) return "fullart";
   return "vanlig";
 }
