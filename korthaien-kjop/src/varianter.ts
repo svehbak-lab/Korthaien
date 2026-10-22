@@ -110,7 +110,15 @@ export function skillUtBokstav(navn: string): { navn: string; posisjon: number |
 //   (Extended Art)  (FOIL)  (Bound/Determined)  (Not Tournament Legal)
 // Derfor er mønsteret forankret i begge ender. Begynner innholdet med noe
 // annet enn et tall, er det ikke et nummer.
-const I_PARENTES = /^#?\s*(\d{1,4})\s*([a-z])?\s*(?:[-–—][^)]*)?$/i;
+// Etter tallet kan det stå én bokstav — da er den en del av nummeret,
+// som på gamle basic lands: «(250 A)» er samlernummer 250a. Står det noe
+// annet, er det en beskrivelse: «(#371 Mothra, Supersonic Queen)» er
+// nummer 371, og resten er kortets alternative navn.
+//
+// Skillet er «én bokstav og så slutt» mot «hva som helst etter et
+// skilletegn». Uten det andre alternativet mistet hele Godzilla-serien i
+// Ikoria nummeret sitt og ble koblet på navn i stedet.
+const I_PARENTES = /^#?\s*(\d{1,4})(?:\s*([a-z]))?(?:\s*[-–—\s].*)?$/i;
 
 // Scryfall skriver «16», butikken skriver «0016». Uten dette sammenligner vi
 // to skrivemåter av samme tall og får aldri treff.

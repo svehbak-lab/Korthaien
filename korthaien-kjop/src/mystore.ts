@@ -400,16 +400,30 @@ export async function synkMystore(
       }
       if (!treff?.rows?.[0] && nummer) {
         // Nummeret er entydig. Da trenger vi verken variant eller navn.
-        treff = await db().execute({
-          sql: `SELECT id, has_nonfoil, has_foil FROM cards
-                 WHERE set_code IN (${plass}) AND (lower(collector_number) = ? OR ltrim(lower(collector_number), '0') = ?)
-                   AND (name_norm = ? OR front_norm = ? OR back_norm = ?)${tokenKrav}
-                 LIMIT 1`,
-          args: [...sett, nummer, nummer, n, n, n],
-        });
-        // Feil nummer skal ikke gi feil kort. Bommer det, faller vi tilbake
-        // til vanlig navneoppslag under.
-        if (!treff.rows[0]) treff = null as any;
+        //
+        // Butikken skiller to kunstvarianter med «244A» og «244B», mens Scryfall
+        // gir dem hvert sitt nummer — 243 og 244. Bokstaven er da butikkens egen
+        // notasjon og ikke en del av samlernummeret, og «244b» finner ingenting.
+        //
+        // Rekkefølgen betyr noe: finnes «250a» hos Scryfall, som på Battle for
+        // Zendikars fullart-land, er den riktig og skal ikke overprøves av «250».
+        // Derfor prøves nummeret med bokstav først.
+        const nummerKandidater = /^\d+[a-z]$/.test(nummer)
+          ? [nummer, nummer.slice(0, -1)]
+          : [nummer];
+        for (const kandidat of nummerKandidater) {
+          treff = await db().execute({
+            sql: `SELECT id, has_nonfoil, has_foil FROM cards
+                   WHERE set_code IN (${plass}) AND (lower(collector_number) = ? OR ltrim(lower(collector_number), '0') = ?)
+                     AND (name_norm = ? OR front_norm = ? OR back_norm = ?)${tokenKrav}
+                   LIMIT 1`,
+            args: [...sett, kandidat, kandidat, n, n, n],
+          });
+          // Feil nummer skal ikke gi feil kort. Bommer alle kandidatene, faller
+          // vi tilbake til vanlig navneoppslag under.
+          if (treff.rows[0]) break;
+          treff = null as any;
+        }
       }
 
       // Står varianten i navnet eller kategorien, er den et krav — ikke bare
