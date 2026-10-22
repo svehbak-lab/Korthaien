@@ -128,3 +128,36 @@ export function nummerFraParentes(navn: string): string | null {
   }
   return null;
 }
+
+// ── oppgitt behandling ───────────────────────────────────────────────────────
+// Butikken og Scryfall bruker ulike ord om samme kort. «Shao Jun (Showcase)»
+// i Assassin's Creed er `borderless` hos Scryfall — settet har ikke et eneste
+// kort med varianten `showcase`. Produktet og kortet kan altså være enige om
+// at dette ikke er standardutgaven, og likevel ikke finne hverandre.
+//
+// Derfor spør vi ikke hva ordet betyr, bare om det er der. Står det noe i
+// parentesen som ikke er foilmerking eller et nummer, sier produktet at dette
+// er en annen utgave enn grunnkortet — og da er grunnkortet feil svar,
+// uansett hvilket ord butikken bruker.
+//
+// Det gjør regelen uavhengig av ordlister som aldri blir ferdige: Promo Pack,
+// Prerelease Foil, Schematic Art og hva de nå finner på neste gang.
+export function oppgirBehandling(navn: string): boolean {
+  for (const m of navn.matchAll(/\(([^)]*)\)/g)) {
+    const t = m[1].trim();
+    if (!t) continue;
+    // Splittkort gjentar hele navnet i parentes: «Determined
+    // (Bound/Determined)». Det er en opplysning om kortet, ikke en utgave.
+    if (t.includes("/")) continue;
+    // «(009)», «(#297)», «(250 A)» — samlernummer, håndteres et annet sted.
+    if (I_PARENTES.test(t)) continue;
+    // «(Foil)», «(FOIL)», «(Non-foil)» — finish, ikke utgave.
+    const rest = t
+      .replace(/\bnon[\s-]?foil\b/gi, "")
+      .replace(/\bfoil\b/gi, "")
+      .replace(/[,\s]+/g, "");
+    if (!rest) continue;
+    return true;
+  }
+  return false;
+}

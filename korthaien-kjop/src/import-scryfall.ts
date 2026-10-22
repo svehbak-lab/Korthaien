@@ -235,6 +235,7 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
               usd = excluded.usd, usd_foil = excluded.usd_foil,
               image_uri = excluded.image_uri, rarity = excluded.rarity,
               variant = excluded.variant,
+              has_nonfoil = excluded.has_nonfoil, has_foil = excluded.has_foil,
               type_line = excluded.type_line, oracle_text = excluded.oracle_text,
               mana_cost = excluded.mana_cost, cmc = excluded.cmc,
               colors = excluded.colors, color_identity = excluded.color_identity,

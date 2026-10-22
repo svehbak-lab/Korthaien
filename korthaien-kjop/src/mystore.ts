@@ -1,7 +1,7 @@
 import { db, normaliser } from "./db.js";
 import { byggIndeks, finnSett } from "./settnavn.js";
 import { gjettSett } from "./gjett.js";
-import { variantFraNavn, skillUtNummer, skillUtBokstav, nummerFraParentes } from "./varianter.js";
+import { variantFraNavn, skillUtNummer, skillUtBokstav, nummerFraParentes, oppgirBehandling } from "./varianter.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MYSTORE
@@ -307,7 +307,7 @@ export async function synkMystore(
       // Beholdningen havnet på feil rad, og kvoten for vanlige ble null.
       const erFoil = (t: string) =>
         /\bfoil\b/i.test(t) && !/\bnon[\s-]?foil\b/i.test(t);
-      const foil = erFoil(p.navn) || erFoil(kat.navn);
+      let foil = erFoil(p.navn) || erFoil(kat.navn);
       // Varianten leses ut av navnet før parentesene kastes — det er nettopp
       // der den står: «Bold Plagiarist (Extended Art)».
       // Varianten kan stå i kategorien i stedet for i navnet — «Retro
@@ -364,7 +364,7 @@ export async function synkMystore(
       if (nummer) {
         // Nummeret er entydig. Da trenger vi verken variant eller navn.
         treff = await db().execute({
-          sql: `SELECT id FROM cards
+          sql: `SELECT id, has_nonfoil, has_foil FROM cards
                  WHERE set_code IN (${plass}) AND (lower(collector_number) = ? OR ltrim(lower(collector_number), '0') = ?)
                    AND (name_norm = ? OR front_norm = ? OR back_norm = ?)${tokenKrav}
                  LIMIT 1`,
@@ -384,7 +384,7 @@ export async function synkMystore(
       // uløst ville vært å bytte én feil mot en annen.
       if (!treff?.rows?.[0] && variant !== "vanlig") {
         const streng = await db().execute({
-          sql: `SELECT c.id FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+          sql: `SELECT c.id, c.has_nonfoil, c.has_foil FROM cards c LEFT JOIN sets s ON s.code = c.set_code
                  WHERE c.set_code IN (${plass}) AND c.variant = ?
                    AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}
                  ORDER BY (c.set_code = ?) DESC,
@@ -396,9 +396,35 @@ export async function synkMystore(
         if (streng.rows[0]) treff = streng;
       }
 
+      // Produktet oppgir en behandling, men ingen kandidat har nøyaktig den
+      // varianten. «Shao Jun (Showcase)» i Assassin's Creed er et eksempel:
+      // settet har ikke ett eneste showcase-kort, utgaven heter `borderless`
+      // hos Scryfall. Vi vet ikke oversettelsen, men vi vet at grunnutgaven er
+      // feil svar — og da er hvilken som helst av de andre bedre enn den.
+      //
+      // Det er også grunnen til at regelen ikke er en ordliste: Promo Pack,
+      // Prerelease Foil og Schematic Art løses av det samme, uten at vi
+      // trenger å vite hva de heter hos Scryfall.
+      if (
+        !treff?.rows?.[0] &&
+        (variant !== "vanlig" || oppgirBehandling(utenFoil) || oppgirBehandling(kat.navn))
+      ) {
+        const ikkeVanlig = await db().execute({
+          sql: `SELECT c.id, c.has_nonfoil, c.has_foil FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+                 WHERE c.set_code IN (${plass}) AND c.variant <> 'vanlig'
+                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}
+                 ORDER BY (c.set_code = ?) DESC,
+                          CAST(c.collector_number AS INTEGER) ASC,
+                          s.released_at ASC
+                 LIMIT 1 OFFSET ?`,
+          args: [...sett, n, helt, n, n, setCode, posisjon || 0],
+        });
+        if (ikkeVanlig.rows[0]) treff = ikkeVanlig;
+      }
+
       if (!treff?.rows?.[0]) {
         treff = await db().execute({
-          sql: `SELECT c.id FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+          sql: `SELECT c.id, c.has_nonfoil, c.has_foil FROM cards c LEFT JOIN sets s ON s.code = c.set_code
                  WHERE c.set_code IN (${plass})
                    AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}
                  ORDER BY (c.variant = ?) DESC,
@@ -415,6 +441,21 @@ export async function synkMystore(
         continue;
       }
       koblet++;
+      // Expeditions finnes bare som foil, og butikken kaller dem ikke «foil» —
+      // det ville vært overflødig. Da sier kortdataene det navnet ikke sier,
+      // og beholdningen havner på en finish kortet ikke har. Butikken viser
+      // bare finisher kortet faktisk har, så kortene blir usynlige.
+      //
+      // Bare denne veien. Sier navnet «foil» mens kortdataene mener foil ikke
+      // finnes, er navnet en påstand du har skrevet om et fysisk kort — og da
+      // er det importen som skal mistenkes, ikke deg.
+      if (
+        !foil &&
+        Number((treff.rows[0] as any).has_foil) === 1 &&
+        Number((treff.rows[0] as any).has_nonfoil) === 0
+      ) {
+        foil = true;
+      }
       // Et produkt kan bare være ett kort. Flytter det seg — fordi
       // variantmatchingen ble bedre, eller fordi du rettet et navn — må den
       // gamle raden bort. Ellers står beholdningen igjen på et kort som ikke
