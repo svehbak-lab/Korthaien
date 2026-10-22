@@ -26,7 +26,9 @@ test("butikkens tilleggsord gir samme variant", () => {
 test("samlernummer skilles ut av navnet", () => {
   assert.deepEqual(skillUtNummer("Island 267"), { navn: "Island", nummer: "267" });
   assert.deepEqual(skillUtNummer("Mountain 274"), { navn: "Mountain", nummer: "274" });
-  assert.deepEqual(skillUtNummer("Beast Within 0075"), { navn: "Beast Within", nummer: "0075" });
+  // Butikken skriver 0075, Scryfall skriver 75. Normaliseringen er poenget:
+  // uten den fant aldri «Swamp (0277)» kortet sitt.
+  assert.deepEqual(skillUtNummer("Beast Within 0075"), { navn: "Beast Within", nummer: "75" });
   assert.deepEqual(skillUtNummer("Ragavan 138a"), { navn: "Ragavan", nummer: "138a" });
 });
 
