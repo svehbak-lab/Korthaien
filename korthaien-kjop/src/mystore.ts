@@ -321,6 +321,19 @@ export async function synkMystore(
       continue;
     }
 
+    // Manuelt koblede først. Kollisjonsvakten under lar det første produktet
+    // ta kortet, og rekkefølgen kommer fra butikken — den sier ingenting om
+    // hvilket produkt som har rett. Uten denne sorteringen taper en kobling
+    // du har bestemt mot et produkt som bare gjettet på navnet, avhengig av
+    // hvilken vei lista tilfeldigvis kom.
+    //
+    // En manuell kobling er en beslutning. Et navneoppslag er en antakelse.
+    produkter.sort(
+      (a, b) =>
+        (lenker.get(String(b.id))?.card_id ? 1 : 0) -
+        (lenker.get(String(a.id))?.card_id ? 1 : 0)
+    );
+
     for (const p of produkter) {
       const lenke = lenker.get(String(p.id));
       // Et produkt du har merket som «ikke et kort» skal verken kobles eller
