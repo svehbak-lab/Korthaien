@@ -287,6 +287,26 @@ export async function synkMystore(
   let koblet = 0;
   const uløste: { p: Produkt; kat: string; setCode: string }[] = [];
   const stockRader: { sql: string; args: any[] }[] = [];
+  // Manuelle koblinger. Hele tabellen leses én gang — den er liten, og et
+  // oppslag per produkt ville vært titusener av spørringer mot Frankfurt.
+  //
+  // Disse går foran alle regler. Har du bestemt hvilket kort et produkt er,
+  // er det ikke matcherens oppgave å ha en mening om det.
+  const lenker = new Map<string, { card_id: string | null; finish: string; ignored: number }>();
+  {
+    const lr = await db().execute(
+      "SELECT product_id, card_id, finish, ignored FROM mystore_links"
+    );
+    for (const x of lr.rows as any[]) {
+      lenker.set(String(x.product_id), {
+        card_id: x.card_id == null ? null : String(x.card_id),
+        finish: String(x.finish || "nonfoil"),
+        ignored: Number(x.ignored || 0),
+      });
+    }
+    if (lenker.size) logg(`  ${lenker.size} manuelle koblinger lest.`);
+  }
+
   const settSett = new Set<string>();
 
   for (let i = 0; i < skalHentes.length; i++) {
@@ -302,6 +322,11 @@ export async function synkMystore(
     }
 
     for (const p of produkter) {
+      const lenke = lenker.get(String(p.id));
+      // Et produkt du har merket som «ikke et kort» skal verken kobles eller
+      // havne i uløst-lista. Ellers kommer det tilbake ved hver synk, og
+      // lista blir aldri kortere uansett hvor mye du rydder.
+      if (lenke?.ignored) continue;
       // «non-foil» inneholder «foil», og bindestreken er en ordgrense — så
       // \bfoil\b traff dem også, og kortene ble koblet som foil-utgaver.
       // Beholdningen havnet på feil rad, og kvoten for vanlige ble null.
@@ -365,8 +390,15 @@ export async function synkMystore(
       const behandling =
         variant !== "vanlig" || oppgirBehandling(utenFoil) || oppgirBehandling(kat.navn);
 
-      let treff;
-      if (nummer) {
+      let treff: any = null;
+      // Er kortet bestemt manuelt, er alt under uten betydning. Finishen følger
+      // med fra koblingen — du vet om kortet i hylla er foil, og det gjør
+      // hverken navnet eller kortdataene bedre enn deg.
+      if (lenke?.card_id) {
+        treff = { rows: [{ id: lenke.card_id, has_nonfoil: 1, has_foil: 1 }] };
+        foil = lenke.finish === "foil";
+      }
+      if (!treff?.rows?.[0] && nummer) {
         // Nummeret er entydig. Da trenger vi verken variant eller navn.
         treff = await db().execute({
           sql: `SELECT id, has_nonfoil, has_foil FROM cards
