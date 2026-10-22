@@ -360,6 +360,11 @@ export async function synkMystore(
       const sett = familie.get(setCode) || [setCode];
       const plass = sett.map(() => "?").join(",");
 
+      // Brukes to steder: når vi velger kandidat, og når vi oppdager at
+      // kandidaten ikke finnes i produktets finish.
+      const behandling =
+        variant !== "vanlig" || oppgirBehandling(utenFoil) || oppgirBehandling(kat.navn);
+
       let treff;
       if (nummer) {
         // Nummeret er entydig. Da trenger vi verken variant eller navn.
@@ -405,10 +410,7 @@ export async function synkMystore(
       // Det er også grunnen til at regelen ikke er en ordliste: Promo Pack,
       // Prerelease Foil og Schematic Art løses av det samme, uten at vi
       // trenger å vite hva de heter hos Scryfall.
-      if (
-        !treff?.rows?.[0] &&
-        (variant !== "vanlig" || oppgirBehandling(utenFoil) || oppgirBehandling(kat.navn))
-      ) {
+      if (!treff?.rows?.[0] && behandling) {
         const ikkeVanlig = await db().execute({
           sql: `SELECT c.id, c.has_nonfoil, c.has_foil FROM cards c LEFT JOIN sets s ON s.code = c.set_code
                  WHERE c.set_code IN (${plass}) AND c.variant <> 'vanlig'
@@ -454,7 +456,41 @@ export async function synkMystore(
         Number((treff.rows[0] as any).has_foil) === 1 &&
         Number((treff.rows[0] as any).has_nonfoil) === 0
       ) {
-        foil = true;
+        // Produktet er ikke foil, men kortet vi fant finnes bare i foil. Da
+        // er det mest sannsynlig feil KORT, ikke feil finish — et ikke-foil
+        // produkt kan umulig være et trykk som aldri ble laget i annet enn
+        // foil.
+        //
+        // «Aerid Konstrari (Showcase)» er eksempelet: settet har to trykk som
+        // heter `showcase` hos Scryfall, begge bare i foil, og ett som heter
+        // `borderless` og finnes i begge. Butikken kaller det siste
+        // «Showcase». Finishen utelukker de to første helt.
+        //
+        // Har nummeret allerede avgjort koblingen, er den sikrere enn dette
+        // resonnementet, og da rører vi den ikke.
+        const sammeFinish = nummer
+          ? null
+          : await db().execute({
+              sql: `SELECT c.id, c.has_nonfoil, c.has_foil FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+                     WHERE c.set_code IN (${plass}) AND c.has_nonfoil = 1
+                       AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}
+                       ${behandling ? "AND c.variant <> 'vanlig'" : ""}
+                     ORDER BY (c.set_code = ?) DESC,
+                              CAST(c.collector_number AS INTEGER) ASC,
+                              s.released_at ASC
+                     LIMIT 1`,
+              args: [...sett, n, helt, n, n, setCode],
+            });
+        if (sammeFinish?.rows[0]) {
+          // Det fantes et trykk i riktig finish. Da var det kortet som var
+          // feil, og finishen var riktig hele tiden.
+          treff = sammeFinish;
+        } else {
+          // Ingen utgave i produktets finish. Da er det Expeditions-tilfellet:
+          // kortet finnes bare i foil, og butikken sier det ikke fordi det
+          // ville vært overflødig.
+          foil = true;
+        }
       }
       // Et produkt kan bare være ett kort. Flytter det seg — fordi
       // variantmatchingen ble bedre, eller fordi du rettet et navn — må den
