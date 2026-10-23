@@ -513,6 +513,20 @@ textarea { width: 100%; font-family: inherit; }
 .butikk .b-flis-stille { cursor: default; }
 .butikk .b-flis-tomt { background: var(--papir); border: 1px dashed var(--kant); }
 
+/* Tallene i «Om settet». Fire like store ruter: ingen av dem er viktigere
+   enn de andre, og de legger seg under hverandre naar det blir trangt. */
+.butikk .b-omrute {
+  display: grid; gap: 12px; margin-top: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+.butikk .b-omtall {
+  background: var(--papir); border: 1px solid var(--kant);
+  border-radius: var(--runding, 10px); padding: 12px 14px;
+}
+.butikk .b-omtall b { display: block; font-size: 24px; line-height: 1.1; }
+.butikk .b-omtall span { font-size: 12.5px; color: var(--svak); }
+.butikk .b-omrariteter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
 .butikk .b-rad { display: flex; align-items: baseline; gap: 12px; margin: 26px 0 12px; }
 .butikk .b-rad h2 { margin: 0; font-size: 16px; }
 .butikk .b-rad .hoyre { margin-left: auto; }

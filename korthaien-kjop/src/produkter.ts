@@ -55,13 +55,17 @@ export function erType(s: unknown): s is Produkttype {
 // Butikken ber om `barePåLager`, admin ber ikke. Det er samme regel som
 // kortene følger: kunden ser det som finnes, du ser alt du har lagt inn.
 export async function hentProdukter(
-  opts: { type?: Produkttype; barePåLager?: boolean; bareAktive?: boolean } = {}
+  opts: { type?: Produkttype; set_code?: string; barePåLager?: boolean; bareAktive?: boolean } = {}
 ): Promise<Produkt[]> {
   const hvor: string[] = [];
   const args: any[] = [];
   if (opts.type) {
     hvor.push("type = ?");
     args.push(opts.type);
+  }
+  if (opts.set_code) {
+    hvor.push("set_code = ?");
+    args.push(String(opts.set_code).toLowerCase());
   }
   if (opts.bareAktive !== false) hvor.push("aktiv = 1");
   if (opts.barePåLager) hvor.push("antall > 0");

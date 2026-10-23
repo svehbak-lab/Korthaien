@@ -14,6 +14,7 @@ import {
   hentProdukter, hentProdukt, leggTilProdukt, endreProdukt, slåAvProdukt,
   antallPerType, erType,
 } from "./produkter.js";
+import { settinfo } from "./settinfo.js";
 import { forsideSett } from "./forside.js";
 import { kontoer, bevegelser, saldo, leggTil as leggTilKreditt, settSaldo } from "./kreditt.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
@@ -1092,6 +1093,14 @@ app.delete("/api/admin/frakt/:id", krevAdmin, fang(async (req: any, res: any) =>
   res.json({ ok: true });
 }));
 
+// Fakta om ett sett, til «Om settet»-fanen. Samme svar sier om det finnes
+// sealed i settet, saa fanen og innholdet aldri kan bli uenige.
+app.get("/api/admin/butikk/sett/:kode", krevAdmin, fang(async (req: any, res: any) => {
+  const info = await settinfo(String(req.params.kode));
+  if (!info) throw new HttpFeil(404, "Fant ikke settet.");
+  res.json({ info });
+}));
+
 // ── egne produkter ───────────────────────────────────────────────────────────
 // Sealed og komplette sett. Butikken spør med bareLager=1 og får bare det som
 // finnes; admin spør uten og ser alt den har lagt inn — samme skille som
@@ -1101,6 +1110,7 @@ app.get("/api/admin/produkter", krevAdmin, fang(async (req: any, res: any) => {
   res.json({
     produkter: await hentProdukter({
       type: erType(type) ? type : undefined,
+      set_code: String(req.query.sett || "") || undefined,
       barePåLager: String(req.query.bareLager || "") === "1",
       bareAktive: String(req.query.alle || "") !== "1",
     }),

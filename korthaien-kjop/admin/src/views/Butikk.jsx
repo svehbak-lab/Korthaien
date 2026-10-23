@@ -53,7 +53,12 @@ export default function Butikk({ onFeil }) {
   const [data, setData] = useState(null);
   const [laster, setLaster] = useState(false);
   const [visning, setVisning] = useState("detalj");
-  const [finish, setFinish] = useState("alle");
+  // Fanene er én tilstand, ikke to. «Sealed» og «Om settet» er faner paa
+  // linje med de andre for den som ser paa, men de er ikke finish — derfor
+  // utledes finish herfra, og spoerringen kan aldri faa «sealed» som finish.
+  const [fane, setFane] = useState("alle");
+  const finish = KORTFANER.some((x) => x.id === fane) ? fane : "alle";
+  const [settinfo, setSettinfo] = useState(null);
   const [sortering, setSortering] = useState("pris_ned");
   const [perSide, setPerSide] = useState(25);
   const [side, setSide] = useState(1);
@@ -81,6 +86,29 @@ export default function Butikk({ onFeil }) {
   useEffect(() => {
     api.sett().then((r) => setAlle(r.sett.filter((s) => Number(s.enabled)))).catch(onFeil);
   }, []);
+
+  // Fakta om settet du staar i. Samme svar bestemmer om Sealed-fanen vises
+  // og fyller «Om settet», saa de to aldri kan bli uenige.
+  useEffect(() => {
+    if (!sett) {
+      setSettinfo(null);
+      return;
+    }
+    let avbrutt = false;
+    setSettinfo(null);
+    api.settinfo(sett).then((r) => !avbrutt && setSettinfo(r.info)).catch(() => {});
+    return () => {
+      avbrutt = true;
+    };
+  }, [sett]);
+
+  // Fanene som bare finnes inne i et sett kan forsvinne under foettene paa
+  // deg: du bytter sett, og det nye har ingen sealed. Da skal du lande paa
+  // «Alle treff» og ikke paa en tom fane.
+  useEffect(() => {
+    if (fane === "om" && !sett) setFane("alle");
+    if (fane === "sealed" && (!sett || (settinfo && settinfo.sealed === 0))) setFane("alle");
+  }, [sett, settinfo, fane]);
 
   // Lagerfilteret hører til forsiden, der det er det eneste som avgrenser.
   // Velger du et sett, vil du se hele settet — ikke bare det du eier.
@@ -314,22 +342,36 @@ export default function Butikk({ onFeil }) {
                       fane. Det var dét som gjorde at Kaladesh Inventions
                       ikke dukket opp når man søkte «Sol Ring». */}
                   <div className="faner" role="tablist">
-                    {[
-                      { id: "alle", navn: "Alle treff" },
-                      { id: "nonfoil", navn: "Vanlig" },
-                      { id: "foil", navn: "Foil" },
-                    ].map((x) => (
+                    {KORTFANER.map((x) => (
                       <button
                         key={x.id}
                         role="tab"
-                        aria-selected={finish === x.id}
-                        onClick={() => setFinish(x.id)}
+                        aria-selected={fane === x.id}
+                        onClick={() => setFane(x.id)}
                       >
                         {x.navn}
                         {data && <span className="dempet"> ({data.antall?.[x.id] ?? 0})</span>}
                       </button>
                     ))}
 
+                    {/* Sealed staar bare naar du staar i et sett og det
+                        faktisk finnes sealed i det. En fane som aapner en
+                        tom liste er en fane som lyver om hva du har. */}
+                    {sett && settinfo?.sealed > 0 && (
+                      <button role="tab" aria-selected={fane === "sealed"} onClick={() => setFane("sealed")}>
+                        Sealed<span className="dempet"> ({settinfo.sealed})</span>
+                      </button>
+                    )}
+
+                    {/* «Om settet» staar saa lenge du staar i et sett. Det
+                        finnes alltid noe aa si naar settet finnes. */}
+                    {sett && (
+                      <button role="tab" aria-selected={fane === "om"} onClick={() => setFane("om")}>
+                        Om settet
+                      </button>
+                    )}
+
+                    {KORTFANER.some((x) => x.id === fane) && (
                     <div style={{ marginLeft: "auto", display: "flex", gap: 2, paddingBottom: 8 }}>
                       {/* Rekkefølgen er tetthet: tettest til venstre, mest
                           plass per kort til høyre. */}
@@ -352,8 +394,10 @@ export default function Butikk({ onFeil }) {
                         form="rutenett"
                       />
                     </div>
+                    )}
                   </div>
 
+                  {KORTFANER.some((x) => x.id === fane) && (
                   <div className="rad-flex" style={{ padding: "10px 0", justifyContent: "space-between" }}>
                     <span className="dempet">
                       {data
@@ -377,12 +421,18 @@ export default function Butikk({ onFeil }) {
                       </label>
                     </div>
                   </div>
+                  )}
                 </div>
               </div>
 
-              {laster && <p className="dempet">Henter…</p>}
+              {fane === "sealed" && (
+                <Produktliste type="sealed" setKode={sett} skjulTittel onFeil={onFeil} />
+              )}
+              {fane === "om" && <OmSettet info={settinfo} onSett={setSett} />}
 
-              {!laster && data && (
+              {KORTFANER.some((x) => x.id === fane) && laster && <p className="dempet">Henter…</p>}
+
+              {KORTFANER.some((x) => x.id === fane) && !laster && data && (
                 <>
                   <p className="dempet">
                     {data.utenPris > 0 && (
@@ -467,6 +517,14 @@ export default function Butikk({ onFeil }) {
 // mangler halve innholdet ikke sier noe om hvordan den blir.
 // Produkttypene staar ett sted. Menyen i toppen, skjermene og seksjonene paa
 // forsiden leser alle herfra, saa en ny type blir én linje og ikke tre.
+// Kortfanene. De tre er avgrensninger av hverandre, ikke tre halvdeler av
+// katalogen — derfor kan ingen kort bli borte fordi man staar i feil fane.
+const KORTFANER = [
+  { id: "alle", navn: "Alle treff" },
+  { id: "nonfoil", navn: "Vanlig" },
+  { id: "foil", navn: "Foil" },
+];
+
 const PRODUKTTYPER = [
   { id: "sealed", navn: "Sealed", ingress: "Forseglede bokser, bundles og displayer." },
   { id: "komplettsett", navn: "Komplette sett", ingress: "Hele sett, ferdig samlet." },
@@ -1401,7 +1459,7 @@ function Flis({ kort, onÅpne }) {
 // varianter aa bla i. Derfor ingen kortside og ingen fanerad — bare navn,
 // bilde, pris og hvor mange du har. Et skjermbilde som later som om det er
 // mer komplisert enn det er, er et skjermbilde i veien.
-function Produktliste({ type, onFeil }) {
+function Produktliste({ type, setKode, skjulTittel, onFeil }) {
   const [produkter, setProdukter] = useState(null);
   const valgt = PRODUKTTYPER.find((t) => t.id === type);
 
@@ -1409,7 +1467,7 @@ function Produktliste({ type, onFeil }) {
     let avbrutt = false;
     setProdukter(null);
     api
-      .produkter({ type, bareLager: 1 })
+      .produkter({ type, sett: setKode || "", bareLager: 1 })
       .then((r) => !avbrutt && setProdukter(r.produkter || []))
       .catch((e) => {
         if (avbrutt) return;
@@ -1419,14 +1477,18 @@ function Produktliste({ type, onFeil }) {
     return () => {
       avbrutt = true;
     };
-  }, [type]);
+  }, [type, setKode]);
 
   return (
     <>
-      <div className="b-rad">
-        <h2>{valgt?.navn || "Produkter"}</h2>
-      </div>
-      {valgt?.ingress && <p className="dempet" style={{ marginTop: -6 }}>{valgt.ingress}</p>}
+      {!skjulTittel && (
+        <>
+          <div className="b-rad">
+            <h2>{valgt?.navn || "Produkter"}</h2>
+          </div>
+          {valgt?.ingress && <p className="dempet" style={{ marginTop: -6 }}>{valgt.ingress}</p>}
+        </>
+      )}
 
       {produkter === null && <p className="dempet">Henter…</p>}
       {produkter !== null && produkter.length === 0 && (
@@ -1439,6 +1501,115 @@ function Produktliste({ type, onFeil }) {
       )}
     </>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OM SETTET
+// ─────────────────────────────────────────────────────────────────────────────
+// Card Kingdom har en redaksjonell tekst her. Den maa noen skrive, og den
+// blir staaende uendret naar lageret endrer seg. Disse tallene er sanne hver
+// gang noen aapner sida, og ingen maa huske aa oppdatere dem.
+function OmSettet({ info, onSett }) {
+  if (!info) return <p className="dempet">Henter…</p>;
+
+  const dekning =
+    info.kort_i_settet > 0
+      ? Math.round((info.ulike_på_lager / info.kort_i_settet) * 100)
+      : null;
+
+  return (
+    <div className="panel">
+      <div className="krop">
+        <h2 style={{ margin: "0 0 2px", fontSize: 20 }}>{info.navn}</h2>
+        {info.offisielt_navn !== info.navn && (
+          <p className="dempet" style={{ margin: "0 0 14px" }}>
+            Heter {info.offisielt_navn} hos Scryfall.
+          </p>
+        )}
+
+        <div className="b-omrute">
+          <Omtall tall={info.kort_i_settet || "—"} tekst="kort i settet" />
+          <Omtall tall={info.ulike_på_lager} tekst="forskjellige på lager" />
+          <Omtall tall={info.eksemplarer} tekst="eksemplarer i hylla" />
+          <Omtall
+            tall={info.utgitt ? new Date(info.utgitt).getFullYear() : "—"}
+            tekst={info.utgitt ? "utgitt " + nordato(info.utgitt) : "utgivelsesdato ukjent"}
+          />
+        </div>
+
+        {dekning !== null && (
+          <p style={{ marginTop: 16 }}>
+            Du har <b>{dekning} %</b> av settet inne — {info.ulike_på_lager} av{" "}
+            {info.kort_i_settet} kort.
+          </p>
+        )}
+
+        {info.rariteter.length > 0 && (
+          <>
+            <h3 style={{ fontSize: 14, margin: "18px 0 6px" }}>Fordelt på raritet</h3>
+            <div className="b-omrariteter">
+              {info.rariteter.map((r) => (
+                <span key={r.raritet} className={"merkelapp r-" + r.raritet}>
+                  {RARITETSNAVN[r.raritet] || r.raritet} {r.antall}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {info.slektninger.length > 0 && (
+          <>
+            <h3 style={{ fontSize: 14, margin: "20px 0 6px" }}>Hører sammen med</h3>
+            <p className="dempet" style={{ margin: "0 0 8px", fontSize: 13 }}>
+              Scryfall deler én utgivelse i flere sett. Kundene tenker på dem
+              som det samme.
+            </p>
+            <div className="b-omrariteter">
+              {info.slektninger.map((x) => (
+                <button key={x.code} className="knapp liten" onClick={() => onSett(x.code)}>
+                  {x.navn}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {(info.sealed > 0 || info.komplettsett > 0) && (
+          <p className="dempet" style={{ marginTop: 20, marginBottom: 0 }}>
+            {info.sealed > 0 && `${info.sealed} sealed-produkt${info.sealed === 1 ? "" : "er"}`}
+            {info.sealed > 0 && info.komplettsett > 0 && " og "}
+            {info.komplettsett > 0 &&
+              `${info.komplettsett} komplett${info.komplettsett === 1 ? "" : "e"} sett`}{" "}
+            fra denne utgivelsen på lager.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Omtall({ tall, tekst }) {
+  return (
+    <div className="b-omtall">
+      <b>{tall}</b>
+      <span>{tekst}</span>
+    </div>
+  );
+}
+
+const RARITETSNAVN = {
+  common: "Vanlig", uncommon: "Uvanlig", rare: "Sjelden",
+  mythic: "Mytisk", special: "Spesial", bonus: "Bonus",
+};
+
+// Ikke toLocaleString: den gir ulik tekst i ulike nettlesere, og dette skal
+// se likt ut uansett hvem som ser paa.
+const MÅNEDER = ["januar", "februar", "mars", "april", "mai", "juni", "juli",
+  "august", "september", "oktober", "november", "desember"];
+function nordato(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return `${d.getDate()}. ${MÅNEDER[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 function Produktflis({ produkt: p }) {

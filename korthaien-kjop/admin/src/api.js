@@ -138,6 +138,7 @@ export const api = {
     kall("/api/admin/produkter?" + new URLSearchParams(
       Object.entries(o).filter(([, v]) => v !== undefined && v !== "")
     )),
+  settinfo: (kode) => kall(`/api/admin/butikk/sett/${encodeURIComponent(kode)}`),
   leggTilProdukt: (p) => kall("/api/admin/produkter", { method: "POST", body: p }),
   endreProdukt: (id, p) => kall(`/api/admin/produkter/${id}`, { method: "PUT", body: p }),
   slåAvProdukt: (id) => kall(`/api/admin/produkter/${id}`, { method: "DELETE" }),
