@@ -796,8 +796,14 @@ textarea { width: 100%; font-family: inherit; }
   display: flex; flex-direction: column; gap: 2px;
 }
 .butikk .b-settflis:hover { border-color: var(--sjo); }
+/* Hoeyden er et utsnitt av kortbildet, ikke hele. 150 piksler mot 108 gir
+   nok av illustrasjonen til at settet kjennes igjen — en strime paa 108 var
+   for lite til aa se hva motivet var.
+
+   object-position holder utsnittet oeverst i illustrasjonen: det er der
+   motivet er, og nederst er det bare regeltekst. */
 .butikk .b-settflis img, .butikk .b-settflis-tom {
-  width: 100%; height: 108px; object-fit: cover; object-position: 50% 22%;
+  width: 100%; height: 150px; object-fit: cover; object-position: 50% 22%;
   display: block; background: var(--papir); margin-bottom: 8px;
 }
 .butikk .b-settflis .navn { font-weight: 600; font-size: 13px; line-height: 1.25; padding: 0 8px; }

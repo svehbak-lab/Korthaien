@@ -107,14 +107,8 @@ export default function Butikk({ onFeil }) {
   // «Alle treff» og ikke paa en tom fane.
   useEffect(() => {
     if (fane === "om" && !sett) setFane("alle");
-    if (fane === "sealed" && (!sett || (settinfo && settinfo.sealed === 0))) setFane("alle");
+    if (fane === "sealed" && (!sett || (settinfo && settprodukter(settinfo) === 0))) setFane("alle");
   }, [sett, settinfo, fane]);
-
-  // Lagerfilteret hører til forsiden, der det er det eneste som avgrenser.
-  // Velger du et sett, vil du se hele settet — ikke bare det du eier.
-  useEffect(() => {
-    setF((x) => ({ ...x, baresalg: !sett }));
-  }, [sett]);
 
   // Endrer du et filter, må du tilbake til første side. Ellers står du på side
   // sju i et resultat med to sider og ser ingenting.
@@ -357,9 +351,9 @@ export default function Butikk({ onFeil }) {
                     {/* Sealed staar bare naar du staar i et sett og det
                         faktisk finnes sealed i det. En fane som aapner en
                         tom liste er en fane som lyver om hva du har. */}
-                    {sett && settinfo?.sealed > 0 && (
+                    {sett && settprodukter(settinfo) > 0 && (
                       <button role="tab" aria-selected={fane === "sealed"} onClick={() => setFane("sealed")}>
-                        Sealed<span className="dempet"> ({settinfo.sealed})</span>
+                        Sealed<span className="dempet"> ({settprodukter(settinfo)})</span>
                       </button>
                     )}
 
@@ -426,7 +420,7 @@ export default function Butikk({ onFeil }) {
               </div>
 
               {fane === "sealed" && (
-                <Produktliste type="sealed" setKode={sett} skjulTittel onFeil={onFeil} />
+                <Produktliste setKode={sett} skjulTittel onFeil={onFeil} />
               )}
               {fane === "om" && <OmSettet info={settinfo} onSett={setSett} />}
 
@@ -519,6 +513,11 @@ export default function Butikk({ onFeil }) {
 // forsiden leser alle herfra, saa en ny type blir én linje og ikke tre.
 // Kortfanene. De tre er avgrensninger av hverandre, ikke tre halvdeler av
 // katalogen — derfor kan ingen kort bli borte fordi man staar i feil fane.
+// Alt du har fra utgivelsen, uansett slag. En forseglet boks og et ferdig
+// samlet sett hoerer til det samme settet, og den som staar paa settsida
+// leter etter begge deler — ikke etter en av dem.
+const settprodukter = (info) => (info?.sealed || 0) + (info?.komplettsett || 0);
+
 const KORTFANER = [
   { id: "alle", navn: "Alle treff" },
   { id: "nonfoil", navn: "Vanlig" },
