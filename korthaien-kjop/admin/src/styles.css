@@ -272,3 +272,73 @@ textarea { width: 100%; font-family: inherit; }
   text-align: left;
 }
 .butikk .lenke:hover { text-decoration: underline; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   FORSIDEN
+   ─────────────────────────────────────────────────────────────────────────────
+   Det kunden møter før lista. Ligger inne i .butikk som resten av visningen,
+   så ingenting av dette kan nå admin.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.butikk .b-hero { margin-bottom: 20px; }
+.butikk .b-hero h1 { font-size: 27px; letter-spacing: -0.02em; margin: 0 0 6px; }
+.butikk .b-hero p { color: var(--dempet); max-width: 58ch; margin: 0 0 16px; }
+
+/* Søkefeltet er det første folk gjør. Da skal det ikke være like stort som
+   et filterfelt i en søyle. */
+.butikk .b-sok { display: flex; gap: 8px; max-width: 540px; }
+.butikk .b-sok input {
+  flex: 1; min-width: 0; font-size: 15px; padding: 10px 13px;
+  border: 1px solid var(--strek-sterk); border-radius: 7px; background: var(--flate);
+}
+.butikk .b-sok input:focus { border-color: var(--sjo); }
+.butikk .b-sok button { padding: 0 18px; font-size: 14px; }
+
+/* Den andre halvparten av butikken. Card Kingdom har «Sell us your cards»
+   som sitt eget felt, ikke bare en lenke i menyen — det er den halvparten
+   folk ikke forventer å finne. Messing på dypgrønt, ikke en ny farge. */
+.butikk .b-band {
+  background: var(--dyp); color: #fff; border-radius: 10px;
+  padding: 20px 24px; margin: 22px 0;
+  display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+}
+.butikk .b-band h2 { margin: 0 0 4px; font-size: 19px; }
+.butikk .b-band p { margin: 0; color: #cfe3df; max-width: 46ch; font-size: 13.5px; }
+.butikk .b-band a {
+  margin-left: auto; background: var(--brass); color: #fff;
+  padding: 10px 18px; border-radius: 7px; font-weight: 700;
+  text-decoration: none; white-space: nowrap;
+}
+.butikk .b-band a:hover { background: #855a12; }
+
+.butikk .b-rad { display: flex; align-items: baseline; gap: 12px; margin: 26px 0 12px; }
+.butikk .b-rad h2 { margin: 0; font-size: 16px; }
+.butikk .b-rad .hoyre { margin-left: auto; }
+
+/* Bildene har samme form som et kort, så rutenettet står stille mens de
+   lastes i stedet for å hoppe nedover siden. */
+.butikk .b-rute { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.butikk .b-flis {
+  display: flex; flex-direction: column; gap: 5px; height: 100%;
+  border: none; background: none; padding: 0; text-align: left; cursor: pointer;
+}
+.butikk .b-flis img {
+  width: 100%; aspect-ratio: 488 / 680; display: block;
+  border-radius: 8px; background: var(--papir); object-fit: cover;
+}
+.butikk .b-flis:hover img { box-shadow: 0 2px 10px rgb(0 0 0 / 16%); }
+.butikk .b-flis .navn { font-weight: 600; font-size: 13px; line-height: 1.3; }
+.butikk .b-flis .linje { font-size: 12px; color: var(--dempet); }
+/* Prisen dyttes ned. Uten det står den rett under settlinja, som er én eller
+   to linjer alt etter hvor langt settnavnet er — og da hopper prisene opp og
+   ned bortover raden. */
+.butikk .b-flis .pris { margin-top: auto; }
+
+.butikk .b-info { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-top: 32px; }
+.butikk .b-info div { border: 1px solid var(--strek); border-radius: 9px; background: var(--flate); padding: 14px 16px; }
+.butikk .b-info h3 { margin: 0 0 5px; font-size: 14px; }
+.butikk .b-info p { margin: 0; font-size: 13px; color: var(--dempet); }
+
+@media (max-width: 720px) {
+  .butikk .b-band a { margin-left: 0; }
+}

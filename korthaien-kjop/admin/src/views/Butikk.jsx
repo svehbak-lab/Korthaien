@@ -55,6 +55,9 @@ export default function Butikk({ onFeil }) {
   const [side, setSide] = useState(1);
   const [f, setF] = useState(TOMT);
   const [åpentKort, setÅpentKort] = useState(null);
+  // Forsiden først. Lista er fortsatt det arbeidsredskapet den alltid har
+  // vært — den er ett klikk unna, og søket herfra lander rett i den.
+  const [skjerm, setSkjerm] = useState("forside");
 
   useEffect(() => {
     api.sett().then((r) => setAlle(r.sett.filter((s) => Number(s.enabled)))).catch(onFeil);
@@ -105,7 +108,7 @@ export default function Butikk({ onFeil }) {
       <div className="butikk">
         <Kortside
           id={åpentKort}
-          onLukk={() => setÅpentKort(null)}
+          onLukk={() => { setÅpentKort(null); setSkjerm("liste"); }}
           onÅpne={setÅpentKort}
           onSett={(kode) => { setSett(kode); setÅpentKort(null); }}
           onFeil={onFeil}
@@ -114,8 +117,33 @@ export default function Butikk({ onFeil }) {
     );
   }
 
+  if (skjerm === "forside") {
+    return (
+      <div className="butikk">
+        <Forside
+          onSøk={(q) => {
+            // Søket fra forsiden er det samme filteret som i søyla. Ett sted
+            // å lete fra, ett sted det havner.
+            endre("q", q);
+            setSkjerm("liste");
+          }}
+          onButikk={() => setSkjerm("liste")}
+          onÅpne={setÅpentKort}
+          onFeil={onFeil}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="butikk">
+      <button
+        className="knapp liten"
+        style={{ marginBottom: 12 }}
+        onClick={() => setSkjerm("forside")}
+      >
+        ← Forsiden
+      </button>
       <h1>Butikkvisning</h1>
       <p className="dempet" style={{ marginTop: -6 }}>
         Slik kundene vil se kortene. Ligger her inntil salgssiden bygges — bruk den
@@ -794,6 +822,140 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil }) {
         </>
       )}
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FORSIDEN
+// ─────────────────────────────────────────────────────────────────────────────
+// Det kunden møter før lista: hva stedet er, et søkefelt, den andre halvparten
+// av butikken, og noen kort å se på. Ingen filtre — de hører til når man
+// allerede leter etter noe bestemt.
+function Forside({ onSøk, onButikk, onÅpne, onFeil }) {
+  const [kort, setKort] = useState(null);
+  const [q, setQ] = useState("");
+
+  // De dyreste kortene på lager. Ingen egen rute: butikkruta sorterer
+  // allerede, og baresalg gjør at den bare viser det du faktisk har.
+  useEffect(() => {
+    let avbrutt = false;
+    api
+      .butikk({ sortering: "pris_ned", perSide: 12, baresalg: true })
+      .then((d) => !avbrutt && setKort(d.kort))
+      .catch((e) => !avbrutt && onFeil(e));
+    return () => {
+      avbrutt = true;
+    };
+  }, []);
+
+  return (
+    <>
+      <div className="b-hero">
+        <h1>Magic-kort fra Korthaien</h1>
+        <p>
+          Enkeltkort fra eget lager, med tilstand og antall oppgitt for hvert
+          kort. Søk, eller bla gjennom butikken.
+        </p>
+        <form
+          className="b-sok"
+          role="search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSøk(q.trim());
+          }}
+        >
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Søk etter kort"
+            aria-label="Søk etter kort"
+          />
+          <button className="knapp primar" type="submit">Søk</button>
+        </form>
+      </div>
+
+      <div className="b-band">
+        <div>
+          <h2>Selg dine kort</h2>
+          <p>
+            Søk opp kortene eller lim inn hele lista. Du ser prisen med én
+            gang, og hvor mange jeg har plass til.
+          </p>
+        </div>
+        <a href="https://kortsalg.korthaien.no">Til innkjøp →</a>
+      </div>
+
+      <div className="b-rad">
+        <h2>Dyreste på lager</h2>
+        <button className="knapp liten hoyre" onClick={onButikk}>Hele butikken</button>
+      </div>
+
+      {kort === null && <p className="dempet">Henter kort…</p>}
+      {kort !== null && kort.length === 0 && (
+        <div className="tom">Ingen kort på lager ennå.</div>
+      )}
+      {kort !== null && kort.length > 0 && (
+        <div className="b-rute">
+          {kort.map((k) => <Flis key={k.id} kort={k} onÅpne={() => onÅpne(k.id)} />)}
+        </div>
+      )}
+
+      <div className="b-info">
+        <div>
+          <h3>Tilstand oppgitt per kort</h3>
+          <p>
+            Hver tilstand har sin egen pris og sitt eget antall. Du ser hva som
+            faktisk ligger i hylla.
+          </p>
+        </div>
+        <div>
+          <h3>Butikkreditt</h3>
+          <p>
+            Selger du kort til meg, blir oppgjøret kreditt du kan handle for
+            her. Den utløper ikke.
+          </p>
+        </div>
+        <div>
+          <h3>Frakt fra 55 kr</h3>
+          <p>
+            Brev, liten eller stor norgespakke. Du velger selv hva som er verdt
+            å forsikre.
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Ett kort i rutenettet på forsiden. Prisen er den billigste du faktisk har
+// på lager — «fra» fordi tilstandene koster ulikt.
+function Flis({ kort, onÅpne }) {
+  const priser = (kort.varianter || [])
+    .flatMap((v) => v.tilstander || [])
+    .filter((t) => t.lager > 0 && t.ore !== null && t.ore !== undefined)
+    .map((t) => t.ore);
+  const fra = priser.length ? Math.min(...priser) : null;
+  const antall = (kort.varianter || []).reduce((n, v) => n + (v.påLager || 0), 0);
+  const foil = (kort.varianter || []).some((v) => v.finish === "foil" && v.påLager > 0);
+
+  return (
+    <button className="b-flis" onClick={onÅpne}>
+      {kort.image_uri ? (
+        // Bildet lastes først når det nærmer seg skjermen.
+        <img src={kort.image_uri} alt={kort.name} loading="lazy" />
+      ) : (
+        <div style={{ width: "100%", aspectRatio: "488 / 680", background: "var(--papir)", borderRadius: 8 }} />
+      )}
+      <span className="navn">{kort.name}</span>
+      <span className="linje">
+        {kort.set_name} · {kort.collector_number}
+        {kort.variant && kort.variant !== "vanlig" ? " · " + kort.variant : ""}
+        {foil ? " · foil" : ""}
+      </span>
+      <span className="pris tall">{fra === null ? "Utsolgt" : "fra " + kroner(fra)}</span>
+      <span className="linje">{antall} på lager</span>
+    </button>
   );
 }
 
