@@ -284,15 +284,103 @@ textarea { width: 100%; font-family: inherit; }
 .butikk .b-hero h1 { font-size: 27px; letter-spacing: -0.02em; margin: 0 0 6px; }
 .butikk .b-hero p { color: var(--dempet); max-width: 58ch; margin: 0 0 16px; }
 
-/* Søkefeltet er det første folk gjør. Da skal det ikke være like stort som
-   et filterfelt i en søyle. */
-.butikk .b-sok { display: flex; gap: 8px; max-width: 540px; }
-.butikk .b-sok input {
-  flex: 1; min-width: 0; font-size: 15px; padding: 10px 13px;
-  border: 1px solid var(--strek-sterk); border-radius: 7px; background: var(--flate);
+/* ─────────────────────────────────────────────────────────────────────────────
+   TOPPEN
+   ─────────────────────────────────────────────────────────────────────────────
+   To linjer som står på hver eneste side, slik Card Kingdom har det. To
+   grønntoner framfor to vilkårlige farger: den mørke bærer logo og søk, den
+   lysere er menyen under.
+
+   Oransje brukes til én ting — «Selg dine kort». Søkeknappen er derfor mørk
+   grønn og ikke oransje; ellers kjemper de to om det samme blikket, og da
+   vinner ingen av dem.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.butikk {
+  --topp1: #0b3f38;
+  --topp2: #15594e;
+  --oransje: #ffa94d;
 }
-.butikk .b-sok input:focus { border-color: var(--sjo); }
-.butikk .b-sok button { padding: 0 18px; font-size: 14px; }
+
+/* Bryter ut av luften i .hoved, så linjene går helt ut til kanten og leses
+   som en topp — ikke som nok et felt inni siden. */
+.butikk .b-skall-topp { margin: -22px -26px 0; }
+.butikk .b-innhold { padding-top: 22px; }
+
+.butikk .b-linje1 { background: var(--topp1); color: #fff; }
+.butikk .b-linje2 { background: var(--topp2); }
+.butikk .b-midt {
+  max-width: 1180px; margin: 0 auto; padding: 0 26px;
+  display: flex; align-items: center; gap: 18px;
+}
+.butikk .b-linje1 .b-midt { min-height: 62px; }
+.butikk .b-linje2 .b-midt { min-height: 40px; }
+
+.butikk .b-logo {
+  display: flex; align-items: center; gap: 9px; flex: none;
+  border: none; background: none; color: #fff; cursor: pointer; padding: 0;
+  font-size: 19px; font-weight: 700; letter-spacing: -0.015em;
+}
+.butikk .b-logo svg { width: 26px; height: 26px; color: #8fd4c0; flex: none; }
+
+.butikk .b-toppsok { flex: 1 1 300px; max-width: 560px; display: flex; }
+.butikk .b-toppsok input {
+  flex: 1; min-width: 0; border: none; border-radius: 6px 0 0 6px;
+  padding: 9px 13px; font-size: 14px; background: #fff; color: var(--blekk);
+}
+.butikk .b-toppsok input:focus-visible { outline: 2px solid var(--oransje); outline-offset: -2px; }
+.butikk .b-toppsok button {
+  border: none; border-radius: 0 6px 6px 0; padding: 0 15px;
+  background: #0f5248; color: #fff; display: grid; place-items: center;
+}
+.butikk .b-toppsok button:hover { background: #156a5d; }
+
+.butikk .b-hoyre { margin-left: auto; display: flex; align-items: center; gap: 16px; flex: none; }
+.butikk .b-toppknapp { border: none; background: none; color: #fff; font-size: 14px; padding: 4px 2px; }
+.butikk .b-kurv {
+  border: none; background: none; color: #fff; padding: 4px 2px;
+  display: flex; align-items: center; gap: 5px;
+}
+.butikk .b-antall {
+  background: #fff; color: var(--topp1); border-radius: 20px;
+  font-size: 11px; font-weight: 700; padding: 1px 6px; min-width: 19px; text-align: center;
+}
+/* Deaktivert, men ikke blass: det er plasseringen som skal vurderes nå, og
+   en knapp man knapt ser kan ikke vurderes. */
+.butikk .b-toppknapp:disabled, .butikk .b-kurv:disabled { opacity: 0.8; cursor: default; }
+
+.butikk .b-navvalg {
+  border: none; background: none; color: #eaf4f1;
+  font-size: 14px; font-weight: 600; padding: 10px 0; cursor: pointer;
+}
+.butikk .b-navvalg:hover { color: #fff; }
+.butikk .b-selg {
+  margin-left: auto; color: var(--oransje); font-weight: 700;
+  font-size: 14px; text-decoration: none; padding: 10px 0;
+}
+.butikk .b-selg:hover { text-decoration: underline; }
+
+/* ── alle sett ───────────────────────────────────────────────────────────── */
+.butikk .b-settgruppe { margin-bottom: 18px; }
+.butikk .b-settgruppe h2 {
+  font-size: 15px; margin: 0 0 6px; color: var(--sjo);
+  border-bottom: 1px solid var(--strek); padding-bottom: 4px;
+}
+.butikk .b-settliste {
+  display: grid; gap: 2px 20px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+.butikk .b-settliste .lenke { padding: 3px 0; font-size: 13.5px; }
+
+@media (max-width: 860px) {
+  .butikk .b-skall-topp { margin: -16px -16px 0; }
+  .butikk .b-midt { padding: 0 16px; flex-wrap: wrap; gap: 10px 14px; }
+  .butikk .b-linje1 .b-midt { padding-top: 10px; padding-bottom: 10px; }
+  /* Søket får hele bredden på egen linje. Klemt inn mellom logo og kurver
+     blir det så smalt at det ikke ser ut som et søkefelt. */
+  .butikk .b-toppsok { order: 3; flex: 1 0 100%; max-width: none; }
+  .butikk .b-hoyre { margin-left: auto; gap: 12px; }
+}
 
 /* Den andre halvparten av butikken. Card Kingdom har «Sell us your cards»
    som sitt eget felt, ikke bare en lenke i menyen — det er den halvparten
@@ -304,12 +392,14 @@ textarea { width: 100%; font-family: inherit; }
 }
 .butikk .b-band h2 { margin: 0 0 4px; font-size: 19px; }
 .butikk .b-band p { margin: 0; color: #cfe3df; max-width: 46ch; font-size: 13.5px; }
+/* Samme oransje som «Selg dine kort» i menylinja. Det er den samme
+   handlingen, og to ulike farger for den ville lest som to ulike ting. */
 .butikk .b-band a {
-  margin-left: auto; background: var(--brass); color: #fff;
+  margin-left: auto; background: var(--oransje); color: #43260a;
   padding: 10px 18px; border-radius: 7px; font-weight: 700;
   text-decoration: none; white-space: nowrap;
 }
-.butikk .b-band a:hover { background: #855a12; }
+.butikk .b-band a:hover { background: #ffbe74; }
 
 .butikk .b-rad { display: flex; align-items: baseline; gap: 12px; margin: 26px 0 12px; }
 .butikk .b-rad h2 { margin: 0; font-size: 16px; }
@@ -339,6 +429,17 @@ textarea { width: 100%; font-family: inherit; }
 .butikk .b-info h3 { margin: 0 0 5px; font-size: 14px; }
 .butikk .b-info p { margin: 0; font-size: 13px; color: var(--dempet); }
 
+/* Prisboksen i detaljraden og på kortsiden. Hadde fast bredde i innebygd
+   stil, og kunne derfor ikke vike på en telefon — teksten ved siden av ble
+   klippet og boksen la seg oppå. */
+.butikk .b-prisboks { width: 200px; flex: none; text-align: center; }
+
 @media (max-width: 720px) {
   .butikk .b-band a { margin-left: 0; }
+  /* Bilde, opplysninger og prisboks ved siden av hverandre er tre spalter
+     for mye på en telefon. La dem bryte. */
+  .butikk .panel .krop { flex-wrap: wrap; }
+  .butikk .b-prisboks { width: 100%; }
+  .butikk .panel { overflow-x: visible; }
+  .butikk .panel table { min-width: 0; }
 }

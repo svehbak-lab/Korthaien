@@ -103,53 +103,57 @@ export default function Butikk({ onFeil }) {
       [felt]: x[felt].includes(verdi) ? x[felt].filter((v) => v !== verdi) : [...x[felt], verdi],
     }));
 
+  // De to linjene i toppen står på hver eneste skjerm; alt som skifter,
+  // skifter under dem. Derfor pakkes alle visningene i det samme skallet i
+  // stedet for å ha hver sin ytterdiv — da kan de ikke komme i utakt.
+  //
+  // Topp holder sin egen søketekst. Den overlever skjermbyttene fordi
+  // elementet står på samme plass i treet uansett hvilken gren som
+  // returneres, og React beholder tilstanden til en komponent som ikke
+  // flytter på seg.
+  const skall = (innhold) => (
+    <div className="butikk">
+      <Topp
+        onHjem={() => { setÅpentKort(null); setSkjerm("forside"); }}
+        onSøk={(t) => {
+          // Søket i toppen er det samme filteret som feltet i søyla. Ett sted
+          // å lete fra, ett sted det havner.
+          endre("q", t);
+          setÅpentKort(null);
+          setSkjerm("liste");
+        }}
+        onAlleSett={() => { setÅpentKort(null); setSkjerm("sett"); }}
+      />
+      <div className="b-innhold">{innhold}</div>
+    </div>
+  );
+
   if (åpentKort) {
-    return (
-      <div className="butikk">
-        <Kortside
-          id={åpentKort}
-          onLukk={() => { setÅpentKort(null); setSkjerm("liste"); }}
-          onÅpne={setÅpentKort}
-          onSett={(kode) => { setSett(kode); setÅpentKort(null); }}
-          onFeil={onFeil}
-        />
-      </div>
+    return skall(
+      <Kortside
+        id={åpentKort}
+        onLukk={() => { setÅpentKort(null); setSkjerm("liste"); }}
+        onÅpne={setÅpentKort}
+        onSett={(kode) => { setSett(kode); setÅpentKort(null); setSkjerm("liste"); }}
+        onFeil={onFeil}
+      />
     );
   }
 
   if (skjerm === "forside") {
-    return (
-      <div className="butikk">
-        <Forside
-          onSøk={(q) => {
-            // Søket fra forsiden er det samme filteret som i søyla. Ett sted
-            // å lete fra, ett sted det havner.
-            endre("q", q);
-            setSkjerm("liste");
-          }}
-          onButikk={() => setSkjerm("liste")}
-          onÅpne={setÅpentKort}
-          onFeil={onFeil}
-        />
-      </div>
+    return skall(
+      <Forside onButikk={() => setSkjerm("liste")} onÅpne={setÅpentKort} onFeil={onFeil} />
     );
   }
 
-  return (
-    <div className="butikk">
-      <button
-        className="knapp liten"
-        style={{ marginBottom: 12 }}
-        onClick={() => setSkjerm("forside")}
-      >
-        ← Forsiden
-      </button>
-      <h1>Butikkvisning</h1>
-      <p className="dempet" style={{ marginTop: -6 }}>
-        Slik kundene vil se kortene. Ligger her inntil salgssiden bygges — bruk den
-        til å se om intervallene gir prisene du mente.
-      </p>
+  if (skjerm === "sett") {
+    return skall(
+      <AlleSett sett={alle} onVelg={(kode) => { setSett(kode); setSkjerm("liste"); }} />
+    );
+  }
 
+  return skall(
+    <>
       <div style={{ display: "grid", gridTemplateColumns: "220px minmax(0, 1fr)", gap: 20, alignItems: "start" }}>
         <div className="panel" style={{ position: "sticky", top: 16 }}>
           <div className="krop">
@@ -338,7 +342,142 @@ export default function Butikk({ onFeil }) {
           </>
         </div>
       </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOPPEN
+// ─────────────────────────────────────────────────────────────────────────────
+// To linjer som står på hver eneste side, slik Card Kingdom har det.
+//
+//   Linje 1, mørk grønn:   logo — søkefelt — Logg inn — kurvene
+//   Linje 2, lysere grønn: Alle sett — … — Selg dine kort i oransje
+//
+// Innlogging og kurvene finnes ikke ennå. De står her likevel, deaktivert,
+// fordi det er plasseringen som skal vurderes nå — og fordi en topp som
+// mangler halve innholdet ikke sier noe om hvordan den blir.
+function Topp({ onHjem, onSøk, onAlleSett }) {
+  const [q, setQ] = useState("");
+
+  return (
+    <div className="b-skall-topp">
+      <div className="b-linje1">
+        <div className="b-midt">
+          <button className="b-logo" onClick={onHjem} title="Til forsiden">
+            {/* Ryggfinnen fra kundesiden. Navnet er Korthaien, så finnen er
+                et merke og ikke en illustrasjon. Bytt denne mot logofilen
+                din når du har en — det er det eneste stedet den står. */}
+            <svg viewBox="88 22 128 136" fill="currentColor" aria-hidden="true">
+              <path d="M95 150C125 132 172 88 208 30 186 76 182 118 196 150Z" />
+            </svg>
+            <span>Korthaien</span>
+          </button>
+
+          <form
+            className="b-toppsok"
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSøk(q.trim());
+            }}
+          >
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Søk etter kort"
+              aria-label="Søk etter kort"
+            />
+            <button type="submit" aria-label="Søk">
+              <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="7" cy="7" r="5" />
+                <path d="M11 11l4 4" strokeLinecap="round" />
+              </svg>
+            </button>
+          </form>
+
+          <div className="b-hoyre">
+            <button className="b-toppknapp" disabled title="Innlogging kommer">
+              Logg inn
+            </button>
+
+            {/* To kurver, ikke én. Å kjøpe og å selge er to bunker som lever
+                side om side: den ene sendes til deg, den andre fra deg. Én
+                kurv for begge ville blandet dem. */}
+            <button className="b-kurv" disabled title="Handlekurv — kommer når kassen bygges">
+              <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+                <path d="M2 3h2.2l2 9.5h9l2-7H6" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="8" cy="16.5" r="1.3" fill="currentColor" stroke="none" />
+                <circle cx="15" cy="16.5" r="1.3" fill="currentColor" stroke="none" />
+              </svg>
+              <span className="b-antall">0</span>
+            </button>
+
+            <button className="b-kurv" disabled title="Kort du selger til meg — kommer">
+              <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+                <path d="M3 7.5l7-4 7 4v8l-7 4-7-4z" strokeLinejoin="round" />
+                <path d="M10 10.5v6M3 7.5l7 3 7-3" strokeLinejoin="round" />
+              </svg>
+              <span className="b-antall">0</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="b-linje2">
+        <div className="b-midt">
+          <button className="b-navvalg" onClick={onAlleSett}>Alle sett</button>
+          <a className="b-selg" href="https://kortsalg.korthaien.no">Selg dine kort</a>
+        </div>
+      </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ALLE SETT
+// ─────────────────────────────────────────────────────────────────────────────
+// Settene alfabetisk, gruppert på forbokstav. Den som leter etter et bestemt
+// sett vet navnet, ikke hvor i rekka det står — derfor bokstavene som anker.
+//
+// Lista er settene du kjøper fra. Den som skal vise hva du har til salgs i
+// hvert sett trenger et antall per sett, og det finnes ingen rute for ennå.
+function AlleSett({ sett, onVelg }) {
+  if (!sett.length) return <p className="dempet">Henter sett…</p>;
+
+  const sortert = [...sett].sort((a, b) =>
+    String(a.name || a.code).localeCompare(String(b.name || b.code), "nb")
+  );
+  const grupper = [];
+  for (const s of sortert) {
+    const bokstav = String(s.name || s.code).charAt(0).toUpperCase();
+    const siste = grupper[grupper.length - 1];
+    if (siste && siste.bokstav === bokstav) siste.sett.push(s);
+    else grupper.push({ bokstav, sett: [s] });
+  }
+
+  return (
+    <>
+      <h1 style={{ fontSize: 24, margin: "4px 0 2px" }}>Alle sett</h1>
+      <p className="dempet" style={{ marginTop: 0 }}>
+        {sortert.length} sett. Velg ett for å se kortene vi har i det.
+      </p>
+
+      {grupper.map((g) => (
+        <section key={g.bokstav} className="b-settgruppe">
+          <h2>{g.bokstav}</h2>
+          <div className="b-settliste">
+            {g.sett.map((s) => (
+              <button key={s.code} className="lenke" onClick={() => onVelg(s.code)}>
+                {s.name || s.code}
+                <span className="dempet"> {String(s.code).toUpperCase()}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+    </>
   );
 }
 
@@ -619,7 +758,7 @@ function Detaljrad({ kort, onÅpne, onSett }) {
           )}
         </div>
 
-        <div style={{ width: 200, flex: "none", textAlign: "center" }}>
+        <div className="b-prisboks">
           <div className="tall pris-stor" style={{ marginBottom: 6 }}>{kroner(t.ore)}</div>
 
           <div className="cond-valg">
@@ -739,7 +878,7 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil }) {
             )}
           </div>
 
-          <div style={{ width: 210, flex: "none", textAlign: "center" }}>
+          <div className="b-prisboks">
             {!variant ? (
               <p className="dempet">Ikke til salgs — kortet har ingen pris.</p>
             ) : (
@@ -831,9 +970,8 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil }) {
 // Det kunden møter før lista: hva stedet er, et søkefelt, den andre halvparten
 // av butikken, og noen kort å se på. Ingen filtre — de hører til når man
 // allerede leter etter noe bestemt.
-function Forside({ onSøk, onButikk, onÅpne, onFeil }) {
+function Forside({ onButikk, onÅpne, onFeil }) {
   const [kort, setKort] = useState(null);
-  const [q, setQ] = useState("");
 
   // De dyreste kortene på lager. Ingen egen rute: butikkruta sorterer
   // allerede, og baresalg gjør at den bare viser det du faktisk har.
@@ -853,26 +991,11 @@ function Forside({ onSøk, onButikk, onÅpne, onFeil }) {
       <div className="b-hero">
         <h1>Magic-kort fra Korthaien</h1>
         <p>
+          {/* Søkefeltet sto her før. Nå står det i toppen på hver eneste side,
+              og to søkefelt over hverandre er ett for mye. */}
           Enkeltkort fra eget lager, med tilstand og antall oppgitt for hvert
-          kort. Søk, eller bla gjennom butikken.
+          kort. Søk i feltet øverst, eller bla gjennom butikken.
         </p>
-        <form
-          className="b-sok"
-          role="search"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onSøk(q.trim());
-          }}
-        >
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Søk etter kort"
-            aria-label="Søk etter kort"
-          />
-          <button className="knapp primar" type="submit">Søk</button>
-        </form>
       </div>
 
       <div className="b-band">
