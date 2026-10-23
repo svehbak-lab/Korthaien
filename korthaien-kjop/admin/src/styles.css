@@ -321,6 +321,17 @@ textarea { width: 100%; font-family: inherit; }
   --pille: 999px;
   --fiber: none;
   font-family: var(--skrift);
+
+  /* Butikken maler sin egen bakgrunn. Uten dette arver flaten bak den
+     admins graa fra :root — temaet setter --papir inne i .butikk, mens
+     body leste sin verdi fra roten for lenge siden.
+     Negative marger drar den ut til kantene av .hoved, og samme padding
+     legger luften tilbake innenfor. Da er hele siden ett papir, slik toppen
+     allerede var. */
+  background-color: var(--papir);
+  margin: -22px -26px -60px;
+  padding: 22px 26px 60px;
+  min-height: 100vh;
 }
 
 /* Bryter ut av luften i .hoved, så linjene går helt ut til kanten og leses
@@ -446,6 +457,7 @@ textarea { width: 100%; font-family: inherit; }
 .butikk .b-settliste .lenke { padding: 3px 0; font-size: 13.5px; }
 
 @media (max-width: 860px) {
+  .butikk { margin: -16px -16px -16px; padding: 16px; }
   .butikk .b-skall-topp { margin: -16px -16px 0; }
   .butikk .b-midt { padding: 0 16px; flex-wrap: wrap; gap: 10px 14px; }
   .butikk .b-linje1 .b-midt { padding-top: 10px; padding-bottom: 10px; }
@@ -538,7 +550,9 @@ textarea { width: 100%; font-family: inherit; }
   --blekk: #14110d; --dempet: #6d6457;
   --dyp: #14110d; --sjo: #8c2f1c; --sjo-svak: #f6e9e3; --brass: #14110d;
   --aksent: #8c2f1c; --aksent-svak: #f6e9e3;
-  --topp1: #fbf9f3; --topp2: #fbf9f3;
+  /* Toppen er samme ark som resten. En avis har ikke et lysere felt oeverst
+     — det er hodet paa den samme sida. */
+  --topp1: #f1eee4; --topp2: #f1eee4;
   --topp-tekst: #14110d; --topp2-tekst: #14110d;
   --oransje: #8c2f1c; --oransje-tekst: #fbf9f3;
   --logo-finne: #14110d;
