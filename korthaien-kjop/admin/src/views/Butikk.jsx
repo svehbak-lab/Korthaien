@@ -404,23 +404,11 @@ function Topp({ onHjem, onSøk, onAlleSett }) {
 
             {/* To kurver, ikke én. Å kjøpe og å selge er to bunker som lever
                 side om side: den ene sendes til deg, den andre fra deg. Én
-                kurv for begge ville blandet dem. */}
-            <button className="b-kurv" disabled title="Handlekurv — kommer når kassen bygges">
-              <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
-                <path d="M2 3h2.2l2 9.5h9l2-7H6" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="8" cy="16.5" r="1.3" fill="currentColor" stroke="none" />
-                <circle cx="15" cy="16.5" r="1.3" fill="currentColor" stroke="none" />
-              </svg>
-              <span className="b-antall">0</span>
-            </button>
-
-            <button className="b-kurv" disabled title="Kort du selger til meg — kommer">
-              <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
-                <path d="M3 7.5l7-4 7 4v8l-7 4-7-4z" strokeLinejoin="round" />
-                <path d="M10 10.5v6M3 7.5l7 3 7-3" strokeLinejoin="round" />
-              </svg>
-              <span className="b-antall">0</span>
-            </button>
+                kurv for begge ville blandet dem.
+                Samme symbol på begge — det er ordet under som skiller dem,
+                og to ulike symboler ville latt som om de var to ulike ting. */}
+            <Kurv navn="Kjøp" antall={0} tittel="Kortene du kjøper — kommer når kassen bygges" />
+            <Kurv navn="Selg" antall={0} tittel="Kortene du selger til meg — kommer" />
           </div>
         </div>
       </div>
@@ -435,6 +423,24 @@ function Topp({ onHjem, onSøk, onAlleSett }) {
   );
 }
 
+// Kurven i toppen. Tallet ligger oppå symbolet, ordet under — slik blir
+// symbolet det samme for begge, og ordet det eneste som skiller dem.
+function Kurv({ navn, antall, tittel }) {
+  return (
+    <button className="b-kurv" disabled title={tittel}>
+      <span className="b-kurvikon">
+        <svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+          <path d="M2 3h2.2l2 9.5h9l2-7H6" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="8" cy="16.5" r="1.3" fill="currentColor" stroke="none" />
+          <circle cx="15" cy="16.5" r="1.3" fill="currentColor" stroke="none" />
+        </svg>
+        <span className="b-antall">{antall}</span>
+      </span>
+      <span className="b-kurvnavn">{navn}</span>
+    </button>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ALLE SETT
 // ─────────────────────────────────────────────────────────────────────────────
@@ -446,15 +452,28 @@ function Topp({ onHjem, onSøk, onAlleSett }) {
 function AlleSett({ sett, onVelg }) {
   if (!sett.length) return <p className="dempet">Henter sett…</p>;
 
-  const sortert = [...sett].sort((a, b) =>
-    String(a.name || a.code).localeCompare(String(b.name || b.code), "nb")
-  );
+  const navnet = (s) => String(s.name || s.code);
+  const sortert = [...sett].sort((a, b) => navnet(a).localeCompare(navnet(b), "nb"));
+
+  // Sett som begynner på et tall samles under «#». Ett sett som heter «10th
+  // Edition» skal ikke få sin egen bokstav mellom A og B.
   const grupper = [];
   for (const s of sortert) {
-    const bokstav = String(s.name || s.code).charAt(0).toUpperCase();
+    const første = navnet(s).charAt(0).toUpperCase();
+    const bokstav = /[A-ZÆØÅ]/.test(første) ? første : "#";
     const siste = grupper[grupper.length - 1];
     if (siste && siste.bokstav === bokstav) siste.sett.push(s);
-    else grupper.push({ bokstav, sett: [s] });
+    else grupper.push({ bokstav, sett: [s], id: "sett-" + (bokstav === "#" ? "tall" : bokstav) });
+  }
+
+  // Hoppelenkene. Med hundrevis av sett er lista flere skjermhøyder lang, og
+  // den som leter etter Zendikar skal slippe å rulle forbi alt annet.
+  //
+  // Bare bokstavene som finnes er klikkbare. En rad med hele alfabetet der
+  // halvparten ikke gjør noe, lover mer enn den holder.
+  function hoppTil(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   return (
@@ -464,13 +483,19 @@ function AlleSett({ sett, onVelg }) {
         {sortert.length} sett. Velg ett for å se kortene vi har i det.
       </p>
 
+      <nav className="b-bokstaver" aria-label="Hopp til bokstav">
+        {grupper.map((g) => (
+          <button key={g.id} onClick={() => hoppTil(g.id)}>{g.bokstav}</button>
+        ))}
+      </nav>
+
       {grupper.map((g) => (
-        <section key={g.bokstav} className="b-settgruppe">
+        <section key={g.id} id={g.id} className="b-settgruppe">
           <h2>{g.bokstav}</h2>
           <div className="b-settliste">
             {g.sett.map((s) => (
               <button key={s.code} className="lenke" onClick={() => onVelg(s.code)}>
-                {s.name || s.code}
+                {navnet(s)}
                 <span className="dempet"> {String(s.code).toUpperCase()}</span>
               </button>
             ))}

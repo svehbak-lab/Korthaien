@@ -337,13 +337,20 @@ textarea { width: 100%; font-family: inherit; }
 
 .butikk .b-hoyre { margin-left: auto; display: flex; align-items: center; gap: 16px; flex: none; }
 .butikk .b-toppknapp { border: none; background: none; color: #fff; font-size: 14px; padding: 4px 2px; }
+/* Symbol med tallet oppå, ordet under. Samme symbol på kjøp og salg — det er
+   ordet som skiller dem, og to ulike symboler ville latt som om det var to
+   ulike slags kurv. */
 .butikk .b-kurv {
-  border: none; background: none; color: #fff; padding: 4px 2px;
-  display: flex; align-items: center; gap: 5px;
+  border: none; background: none; color: #fff; padding: 2px 2px;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
 }
+.butikk .b-kurvikon { position: relative; display: block; line-height: 0; }
+.butikk .b-kurvnavn { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
 .butikk .b-antall {
-  background: #fff; color: var(--topp1); border-radius: 20px;
-  font-size: 11px; font-weight: 700; padding: 1px 6px; min-width: 19px; text-align: center;
+  position: absolute; top: -6px; right: -10px;
+  background: var(--oransje); color: #181818; border-radius: 20px;
+  font-size: 10px; font-weight: 700; padding: 1px 5px; min-width: 17px;
+  text-align: center; line-height: 1.4;
 }
 /* Deaktivert, men ikke blass: det er plasseringen som skal vurderes nå, og
    en knapp man knapt ser kan ikke vurderes. */
@@ -354,21 +361,39 @@ textarea { width: 100%; font-family: inherit; }
   font-size: 14px; font-weight: 600; padding: 10px 0; cursor: pointer;
 }
 .butikk .b-navvalg:hover { color: #fff; }
+/* Pilleform i oransje med sort skrift. Som tekst forsvant den i linja; som
+   en flate med farge bak er den det ene elementet øyet finner uten å lete. */
 .butikk .b-selg {
-  margin-left: auto; color: var(--oransje); font-weight: 700;
-  font-size: 14px; text-decoration: none; padding: 10px 0;
+  margin-left: auto; background: var(--oransje); color: #181818;
+  font-weight: 700; font-size: 13.5px; text-decoration: none;
+  padding: 5px 15px; border-radius: 999px; white-space: nowrap;
 }
-.butikk .b-selg:hover { text-decoration: underline; }
+.butikk .b-selg:hover { background: #ffbe74; color: #181818; }
 
 /* ── alle sett ───────────────────────────────────────────────────────────── */
-.butikk .b-settgruppe { margin-bottom: 18px; }
+/* Bokstavene øverst. Med hundrevis av sett er lista flere skjermhøyder lang,
+   og den som leter etter Zendikar skal slippe å rulle forbi alt annet. */
+.butikk .b-bokstaver {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin: 14px 0 22px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--strek);
+}
+.butikk .b-bokstaver button {
+  min-width: 30px; padding: 5px 7px; font-size: 13px; font-weight: 600;
+  border: 1px solid var(--strek); border-radius: 6px;
+  background: var(--flate); color: var(--sjo);
+}
+.butikk .b-bokstaver button:hover { background: var(--sjo-svak); border-color: var(--sjo); }
+
+/* Overskriften skal ikke stå klistret i overkant når man har hoppet hit. */
+.butikk .b-settgruppe { margin-bottom: 18px; scroll-margin-top: 14px; }
 .butikk .b-settgruppe h2 {
   font-size: 15px; margin: 0 0 6px; color: var(--sjo);
   border-bottom: 1px solid var(--strek); padding-bottom: 4px;
 }
 .butikk .b-settliste {
-  display: grid; gap: 2px 20px;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  display: grid; gap: 2px 18px;
+  grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
 }
 .butikk .b-settliste .lenke { padding: 3px 0; font-size: 13.5px; }
 
