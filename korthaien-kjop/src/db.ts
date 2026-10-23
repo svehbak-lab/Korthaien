@@ -381,6 +381,10 @@ export type Settings = {
   // Butikkens utseende. Ligger her og ikke i nettleseren: det er butikkens
   // utseende, ikke den enkeltes. Temaene er definert i admin/src/styles.css.
   tema: string;
+  // Settene i raden på forsiden. Tom liste betyr «følg de nyeste
+  // automatisk» — og det er det den skal gjøre, så ingen trenger å huske å
+  // bytte den.
+  forside_sett: string[];
 };
 
 const STANDARD: Settings = {
@@ -403,6 +407,7 @@ const STANDARD: Settings = {
   order_expiry_days: 14,
   ship_to: "Svein Bakke\nLørenvangen 23C\n0585 Oslo\n91774561",
   tema: "dagens",
+  forside_sett: [],
 };
 
 export async function hentSettings(): Promise<Settings> {

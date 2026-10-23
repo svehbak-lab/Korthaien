@@ -699,7 +699,11 @@ textarea { width: 100%; font-family: inherit; }
 
 /* Prøven er butikken i miniatyr. Målene er skrudd ned, ikke stilen — den
    arver temaet sitt fra de samme reglene som butikken bruker. */
-.prove { pointer-events: none; }
+/* Proeven er .butikk i miniatyr, og arvet derfor ogsaa dens min-height: 100vh
+   og de negative margene som drar butikken ut til kantene av .hoved. Inne i
+   et kort i en rute er begge deler feil: kortet ble like hoeyt som skjermen
+   uansett zoom. */
+.prove { pointer-events: none; min-height: 0; margin: 0; padding: 0; }
 .prove .b-skall-topp { margin: 0; }
 .prove .b-midt { padding: 0 12px; gap: 8px; }
 .prove .b-linje1 .b-midt { min-height: 38px; }
@@ -714,3 +718,24 @@ textarea { width: 100%; font-family: inherit; }
 .prove .pris-stor { font-size: 19px; }
 .prove .cond-valg { margin-top: 8px; max-width: 150px; }
 .prove .cond-valg button { padding: 3px 0; font-size: 11px; }
+
+/* ── nye sett på forsiden ────────────────────────────────────────────────── */
+/* Et kortbilde og settnavnet under, slik Card Kingdom har det. Bildet er
+   beskåret til en bred flis: hele kortet ville gjort raden tre ganger så
+   høy som den trenger, og det er settet raden handler om. */
+.butikk .b-settrad {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.butikk .b-settflis {
+  border: 1px solid var(--strek); border-radius: 9px; background: var(--flate);
+  padding: 0 0 10px; cursor: pointer; overflow: hidden; text-align: center;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.butikk .b-settflis:hover { border-color: var(--sjo); }
+.butikk .b-settflis img, .butikk .b-settflis-tom {
+  width: 100%; height: 108px; object-fit: cover; object-position: 50% 22%;
+  display: block; background: var(--papir); margin-bottom: 8px;
+}
+.butikk .b-settflis .navn { font-weight: 600; font-size: 13px; line-height: 1.25; padding: 0 8px; }
+.butikk .b-settflis .linje { font-size: 11.5px; color: var(--dempet); }

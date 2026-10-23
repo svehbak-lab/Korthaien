@@ -165,7 +165,12 @@ export default function Butikk({ onFeil }) {
 
   if (skjerm === "forside") {
     return skall(
-      <Forside onButikk={() => setSkjerm("liste")} onÅpne={setÅpentKort} onFeil={onFeil} />
+      <Forside
+        onButikk={() => setSkjerm("liste")}
+        onÅpne={setÅpentKort}
+        onSett={(kode) => { setSett(kode); setSkjerm("liste"); }}
+        onFeil={onFeil}
+      />
     );
   }
 
@@ -1169,8 +1174,22 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil }) {
 // Det kunden møter før lista: hva stedet er, et søkefelt, den andre halvparten
 // av butikken, og noen kort å se på. Ingen filtre — de hører til når man
 // allerede leter etter noe bestemt.
-function Forside({ onButikk, onÅpne, onFeil }) {
+function Forside({ onButikk, onÅpne, onSett, onFeil }) {
   const [kort, setKort] = useState(null);
+  const [nyeste, setNyeste] = useState(null);
+
+  // Raden med nyeste sett. Henter seg selv fra lageret, saa ingen trenger aa
+  // huske aa bytte den naar et sett kommer inn.
+  useEffect(() => {
+    let avbrutt = false;
+    api
+      .nyesteSett()
+      .then((d) => !avbrutt && setNyeste(d.sett))
+      .catch(() => !avbrutt && setNyeste([]));
+    return () => {
+      avbrutt = true;
+    };
+  }, []);
 
   // De dyreste kortene på lager. Ingen egen rute: butikkruta sorterer
   // allerede, og baresalg gjør at den bare viser det du faktisk har.
@@ -1207,6 +1226,30 @@ function Forside({ onButikk, onÅpne, onFeil }) {
         </div>
         <a href="https://kortsalg.korthaien.no">Til innkjøp →</a>
       </div>
+
+      {nyeste && nyeste.length > 0 && (
+        <>
+          <div className="b-rad">
+            <h2>Nye sett i butikken</h2>
+          </div>
+          {/* Bildet er det dyreste kortet vi har i settet — det er kortet
+              folk kjenner settet igjen paa. Hele flisa er klikkbar til
+              settet, ikke til kortet: det er settet raden handler om. */}
+          <div className="b-settrad">
+            {nyeste.map((s) => (
+              <button key={s.code} className="b-settflis" onClick={() => onSett(s.code)}>
+                {s.image_uri ? (
+                  <img src={s.image_uri} alt="" loading="lazy" />
+                ) : (
+                  <div className="b-settflis-tom" />
+                )}
+                <span className="navn">{s.name}</span>
+                <span className="linje">{s.kort} kort</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="b-rad">
         <h2>Dyreste på lager</h2>

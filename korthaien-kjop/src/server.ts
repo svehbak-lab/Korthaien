@@ -10,6 +10,7 @@ import {
   butikkvisning, kortdetaljer,
 } from "./salgspris.js";
 import { hentFrakt, leggTilFrakt, endreFrakt, slåAvFrakt } from "./frakt.js";
+import { forsideSett } from "./forside.js";
 import { kontoer, bevegelser, saldo, leggTil as leggTilKreditt, settSaldo } from "./kreditt.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
@@ -402,6 +403,12 @@ app.get("/api/admin/butikk", krevAdmin, fang(async (req: any, res: any) => {
       perSide: tall(req.query.perSide),
     })
   );
+}));
+
+// Raden med nyeste sett paa forsiden. Oppdaterer seg selv fra lageret med
+// mindre forside_sett er satt i innstillingene.
+app.get("/api/admin/butikk/nyeste", krevAdmin, fang(async (req: any, res: any) => {
+  res.json({ sett: await forsideSett(Number(req.query.antall) || 6) });
 }));
 
 app.get("/api/admin/butikk/kort/:id", krevAdmin, fang(async (req: any, res: any) => {
@@ -1090,7 +1097,7 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
   const lov: (keyof Settings)[] = [
     "usd_nok", "buy_pct", "min_buy_ore", "min_order_ore", "min_usd",
     "salg_trapp", "salg_faktor", "salg_avrunding", "default_conditions",
-    "default_ladder", "order_expiry_days", "ship_to", "tema",
+    "default_ladder", "order_expiry_days", "ship_to", "tema", "forside_sett",
   ];
   for (const [k, v] of Object.entries(req.body || {})) {
     if (lov.includes(k as any)) await settSetting(k as keyof Settings, v);
