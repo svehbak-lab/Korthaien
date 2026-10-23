@@ -22,7 +22,6 @@ const SPALTER = [
       { tekst: "Kontakt oss", skjerm: "kontakt" },
       { tekst: "Frakt og levering", skjerm: "frakt" },
       { tekst: "Retur og angrerett" },
-      { tekst: "Spørsmål og svar" },
     ],
   },
   {
@@ -46,7 +45,7 @@ const SPALTER = [
   {
     navn: "Korthaien",
     punkter: [
-      { tekst: "Om oss" },
+      { tekst: "Om oss", skjerm: "omoss" },
       { tekst: "Butikkreditt", skjerm: "kreditt" },
       { tekst: "Kontakt oss", skjerm: "kontakt" },
     ],
@@ -234,6 +233,24 @@ export function Frakt({ onFeil }) {
             </tbody>
           </table>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Om oss. Sveins egne ord, kortet ned til ett avsnitt.
+export function OmOss() {
+  return (
+    <div className="panel" style={{ maxWidth: 620 }}>
+      <div className="krop">
+        <h1 style={{ fontSize: 22, marginTop: 0 }}>Om Korthaien</h1>
+        <p style={{ marginBottom: 0, lineHeight: 1.7 }}>
+          Korthaien har solgt enkeltkort siden 2014, til kunder over hele
+          landet. Det har alltid vært et sideprosjekt og en hobby — men når man
+          liker noe, kjennes det ikke som jobb, og det å drive Korthaien er
+          rett og slett gøy. De fleste kortene går i posten, men mange henter
+          dem også på Løren i Oslo.
+        </p>
       </div>
     </div>
   );

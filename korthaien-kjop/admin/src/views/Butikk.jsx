@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api, kroner, CONDITIONS } from "../api.js";
-import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside } from "./Bunn.jsx";
+import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside, OmOss } from "./Bunn.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BUTIKKVISNING
@@ -180,6 +180,7 @@ export default function Butikk({ onFeil }) {
   if (skjerm === "kontakt") return skall(<Kontakt onFeil={onFeil} />);
   if (skjerm === "frakt") return skall(<Fraktside onFeil={onFeil} />);
   if (skjerm === "kreditt") return skall(<Kredittside />);
+  if (skjerm === "omoss") return skall(<OmOss />);
 
   if (skjerm === "sett") {
     return skall(

@@ -723,9 +723,31 @@ textarea { width: 100%; font-family: inherit; }
 /* Et kortbilde og settnavnet under, slik Card Kingdom har det. Bildet er
    beskåret til en bred flis: hele kortet ville gjort raden tre ganger så
    høy som den trenger, og det er settet raden handler om. */
+/* Seks i bredden, alltid. Er det ikke plass — paa en telefon — blir raden en
+   karusell man drar sidelengs i stedet for aa pakke seg om til to rader med
+   tre. Rekkefoelgen er nyeste foerst, og da skal den foerste ligge foerst og
+   ikke et sted midt i bildet. */
 .butikk .b-settrad {
   display: grid; gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .butikk .b-settrad {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 44%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    /* Plass til skyggen under flisene naar raden scroller. */
+    padding-bottom: 8px;
+    /* Drar man helt ut til hoeyre, skal siste flis ha samme luft som
+       den foerste har til venstre. */
+    scroll-padding-left: 16px;
+  }
+  .butikk .b-settflis { scroll-snap-align: start; }
+}
+@media (max-width: 560px) {
+  .butikk .b-settrad { grid-auto-columns: 62%; }
 }
 .butikk .b-settflis {
   border: 1px solid var(--strek); border-radius: 9px; background: var(--flate);
