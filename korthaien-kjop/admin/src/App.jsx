@@ -26,7 +26,9 @@ const SIDER = [
   { id: "butikk", navn: "Butikk" },
   { id: "lagerrapport", navn: "Lagerrapport" },
   { id: "kupp", navn: "Kupp" },
-  { id: "innstillinger", navn: "Innstillinger" },
+  // Het Innstillinger. Admin sier bedre hva det er: ett sted for alt du
+  // styrer selv. Fanene gjoer at det kan vokse uten aa bli en lang liste.
+  { id: "innstillinger", navn: "Admin" },
 ];
 
 export default function App() {
@@ -37,6 +39,7 @@ export default function App() {
   const [melding, setMelding] = useState("");
   const [antallOrdrer, setAntallOrdrer] = useState(null);
   const [antallUkoblede, setAntallUkoblede] = useState(null);
+  const [adminfane, setAdminfane] = useState("innkjop");
 
   useEffect(() => {
     api.meg().then(() => setInnlogget(true)).catch(() => setInnlogget(false));
@@ -122,11 +125,40 @@ export default function App() {
         {side === "butikk" && <Butikk onFeil={håndterFeil} />}
         {side === "lagerrapport" && <Lagerrapport onFeil={håndterFeil} />}
         {side === "kupp" && <Kupp onFeil={håndterFeil} />}
-        {side === "innstillinger" && <Innstillinger onFeil={håndterFeil} onMelding={visMelding} />}
+        {side === "innstillinger" && (
+          <>
+            {/* Fanene bor her og ikke inne i Innstillinger, saa de staar
+                paa samme sted uansett hvilken fane som er valgt. */}
+            <div className="faner" role="tablist" style={{ marginBottom: 18 }}>
+              {ADMINFANER.map((f) => (
+                <button
+                  key={f.id}
+                  role="tab"
+                  aria-selected={adminfane === f.id}
+                  onClick={() => setAdminfane(f.id)}
+                >
+                  {f.navn}
+                </button>
+              ))}
+            </div>
+            <Innstillinger fane={adminfane} onFeil={håndterFeil} onMelding={visMelding} />
+          </>
+        )}
       </main>
     </div>
   );
 }
+
+// Fanene i Admin. Innkjoep, Utsalg og Innlogging er det siden alltid har
+// handlet om - den sa det bare ikke. Frakt og Kreditt er nye, og det som
+// kommer senere faar sin egen fane i stedet for aa bli nok en bolk nedover.
+const ADMINFANER = [
+  { id: "innkjop", navn: "Innkjøp" },
+  { id: "utsalg", navn: "Utsalg" },
+  { id: "frakt", navn: "Frakt" },
+  { id: "kreditt", navn: "Kreditt" },
+  { id: "innlogging", navn: "Innlogging" },
+];
 
 const FORKLARING = {
   lagerrapport:
@@ -139,7 +171,7 @@ const FORKLARING = {
   // den foelger med hvis den settes inn igjen.
   kobling:
     "Produkter i Mystore som ikke lot seg koble til et kort. Beholdningen deres regnes som 0, og da kan kunder selge deg kort du har fra før.",
-  innstillinger: "Pris, frister og adressen kunden sender til.",
+  innstillinger: "Alt du styrer selv. Velg en fane.",
 };
 
 function Innlogging({ onInn }) {

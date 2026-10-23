@@ -1,14 +1,21 @@
 import { useState, useEffect } from "react";
+import Frakt from "./Frakt.jsx";
+import Kreditt from "./Kreditt.jsx";
 import QRCode from "qrcode";
 import { api, CONDITIONS, CONDITION_NAVN, kroner } from "../api.js";
 
-export default function Innstillinger({ onFeil, onMelding }) {
+export default function Innstillinger({ fane, onFeil, onMelding }) {
   const [s, setS] = useState(null);
   const [lagrer, setLagrer] = useState(false);
 
   useEffect(() => {
     api.innstillinger().then(setS).catch(onFeil);
   }, []);
+
+  // Frakt og Kreditt står på egne tabeller og trenger ikke innstillingene.
+  // Ventet de på dem, ville de blinket i tomt i et halvt sekund uten grunn.
+  if (fane === "frakt") return <Frakt onFeil={onFeil} onMelding={onMelding} />;
+  if (fane === "kreditt") return <Kreditt onFeil={onFeil} />;
 
   if (!s) return <p className="dempet">Henter innstillinger…</p>;
 
@@ -37,6 +44,20 @@ export default function Innstillinger({ onFeil, onMelding }) {
 
   // Regneeksempel så du ser hva en endring faktisk gjør med utbetalingen.
   const eksempel = Math.round(5 * s.usd_nok * (s.buy_pct / 100) * 100);
+
+  // Alt som fantes fra før ligger under «Innkjøp», «Utsalg» og «Innlogging»
+  // — det er de tre tingene siden egentlig handlet om, den sa det bare ikke.
+  // Det som kommer senere får sin egen fane i stedet for å bli nok en bolk
+  // nedover på en side som allerede var for lang.
+  if (fane === "utsalg") {
+    return (
+      <>
+        <Salgspriser onFeil={onFeil} onMelding={onMelding} />
+        <SalgsTrapp s={s} endre={endre} />
+      </>
+    );
+  }
+  if (fane === "innlogging") return <Sikkerhet onFeil={onFeil} onMelding={onMelding} />;
 
   return (
     <>
@@ -197,11 +218,6 @@ export default function Innstillinger({ onFeil, onMelding }) {
         </div>
       </div>
 
-      <Salgspriser onFeil={onFeil} onMelding={onMelding} />
-
-      <SalgsTrapp s={s} endre={endre} />
-
-      <Sikkerhet onFeil={onFeil} onMelding={onMelding} />
     </>
   );
 }

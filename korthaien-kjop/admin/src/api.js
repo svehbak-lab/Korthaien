@@ -123,6 +123,15 @@ export const api = {
     kall(`/api/admin/cards/${id}/pris?finish=${finish}`, { method: "DELETE" }),
   koble: (felt) => kall("/api/admin/mystore/link", { method: "POST", body: felt }),
 
+  frakt: () => kall("/api/admin/frakt"),
+  leggTilFrakt: (f) => kall("/api/admin/frakt", { method: "POST", body: f }),
+  endreFrakt: (id, f) => kall(`/api/admin/frakt/${id}`, { method: "PUT", body: f }),
+  slåAvFrakt: (id) => kall(`/api/admin/frakt/${id}`, { method: "DELETE" }),
+
+  kreditt: (q) => kall(`/api/admin/kreditt?q=${encodeURIComponent(q || "")}`),
+  kredittKonto: (epost) => kall(`/api/admin/kreditt/${encodeURIComponent(epost)}`),
+  bokførKreditt: (felt) => kall("/api/admin/kreditt", { method: "POST", body: felt }),
+
   innstillinger: () => kall("/api/admin/settings"),
   lagreInnstillinger: (felt) => kall("/api/admin/settings", { method: "PUT", body: felt }),
   jobb: (navn) => kall(`/api/admin/jobs/${navn}`, { method: "POST" }),

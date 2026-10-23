@@ -382,3 +382,41 @@ CREATE TABLE IF NOT EXISTS lager_historikk (
   butikk_kort INTEGER NOT NULL DEFAULT 0,
   butikk_ore INTEGER NOT NULL DEFAULT 0,
   malt_at TEXT);
+
+-- Fraktalternativene kunden velger mellom i kassen. Prisen og
+-- forsikringsgrensen står her og ikke i koden, fordi Posten endrer dem og du
+-- skal slippe en utrulling for å rette et tall.
+--
+-- forsikret_ore er NULL for sendinger uten sporing og forsikring. Null og
+-- NULL er to ulike ting her: 0 ville betydd «forsikret for ingenting».
+CREATE TABLE IF NOT EXISTS frakt_alternativer (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  navn          TEXT NOT NULL,
+  pris_ore      INTEGER NOT NULL,
+  forsikret_ore INTEGER,
+  beskrivelse   TEXT,
+  sortering     INTEGER NOT NULL DEFAULT 0,
+  -- Alternativer slettes ikke, de slås av. En ordre som er sendt med et
+  -- alternativ skal fortsatt kunne vise hva den ble sendt med.
+  aktiv         INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL);
+
+-- Kreditt er en bok, ikke et tall. Saldoen er summen av linjene, og hver
+-- linje har en grunn — ellers kan verken du eller kunden svare på hvor en
+-- saldo kom fra. Det var hele poenget med at folk skal kunne følge summer
+-- inn og ut.
+--
+-- Nøkkelen er e-postadressen i små bokstaver. Det finnes ingen kundekonto
+-- ennå; adressen er det eneste som følger en kunde fra ordre til ordre.
+CREATE TABLE IF NOT EXISTS kreditt_bevegelser (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  email      TEXT NOT NULL,
+  -- Positivt inn, negativt ut. Aldri null — en linje uten beløp sier
+  -- ingenting og ville bare gjort boka lengre.
+  ore        INTEGER NOT NULL,
+  grunn      TEXT NOT NULL,
+  notat      TEXT,
+  order_no   TEXT,
+  created_at TEXT NOT NULL);
+
+CREATE INDEX IF NOT EXISTS idx_kreditt_epost ON kreditt_bevegelser (email, created_at);

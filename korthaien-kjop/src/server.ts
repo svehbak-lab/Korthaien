@@ -9,6 +9,8 @@ import {
   hentIntervaller, lagreIntervaller, finnHull, salgsprisForSett, settManuellSalg,
   butikkvisning, kortdetaljer,
 } from "./salgspris.js";
+import { hentFrakt, leggTilFrakt, endreFrakt, slåAvFrakt } from "./frakt.js";
+import { kontoer, bevegelser, saldo, leggTil as leggTilKreditt, settSaldo } from "./kreditt.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
   lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal,
@@ -1022,6 +1024,59 @@ app.put("/api/admin/orders/:id/kreditt", krevAdmin, fang(async (req: any, res: a
   const r = await db().execute({ sql: "SELECT * FROM orders WHERE id = ?", args: [id] });
   if (!r.rows[0]) throw new HttpFeil(404, "Fant ikke ordren");
   res.json(r.rows[0]);
+}));
+
+// ── frakt ────────────────────────────────────────────────────────────────────
+app.get("/api/admin/frakt", krevAdmin, fang(async (_req: any, res: any) => {
+  res.json({ alternativer: await hentFrakt() });
+}));
+
+app.post("/api/admin/frakt", krevAdmin, fang(async (req: any, res: any) => {
+  try {
+    res.json(await leggTilFrakt(req.body || {}));
+  } catch (e: any) {
+    throw new HttpFeil(400, e.message);
+  }
+}));
+
+app.put("/api/admin/frakt/:id", krevAdmin, fang(async (req: any, res: any) => {
+  try {
+    res.json(await endreFrakt(Number(req.params.id), req.body || {}));
+  } catch (e: any) {
+    throw new HttpFeil(400, e.message);
+  }
+}));
+
+// Slår av, sletter ikke. En ordre som er sendt med et alternativ skal
+// fortsatt kunne vise hva den ble sendt med.
+app.delete("/api/admin/frakt/:id", krevAdmin, fang(async (req: any, res: any) => {
+  await slåAvFrakt(Number(req.params.id));
+  res.json({ ok: true });
+}));
+
+// ── kreditt ──────────────────────────────────────────────────────────────────
+app.get("/api/admin/kreditt", krevAdmin, fang(async (req: any, res: any) => {
+  res.json({ kontoer: await kontoer(String(req.query.q || "")) });
+}));
+
+app.get("/api/admin/kreditt/:epost", krevAdmin, fang(async (req: any, res: any) => {
+  const epost = String(req.params.epost);
+  res.json({ epost, saldo_ore: await saldo(epost), bevegelser: await bevegelser(epost) });
+}));
+
+app.post("/api/admin/kreditt", krevAdmin, fang(async (req: any, res: any) => {
+  const { epost, ore, notat, saldo_ore } = req.body || {};
+  try {
+    // To måter å si det samme: legg til et beløp, eller sett saldoen til et
+    // tall. Den andre bokfører differansen, så boka aldri mister en linje.
+    const ut =
+      saldo_ore === undefined || saldo_ore === null || saldo_ore === ""
+        ? await leggTilKreditt({ email: epost, ore: Number(ore), notat })
+        : await settSaldo(epost, Number(saldo_ore), notat);
+    res.json({ bevegelse: ut, saldo_ore: await saldo(epost) });
+  } catch (e: any) {
+    throw new HttpFeil(400, e.message);
+  }
 }));
 
 app.get("/api/admin/settings", krevAdmin, fang(async (_req: any, res: any) => {
