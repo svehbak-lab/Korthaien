@@ -12,13 +12,16 @@ import Innstillinger from "./views/Innstillinger.jsx";
 
 const SIDER = [
   { id: "ordrer", navn: "Ordrer" },
-  { id: "sett", navn: "Sett" },
+  { id: "sett", navn: "Kjøpsliste" },
   // Enkeltkort byttet plass med Hurtigredigering. Enkeltkort-siden handler om
   // innkjøp — hva du tar imot, hvor mange du vil ha, hva du betaler — og den
   // naas der den hoerer hjemme: fra Sett. Lageret er en annen jobb, og gjoeres
   // ofte nok til aa fortjene sin egen inngang.
   { id: "hurtig", navn: "Hurtigredigering" },
-  { id: "kobling", navn: "Kobling" },
+  // Kobling er ute av menyen. Visningen og ruten staar igjen, saa den er en
+  // linje unna aa komme tilbake — men merk at tellingen av ukoblede
+  // produkter forsvinner med den. Varselet i Lagerrapport fanger fortsatt
+  // det som koster penger: produkter som har beholdning uten aa vaere koblet.
   // Midlertidig: forhåndsvisning av butikken. Flyttes ut når salgssiden bygges.
   { id: "butikk", navn: "Butikk" },
   { id: "lagerrapport", navn: "Lagerrapport" },
@@ -130,8 +133,10 @@ const FORKLARING = {
     "Hva du har på lager, og hva det er verdt til utsalgspris. Trykk på et sett for å se rariteter.",
   ordrer:
     "Kortene ligger i samme rekkefølge som kunden ble bedt om å sortere bunken, så du kan gå gjennom stabelen og lista i takt.",
-  sett: "Slå på settene du kjøper fra, og bestem hvor mange du vil ha og hvilke tilstander du tar imot.",
+  sett: "Kjøpslista: settene du kjøper fra. Bestem hvor mange du vil ha og hvilke tilstander du tar imot.",
   kort: "Overstyr enkeltkort. Tomt felt betyr at kortet følger settregelen.",
+  // Kobling staar ikke i menyen lenger, men forklaringen blir staaende saa
+  // den foelger med hvis den settes inn igjen.
   kobling:
     "Produkter i Mystore som ikke lot seg koble til et kort. Beholdningen deres regnes som 0, og da kan kunder selge deg kort du har fra før.",
   innstillinger: "Pris, frister og adressen kunden sender til.",
