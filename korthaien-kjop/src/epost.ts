@@ -333,3 +333,36 @@ ${linjetekst(l.rows)}
 
   return send({ til: String(ordre.email), emne: `Oppgjør — ${ordre.order_no}`, html, tekst });
 }
+
+// Kontaktskjemaet på forsiden. Går til meg, med kundens adresse som svar-til,
+// så et svar havner der det skal uten at noen må klippe og lime.
+//
+// Teksten går gjennom trygg() som alt annet: innholdet kommer fra en åpen
+// side, og en e-post er HTML.
+export async function sendKontakt(inn: {
+  navn: string;
+  epost: string;
+  melding: string;
+  emne?: string;
+}): Promise<Utfall> {
+  const emne = (inn.emne || "").trim() || "Henvendelse fra korthaien.no";
+  const html = RAMME(`
+    <h1 style="font-size:21px;margin:0 0 12px">${trygg(emne)}</h1>
+    <table style="font-size:14px;line-height:1.8;margin-bottom:16px">
+      <tr><td style="color:#7a746c;padding-right:14px">Navn</td><td>${trygg(inn.navn)}</td></tr>
+      <tr><td style="color:#7a746c;padding-right:14px">E-post</td><td>${trygg(inn.epost)}</td></tr>
+    </table>
+    <p style="background:#f6f5f2;border-radius:8px;padding:12px 14px;margin:0;white-space:pre-wrap">${trygg(
+      inn.melding
+    )}</p>
+  `);
+
+  return send({
+    til: MIN_ADRESSE(),
+    emne: `Kontakt: ${emne}`,
+    html,
+    tekst: `${emne}\n\nNavn: ${inn.navn}\nE-post: ${inn.epost}\n\n${inn.melding}`,
+    // Svar går til kunden, ikke til butikkens egen adresse.
+    svarTil: inn.epost,
+  });
+}

@@ -108,3 +108,28 @@ test("tom liste betyr automatisk igjen", async () => {
 test("antallet begrenses", async () => {
   assert.equal((await forsideSett(2)).length, 2);
 });
+
+test("sortering nyeste gir det som sist ble lagt inn", async () => {
+  const { butikkvisning } = await import("../src/salgspris.ts");
+  const { lagreIntervaller } = await import("../src/salgspris.ts");
+  await lagreIntervaller([{ rarity: "alle", usd_fra: 0, usd_til: 10000, pris_ore: 5000 }]);
+
+  // Et kort som ble lagt inn i dag skal ligge foran et som ble lagt inn i fjor.
+  const sent = await leggInn("midt", "Kom I Dag", 3, 0);
+  await db().execute({
+    sql: `INSERT INTO lager_bevegelser (card_id,finish,condition,antall,grunn,created_at)
+          VALUES (?,'nonfoil','NM',1,'manuell','2026-10-23T12:00:00Z')`,
+    args: [sent],
+  });
+  // ...og en linje som TAR kort ut skal ikke gjøre et gammelt kort nytt.
+  const gammelt = (await db().execute("SELECT card_id FROM lager_bevegelser WHERE antall > 0 ORDER BY id LIMIT 1")).rows[0].card_id;
+  await db().execute({
+    sql: `INSERT INTO lager_bevegelser (card_id,finish,condition,antall,grunn,created_at)
+          VALUES (?,'nonfoil','NM',-1,'salg','2026-10-24T12:00:00Z')`,
+    args: [gammelt],
+  });
+
+  const d = await butikkvisning({ sortering: "nyeste", baresalg: true, perSide: 10 });
+  assert.equal(d.kort[0].id, sent, "det sist innlagte kortet skal ligge først");
+  assert.notEqual(d.kort[0].id, gammelt, "et uttak gjør ikke et kort nytt");
+});

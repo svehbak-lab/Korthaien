@@ -739,3 +739,51 @@ textarea { width: 100%; font-family: inherit; }
 }
 .butikk .b-settflis .navn { font-weight: 600; font-size: 13px; line-height: 1.25; padding: 0 8px; }
 .butikk .b-settflis .linje { font-size: 11.5px; color: var(--dempet); }
+
+/* ── bunnen ──────────────────────────────────────────────────────────────── */
+/* Fire spalter og en juridisk linje. Mørk flate i samme farge som toppen,
+   så sida har et hode og en fot og ikke bare en kant. */
+.butikk .b-bunn { background: var(--topp1); color: var(--topp2-tekst); margin-top: 44px; }
+.butikk .b-bunnrad {
+  display: grid; gap: 26px 32px; padding-top: 30px; padding-bottom: 26px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: start;
+}
+.butikk .b-bunnrad h4 {
+  margin: 0 0 9px; font-size: 12.5px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--topp-tekst);
+}
+.butikk .b-bunnrad ul { list-style: none; margin: 0; padding: 0; }
+.butikk .b-bunnrad li { padding: 3px 0; }
+.butikk .b-bunnlenke {
+  border: 0; background: none; padding: 0; font: inherit; font-size: 13.5px;
+  color: var(--topp2-tekst); text-decoration: none; cursor: pointer; text-align: left;
+}
+.butikk .b-bunnlenke:hover { color: var(--topp-tekst); text-decoration: underline; }
+/* Ikke bygget ennå. En lenke som ikke fører noe sted er verre enn ingen
+   lenke — den lover en side kunden først oppdager mangler etter å ha
+   trykket. */
+.butikk .b-bunnlenke.av { cursor: default; opacity: 0.55; }
+.butikk .b-bunnlenke.av:hover { text-decoration: none; color: var(--topp2-tekst); }
+.butikk .b-bunnlenke i {
+  font-style: normal; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; border: 1px solid currentColor;
+  border-radius: 3px; padding: 0 4px; margin-left: 5px; opacity: 0.8;
+}
+.butikk .b-bunnjus {
+  display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline;
+  padding-top: 16px; padding-bottom: 28px; font-size: 12.5px;
+  border-top: 1px solid rgb(255 255 255 / 14%);
+}
+.butikk .b-bunnjus a { color: var(--topp2-tekst); }
+.butikk .b-bunnjus .dempet { color: var(--topp2-tekst); opacity: 0.68; }
+/* Lyse temaer har mørk tekst i toppen; da må skillelinja i bunnen være mørk. */
+.butikk[data-tema="avis"] .b-bunnjus,
+.butikk[data-tema="katalog"] .b-bunnjus { border-top-color: rgb(0 0 0 / 14%); }
+.butikk[data-tema="avis"] .b-bunn,
+.butikk[data-tema="katalog"] .b-bunn { border-top: 1px solid var(--strek); }
+
+.butikk textarea {
+  width: 100%; border: 1px solid var(--strek-sterk); border-radius: var(--runding);
+  padding: 8px 10px; font: inherit; font-size: 14px; background: var(--flate); color: var(--blekk);
+}

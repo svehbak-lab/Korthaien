@@ -3,7 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { db, migrate, hentSettings, settSetting, normaliser, CONDITIONS, type Settings } from "./db.js";
 import { søk, løsBulk, tilbudFor } from "./catalog.js";
-import { sendBekreftelse, varsleMeg, varsleStatus, sendOppgjør } from "./epost.js";
+import { sendBekreftelse, varsleMeg, varsleStatus, sendOppgjør, sendKontakt } from "./epost.js";
 import { bokførOrdre, reverserOrdre, beholdning, historikk, settBeholdning, avvikMotMystore } from "./lager.js";
 import {
   hentIntervaller, lagreIntervaller, finnHull, salgsprisForSett, settManuellSalg,
@@ -73,6 +73,26 @@ app.get("/api/config", grense(REGLER.søk), fang(async (_req: any, res: any) => 
     // admin, henter den temaet fra en rute den allerede har lov til å lese.
     tema: s.tema,
   });
+}));
+
+// Kontaktskjemaet. Aapen rute, saa den har samme grense som ordreinnsending:
+// en som vil fylle innboksen min skal ikke kunne gjoere det raskere enn en
+// som vil selge meg kort.
+app.post("/api/kontakt", grense(REGLER.ordre), fang(async (req: any, res: any) => {
+  const navn = String(req.body?.navn || "").trim();
+  const epost = String(req.body?.epost || "").trim();
+  const melding = String(req.body?.melding || "").trim();
+  const emne = String(req.body?.emne || "").trim();
+
+  if (!navn || !epost.includes("@") || melding.length < 5) {
+    throw new HttpFeil(400, "Fyll inn navn, e-post og en melding.");
+  }
+  // Lange meldinger er nesten alltid noen andre enn en kunde.
+  if (melding.length > 4000) throw new HttpFeil(400, "Meldingen er for lang.");
+
+  const utfall = await sendKontakt({ navn, epost, melding, emne });
+  if (!utfall.sendt) throw new HttpFeil(502, "Fikk ikke sendt meldingen. Prøv igjen, eller send e-post direkte.");
+  res.json({ ok: true });
 }));
 
 app.get("/api/sets", grense(REGLER.søk), fang(async (_req: any, res: any) => {

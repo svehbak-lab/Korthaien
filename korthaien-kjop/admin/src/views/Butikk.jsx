@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api, kroner, CONDITIONS } from "../api.js";
+import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside } from "./Bunn.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BUTIKKVISNING
@@ -148,6 +149,8 @@ export default function Butikk({ onFeil }) {
         onAlleSett={() => { setÅpentKort(null); setSkjerm("sett"); }}
       />
       <div className="b-innhold">{innhold}</div>
+      {/* Bunnen staar paa hver skjerm, som toppen. */}
+      <Bunn onSkjerm={(id) => { setÅpentKort(null); setSkjerm(id); }} />
     </div>
   );
 
@@ -173,6 +176,10 @@ export default function Butikk({ onFeil }) {
       />
     );
   }
+
+  if (skjerm === "kontakt") return skall(<Kontakt onFeil={onFeil} />);
+  if (skjerm === "frakt") return skall(<Fraktside onFeil={onFeil} />);
+  if (skjerm === "kreditt") return skall(<Kredittside />);
 
   if (skjerm === "sett") {
     return skall(
@@ -1196,7 +1203,7 @@ function Forside({ onButikk, onÅpne, onSett, onFeil }) {
   useEffect(() => {
     let avbrutt = false;
     api
-      .butikk({ sortering: "pris_ned", perSide: 12, baresalg: true })
+      .butikk({ sortering: "nyeste", perSide: 12, baresalg: true })
       .then((d) => !avbrutt && setKort(d.kort))
       .catch((e) => !avbrutt && onFeil(e));
     return () => {
@@ -1252,7 +1259,7 @@ function Forside({ onButikk, onÅpne, onSett, onFeil }) {
       )}
 
       <div className="b-rad">
-        <h2>Dyreste på lager</h2>
+        <h2>Nylig inn i butikken</h2>
         <button className="knapp liten hoyre" onClick={onButikk}>Hele butikken</button>
       </div>
 

@@ -424,6 +424,10 @@ export async function butikkvisning(opts: ButikkFilter) {
     pris_opp: `${SORTPRIS} ASC, c.name`,
     navn: "c.name COLLATE NOCASE ASC",
     navn_ned: "c.name COLLATE NOCASE DESC",
+    // Sist lagt inn. Bare bevegelser som la noe TIL teller — en linje som
+    // tok kort ut av hylla gjør ikke kortet nytt i butikken.
+    nyeste: `(SELECT MAX(b.created_at) FROM lager_bevegelser b
+               WHERE b.card_id = c.id AND b.antall > 0) DESC, c.name`,
   }[String(opts.sortering || "")] || (opts.sett
     ? "CAST(c.collector_number AS INTEGER), c.collector_number"
     : "c.name COLLATE NOCASE ASC");
