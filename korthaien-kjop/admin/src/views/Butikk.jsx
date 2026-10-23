@@ -1253,7 +1253,9 @@ function Forside({ onButikk, onÅpne, onSett, onFeil }) {
                   <div className="b-settflis-tom" />
                 )}
                 <span className="navn">{s.name}</span>
-                <span className="linje">{s.kort} kort</span>
+                {/* Ulike kort, ikke eksemplarer: 259 betyr 259 forskjellige
+                    utgaver på lager, ikke 259 i bunken. */}
+                <span className="linje">{s.kort} ulike kort</span>
               </button>
             ))}
           </div>
@@ -1303,13 +1305,18 @@ function Forside({ onButikk, onÅpne, onSett, onFeil }) {
 }
 
 // Ett kort i rutenettet på forsiden. Prisen er den billigste du faktisk har
-// på lager — «fra» fordi tilstandene koster ulikt.
+// på lager.
+//
+// «Fra» står bare når det finnes flere priser å velge mellom — har du både NM
+// og EX til ulik pris, er den billigste et utgangspunkt og ikke prisen. Har du
+// bare én, er det prisen, og da er «fra» et forbehold mot ingenting.
 function Flis({ kort, onÅpne }) {
   const priser = (kort.varianter || [])
     .flatMap((v) => v.tilstander || [])
     .filter((t) => t.lager > 0 && t.ore !== null && t.ore !== undefined)
     .map((t) => t.ore);
   const fra = priser.length ? Math.min(...priser) : null;
+  const flerePriser = new Set(priser).size > 1;
   const antall = (kort.varianter || []).reduce((n, v) => n + (v.påLager || 0), 0);
   const foil = (kort.varianter || []).some((v) => v.finish === "foil" && v.påLager > 0);
 
@@ -1327,7 +1334,9 @@ function Flis({ kort, onÅpne }) {
         {kort.variant && kort.variant !== "vanlig" ? " · " + kort.variant : ""}
         {foil ? " · foil" : ""}
       </span>
-      <span className="pris tall">{fra === null ? "Utsolgt" : "fra " + kroner(fra)}</span>
+      <span className="pris tall">
+        {fra === null ? "Utsolgt" : (flerePriser ? "fra " : "") + kroner(fra)}
+      </span>
       <span className="linje">{antall} på lager</span>
     </button>
   );
