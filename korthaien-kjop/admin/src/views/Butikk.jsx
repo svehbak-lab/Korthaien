@@ -90,7 +90,15 @@ export default function Butikk({ onFeil }) {
   const synlige = useMemo(() => {
     if (!data) return [];
     return data.kort
-      .map((k) => ({ ...k, valgt: k.varianter.find((v) => v.finish === finish) }))
+      .map((k) => ({
+        ...k,
+        // Finnes kortet bare i én utførelse, er det den som vises uansett
+        // hvilken fane du står i. Kaladesh Inventions finnes bare i foil, og
+        // uten dette falt de ut av «Enkeltkort» selv om serveren sendte dem.
+        valgt:
+          k.varianter.find((v) => v.finish === finish) ||
+          (k.varianter.length === 1 ? k.varianter[0] : null),
+      }))
       .filter((k) => k.valgt?.tilstander.length);
   }, [data, finish]);
 

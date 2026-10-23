@@ -327,8 +327,9 @@ export async function butikkvisning(opts: ButikkFilter) {
     hvor.push("c.set_code = ?");
     args.push(opts.sett.toLowerCase());
   }
-  if (opts.finish === "foil") hvor.push("c.has_foil = 1");
-  else if (opts.finish === "nonfoil") hvor.push("c.has_nonfoil = 1");
+  // Finish-kravet legges på lenger ned, ikke her. Fanetallene skal telles
+  // uten det — ellers telles fanene inni hverandre, og «Enkeltkort» viser
+  // hvor mange enkeltkort det er blant foilene.
   if (opts.baresalg) {
     hvor.push(`EXISTS (SELECT 1 FROM lager_bevegelser b
                         WHERE b.card_id = c.id
@@ -396,20 +397,45 @@ export async function butikkvisning(opts: ButikkFilter) {
     ? "CAST(c.collector_number AS INTEGER), c.collector_number"
     : "c.name COLLATE NOCASE ASC");
 
+  // «Enkeltkort» er ikke det motsatte av «Foils». De to fanene finnes for å
+  // slippe å vise det samme kortet to ganger — én gang vanlig og én gang
+  // foil. Et kort som BARE finnes i foil, som Kaladesh Inventions, vises
+  // uansett bare én gang, og hører like fullt hjemme blant enkeltkortene.
+  //
+  // Krevde vi has_nonfoil = 1 her, forsvant de helt: søker du «Sol Ring»,
+  // får du alle utgavene unntatt den dyreste, uten noe som sier at den
+  // finnes. Foil-fanen er fortsatt kortene som finnes i foil.
+  const FINISH_KRAV =
+    opts.finish === "foil"
+      ? "c.has_foil = 1"
+      : opts.finish === "nonfoil"
+        ? "(c.has_nonfoil = 1 OR c.has_foil = 1)"
+        : null;
+  const hvorMedFinish = FINISH_KRAV ? [...hvor, FINISH_KRAV] : hvor;
+
   // Totalen og fanetallene telles i databasen. Å telle det som ligger på
   // siden ville gitt «Enkeltkort (25)» uansett hvor mange det er.
+  //
+  // Telles uten finish-kravet, så hver fane viser hvor mange den selv har —
+  // ikke hvor mange den har til felles med den du står i.
   const tellinger = await db().execute({
     sql: `SELECT COUNT(*) AS n,
-                 SUM(CASE WHEN c.has_nonfoil = 1 THEN 1 ELSE 0 END) AS nonfoil,
+                 SUM(CASE WHEN c.has_nonfoil = 1 OR c.has_foil = 1 THEN 1 ELSE 0 END) AS nonfoil,
                  SUM(CASE WHEN c.has_foil = 1 THEN 1 ELSE 0 END)    AS foil
             FROM cards c WHERE ${hvor.join(" AND ")}`,
     args,
   });
-  const totalt = Number(tellinger.rows[0]?.n || 0);
   const antall = {
     nonfoil: Number(tellinger.rows[0]?.nonfoil || 0),
     foil: Number(tellinger.rows[0]?.foil || 0),
   };
+  // Totalen er fanens egen, siden den styrer sidetallet.
+  const totalt =
+    opts.finish === "foil"
+      ? antall.foil
+      : opts.finish === "nonfoil"
+        ? antall.nonfoil
+        : Number(tellinger.rows[0]?.n || 0);
 
   const r = await db().execute({
     sql: `SELECT c.id, c.name, c.collector_number, c.rarity, c.variant,
@@ -418,7 +444,7 @@ export async function butikkvisning(opts: ButikkFilter) {
                  c.power, c.toughness, c.loyalty, c.colors, c.artist, c.set_code,
                  COALESCE(s.visningsnavn, s.name) AS set_name
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
-           WHERE ${hvor.join(" AND ")}
+           WHERE ${hvorMedFinish.join(" AND ")}
            ORDER BY ${ORDNING}
            LIMIT ? OFFSET ?`,
     args: [...args, perSide, (side - 1) * perSide],
