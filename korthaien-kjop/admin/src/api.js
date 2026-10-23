@@ -138,6 +138,7 @@ export const api = {
     kall("/api/admin/produkter?" + new URLSearchParams(
       Object.entries(o).filter(([, v]) => v !== undefined && v !== "")
     )),
+  frigiKvote: (id) => kall(`/api/admin/orders/${id}/frigi`, { method: "POST" }),
   settinfo: (kode) => kall(`/api/admin/butikk/sett/${encodeURIComponent(kode)}`),
   leggTilProdukt: (p) => kall("/api/admin/produkter", { method: "POST", body: p }),
   endreProdukt: (id, p) => kall(`/api/admin/produkter/${id}`, { method: "PUT", body: p }),

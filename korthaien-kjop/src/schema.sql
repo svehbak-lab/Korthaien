@@ -209,6 +209,10 @@ CREATE TABLE IF NOT EXISTS mystore_stock (
 CREATE TABLE IF NOT EXISTS orders (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   order_no       TEXT NOT NULL UNIQUE,
+  -- Satt når kortene er lagt inn i Mystore. Til da holder ordren kvoten,
+  -- uavhengig av om kunden har fått oppgjøret sitt. De to tingene skjer til
+  -- ulik tid, og kvoten må følge hyllene, ikke pengene.
+  kvote_frigitt_at TEXT,
   customer_name  TEXT NOT NULL,
   email          TEXT NOT NULL,
   phone          TEXT,

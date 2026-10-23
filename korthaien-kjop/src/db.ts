@@ -187,6 +187,26 @@ async function leggTilNyeKolonner(): Promise<void> {
   // Det kunden ble forespeilet, frosset ved innsending. unit_ore endrer seg
   // når du justerer tilstand ved mottak, og uten disse ville vi ikke lenger
   // kunne si hva avviket besto i.
+  // Når kortene faktisk er lagt inn i Mystore, og kvoten derfor kan slippes.
+  //
+  // Dette var før bundet til oppgjøret: gjorde du opp, var kvoten fri. Men
+  // oppgjøret skjer når kunden skal ha pengene sine, og innleggingen skjer
+  // når du rekker det. I mellomrommet var kortene verken i beholdningen
+  // eller reservert, og da kunne de samme kortene loves bort på nytt.
+  //
+  // Backfillen står inne i grenen som lager kolonnen, så den går én gang.
+  // Kjørte den hver oppstart, ville den frigitt enhver ordre du nettopp har
+  // gjort opp og ikke rukket å legge inn — altså selve feilen vi retter.
+  if (ordre.size && !ordre.has("kvote_frigitt_at")) {
+    await db().execute("ALTER TABLE orders ADD COLUMN kvote_frigitt_at TEXT");
+    // Alt som allerede er ute av løpet regnes som frigitt. Uten dette ville
+    // hver eneste historiske ordre begynt å reservere kvote i natt.
+    await db().execute(
+      `UPDATE orders
+          SET kvote_frigitt_at = COALESCE(credit_sent_at, received_at, created_at)
+        WHERE status IN ('stocked', 'cancelled', 'expired')`
+    );
+  }
   if (ordre.size && !ordre.has("quoted_ore")) {
     await db().execute("ALTER TABLE orders ADD COLUMN quoted_ore INTEGER NOT NULL DEFAULT 0");
     await db().execute("UPDATE orders SET quoted_ore = total_ore");

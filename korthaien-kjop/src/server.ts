@@ -15,6 +15,7 @@ import {
   antallPerType, erType,
 } from "./produkter.js";
 import { settinfo } from "./settinfo.js";
+import { HOLDER_KVOTE, frigiKvote } from "./quota.js";
 import { forsideSett } from "./forside.js";
 import { kontoer, bevegelser, saldo, leggTil as leggTilKreditt, settSaldo } from "./kreditt.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
@@ -243,16 +244,37 @@ app.post("/api/admin/logout", (_req, res) => {
 
 app.get("/api/admin/me", krevAdmin, (_req, res) => res.json({ ok: true }));
 
+// Kortene er lagt inn i Mystore — fra naa teller beholdningen dem, og
+// reservasjonen ville telt dem en gang til.
+//
+// Midlertidig, til var egen varebeholdning overtar. Da kan innleggingen og
+// frigivelsen skje i samme handling, fordi systemet selv vet naar kortene er
+// paa plass. I dag vet det ikke det, og en knapp er aerligere enn en gjetning.
+app.post("/api/admin/orders/:id/frigi", krevAdmin, fang(async (req: any, res: any) => {
+  const id = Number(req.params.id);
+  const f = await db().execute({ sql: "SELECT id FROM orders WHERE id = ?", args: [id] });
+  if (!f.rows.length) throw new HttpFeil(404, "Fant ikke ordren.");
+  res.json({ kvote_frigitt_at: await frigiKvote(id) });
+}));
+
 app.get("/api/admin/orders", krevAdmin, fang(async (req: any, res: any) => {
   await utløpGamleOrdrer();
   const arkiv = String(req.query.arkiv || "") === "1";
-  // Mottatte ordrer er fortsatt aktive: de holder kvote til de er lagerført.
-  const status = arkiv ? ["stocked", "cancelled", "expired"] : ["pending", "received"];
-  const r = await db().execute({
-    sql: `SELECT * FROM orders WHERE status IN (${status.map(() => "?").join(",")})
-          ORDER BY created_at DESC LIMIT 300`,
-    args: status,
-  });
+  // Skillet gaar paa kvoten, ikke paa statusen. En ordre som er gjort opp
+  // men ikke frigitt holder fortsatt kortene dine reservert, og da er den
+  // fortsatt din — knappen som frigir dem maa vaere til aa finne uten aa
+  // lete i arkivet.
+  const r = await db().execute(
+    arkiv
+      ? `SELECT * FROM orders
+          WHERE status IN ('cancelled','expired')
+             OR (status = 'stocked' AND kvote_frigitt_at IS NOT NULL)
+          ORDER BY created_at DESC LIMIT 300`
+      : `SELECT * FROM orders
+          WHERE status IN ('pending','received')
+             OR (status = 'stocked' AND kvote_frigitt_at IS NULL)
+          ORDER BY created_at DESC LIMIT 300`
+  );
   const ider = r.rows.map((o: any) => o.id);
   let linjer: any[] = [];
   if (ider.length) {
@@ -755,9 +777,9 @@ app.get("/api/admin/cards", krevAdmin, fang(async (req: any, res: any) => {
                  (SELECT product_name FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS pnavn_foil,
                  (SELECT category     FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS pkat_foil,
                  (SELECT COALESCE(SUM(l.qty),0) FROM order_lines l JOIN orders o ON o.id = l.order_id
-                   WHERE l.card_id = c.id AND l.finish='nonfoil' AND o.status IN ('pending','received')) AS res_nonfoil,
+                   WHERE l.card_id = c.id AND l.finish='nonfoil' AND ${HOLDER_KVOTE}) AS res_nonfoil,
                  (SELECT COALESCE(SUM(l.qty),0) FROM order_lines l JOIN orders o ON o.id = l.order_id
-                   WHERE l.card_id = c.id AND l.finish='foil' AND o.status IN ('pending','received')) AS res_foil
+                   WHERE l.card_id = c.id AND l.finish='foil' AND ${HOLDER_KVOTE}) AS res_foil
             FROM cards c WHERE c.set_code = ?
            ORDER BY CAST(c.collector_number AS INTEGER), c.name`,
     args: [set],

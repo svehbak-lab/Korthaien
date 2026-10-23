@@ -142,11 +142,11 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
 
           <div className="spred" style={{ marginTop: 16 }}>
             <span className="dempet">
-              {ordre.status === "received"
-                ? "Kvoten holdes til ordren er gjort opp."
-                : ordre.status === "pending"
+              {ordre.status === "pending"
                 ? "Kortene er ikke kommet ennå."
-                : ""}
+                : ordre.kvote_frigitt_at
+                ? `Kvoten ble frigitt ${dato(ordre.kvote_frigitt_at)}.`
+                : "Kvoten holdes til kortene er lagt inn i Mystore."}
             </span>
             <div className="rad-flex">
               <label className="dempet" style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 4 }}>
@@ -162,6 +162,12 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
               {ordre.status === "received" && (
                 <button className="knapp" onClick={() => sett("pending")}>Angre mottak</button>
               )}
+              {/* Midlertidig, til vår egen varebeholdning overtar. Da vet
+                  systemet selv når kortene er på plass, og innleggingen kan
+                  frigi kvoten uten at noen må si fra. */}
+              {["received", "stocked"].includes(ordre.status) && !ordre.kvote_frigitt_at && (
+                <Frigi ordre={ordre} onEndret={onEndret} onFeil={onFeil} />
+              )}
               {["stocked", "cancelled", "expired"].includes(ordre.status) && (
                 <button className="knapp" onClick={() => sett("pending")}>Åpne på nytt</button>
               )}
@@ -170,6 +176,46 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FRIGI ANTALL
+// ─────────────────────────────────────────────────────────────────────────────
+// Kvoten fulgte før oppgjøret: gjorde du opp, var kortene frie. Men
+// oppgjøret skjer når kunden skal ha pengene sine, og innleggingen i Mystore
+// skjer når du rekker det. I mellomrommet var kortene verken i beholdningen
+// eller reservert — og da kunne de samme kortene loves bort på nytt.
+//
+// Nå holder ordren kvoten til du sier fra. Knappen er bekreftelsen på at
+// kortene står i hylla.
+function Frigi({ ordre, onEndret, onFeil }) {
+  const [jobber, setJobber] = useState(false);
+
+  async function frigi() {
+    if (
+      !confirm(
+        `Frigi antallet på ${ordre.order_no}?\n\n` +
+          "Gjør dette først når kortene er lagt inn i Mystore. Fra nå teller " +
+          "beholdningen dem, og kvoten åpnes for nye innsendinger."
+      )
+    )
+      return;
+    setJobber(true);
+    try {
+      await api.frigiKvote(ordre.id);
+      onEndret();
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setJobber(false);
+    }
+  }
+
+  return (
+    <button className="knapp primar" disabled={jobber} onClick={frigi}>
+      {jobber ? "Frigir…" : "Frigi antall"}
+    </button>
   );
 }
 
@@ -714,6 +760,12 @@ function Oppgjør({ ordre, onEndret, onFeil }) {
             <span className="dempet">{ordre.credit_sent_at ? dato(ordre.credit_sent_at) : ""}</span>
             {ordre.credit_note && <span className="dempet">{ordre.credit_note}</span>}
           </div>
+          {!ordre.kvote_frigitt_at && (
+            <p className="dempet" style={{ margin: "8px 0 0" }}>
+              Kvoten holdes fortsatt. Trykk «Frigi antall» når kortene er lagt
+              inn i Mystore, så åpnes de for nye innsendinger.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -724,10 +776,9 @@ function Oppgjør({ ordre, onEndret, onFeil }) {
       <div className="krop">
         <strong>Gjør opp</strong>
         <p className="dempet" style={{ margin: "4px 0 12px" }}>
-          Lag en rabattkode på {kroner(ordre.total_ore)} i Mystore, lim den inn her, og
-          legg kortene inn på lager. Når du bekrefter, frigjøres kvoten og
-          beholdningen i Mystore overtar tellingen — er ikke kortene lagt inn ennå,
-          kan du love bort de samme kortene på nytt.
+          Lag en rabattkode på {kroner(ordre.total_ore)} i Mystore, lim den inn her,
+          og bekreft. Kvoten blir stående til du trykker «Frigi antall» — den
+          slippes når kortene er lagt inn, ikke når kunden har fått oppgjøret.
         </p>
         <div className="rad-flex" style={{ marginBottom: 10 }}>
           <label>

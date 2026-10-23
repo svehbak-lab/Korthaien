@@ -7,9 +7,13 @@ import type { SetRule } from "./pricing.js";
 //   ledig = ønsket − beholdning i Mystore − reservert i aktive ordrer
 //
 // Reservasjonsleddet er det som hindrer at to kunder samtidig får selge meg
-// det samme siste eksemplaret. Reservasjonen holder helt til kortene er
-// lagerført i Mystore. Slapp vi den ved mottak, ville kvoten stått åpen i
-// vinduet mellom at pakken kommer og at varene er lagt inn.
+// det samme siste eksemplaret. Reservasjonen holder helt til kortene faktisk
+// står i Mystore — ikke til ordren er gjort opp.
+//
+// Det skillet er hele poenget. Oppgjøret skjer når kunden skal ha pengene
+// sine; innleggingen skjer når du rekker det. Bandt vi kvoten til oppgjøret,
+// var kortene i mellomrommet verken i beholdningen eller reservert, og da
+// kunne de samme kortene loves bort på nytt.
 
 export type Kvote = {
   wanted: number;
@@ -61,12 +65,21 @@ async function hentBeholdning(cardId: string, finish: string): Promise<number> {
   return r.rows[0] ? Number(r.rows[0].qty) : 0;
 }
 
+// En ordre holder kvoten til kortene er lagt inn i Mystore — ikke til kunden
+// har fått oppgjoeret. De to skjer til ulik tid: oppgjoeret naar kunden skal
+// ha pengene sine, innleggingen naar du rekker det. Bandt vi kvoten til
+// oppgjoeret, var kortene i mellomrommet verken i beholdningen eller
+// reservert, og da kunne de samme kortene loves bort paa nytt.
+export const HOLDER_KVOTE =
+  `(o.status IN ('pending','received')
+    OR (o.status = 'stocked' AND o.kvote_frigitt_at IS NULL))`;
+
 async function hentReservert(cardId: string, finish: string): Promise<number> {
   const r = await db().execute({
     sql: `SELECT COALESCE(SUM(l.qty), 0) AS n
             FROM order_lines l
             JOIN orders o ON o.id = l.order_id
-           WHERE l.card_id = ? AND l.finish = ? AND o.status IN ('pending','received')`,
+           WHERE l.card_id = ? AND l.finish = ? AND ${HOLDER_KVOTE}`,
     args: [cardId, finish],
   });
   return Number(r.rows[0]?.n || 0);
@@ -89,7 +102,7 @@ export async function hentKvoterBulk(
     db().execute({
       sql: `SELECT l.card_id, l.finish, COALESCE(SUM(l.qty),0) AS n
               FROM order_lines l JOIN orders o ON o.id = l.order_id
-             WHERE o.status IN ('pending','received') AND l.card_id IN (${plassholdere})
+             WHERE ${HOLDER_KVOTE} AND l.card_id IN (${plassholdere})
              GROUP BY l.card_id, l.finish`,
       args: ids,
     }),
@@ -132,4 +145,33 @@ export function regnLedig(
     kilde = "sett";
   }
   return { wanted, stock, reserved, available: Math.max(0, wanted - stock - reserved), kilde };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FRIGI KVOTEN
+// ─────────────────────────────────────────────────────────────────────────────
+// Du trykker på denne når kortene er lagt inn i Mystore. Fra da av teller
+// beholdningen dem, og reservasjonen ville telt dem én gang til.
+//
+// Midlertidig, til vår egen varebeholdning overtar. Da kan «Legg til
+// varebeholdning» gjøre begge deler i ett — legge inn kortene og frigi
+// kvoten — fordi systemet da selv vet når kortene er på plass. I dag vet
+// det ikke det, og en knapp er ærligere enn en gjetning.
+export async function frigiKvote(ordreId: number): Promise<string | null> {
+  const nå = new Date().toISOString();
+  // Vilkåret står i setningen: trykker du to ganger, skal ikke tidspunktet
+  // flytte seg, og to faner skal ikke kunne overskrive hverandre.
+  const r = await db().execute({
+    sql: "UPDATE orders SET kvote_frigitt_at = ? WHERE id = ? AND kvote_frigitt_at IS NULL",
+    args: [nå, ordreId],
+  });
+  if (!Number(r.rowsAffected)) {
+    const f = await db().execute({
+      sql: "SELECT kvote_frigitt_at FROM orders WHERE id = ?",
+      args: [ordreId],
+    });
+    return f.rows[0] ? (f.rows[0].kvote_frigitt_at as string | null) : null;
+  }
+  return nå;
 }
