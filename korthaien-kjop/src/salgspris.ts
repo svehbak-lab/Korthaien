@@ -307,6 +307,8 @@ export type ButikkFilter = {
   tekst?: string;
   rarity?: string;
   farge?: string;
+  // «Bare disse fargene». Uten den betyr fargevalget «minst én av dem».
+  fargeEksakt?: boolean;
   type?: string;
   baresalg?: boolean;
   prisFra?: number;
@@ -362,19 +364,48 @@ export async function butikkvisning(opts: ButikkFilter) {
   }
   // Flere farger betyr «minst én av dem», ikke «alle sammen». Det er det
   // folk mener når de huker av hvit og blå.
+  //
+  // Men ikke alltid: noen ganger er spørsmålet «svarte kort», ikke «kort som
+  // har svart i seg». Da huker man av «Bare disse fargene», og svart alene
+  // gir monofargede svarte kort. To farger gir kort som er nøyaktig de to.
+  const FARGENE = ["W", "U", "B", "R", "G"];
   const farger = String(opts.farge || "").split(",").filter(Boolean);
   if (farger.length) {
-    const deler: string[] = [];
-    for (const f of farger) {
-      if (f === "C") {
-        // Fargeløs: enten ingen farger lagret, eller en tom liste.
-        deler.push("(c.colors IS NULL OR c.colors = '[]')");
-      } else {
-        deler.push("c.colors LIKE ?");
-        args.push(`%"${f}"%`);
+    const kulører = farger.filter((f) => f !== "C");
+
+    if (opts.fargeEksakt && kulører.length) {
+      // Hver valgt farge må være der, og ingen av de andre.
+      //
+      // Hver farge sjekkes for seg i stedet for å sammenligne hele
+      // JSON-teksten mot ["B","R"]. Da spiller rekkefølge og mellomrom
+      // ingen rolle, og vi slipper å stole på at importen alltid skriver
+      // lista likt.
+      //
+      // Fargeløs kan ikke være «en av disse fargene» — et kort er enten
+      // uten farge eller ikke. Er C huket av sammen med en farge, er det
+      // fargene som gjelder.
+      hvor.push(
+        `(${FARGENE.map((f) =>
+          kulører.includes(f) ? `c.colors LIKE '%"${f}"%'` : `c.colors NOT LIKE '%"${f}"%'`
+        ).join(" AND ")})`
+      );
+    } else if (opts.fargeEksakt) {
+      // Bare fargeløs huket av: da er «bare disse fargene» det samme som
+      // fargeløs alene.
+      hvor.push("(c.colors IS NULL OR c.colors = '[]')");
+    } else {
+      const deler: string[] = [];
+      for (const f of farger) {
+        if (f === "C") {
+          // Fargeløs: enten ingen farger lagret, eller en tom liste.
+          deler.push("(c.colors IS NULL OR c.colors = '[]')");
+        } else {
+          deler.push("c.colors LIKE ?");
+          args.push(`%"${f}"%`);
+        }
       }
+      hvor.push(`(${deler.join(" OR ")})`);
     }
-    hvor.push(`(${deler.join(" OR ")})`);
   }
 
   const perSide = Math.min(200, Math.max(1, opts.perSide ?? 25));

@@ -39,6 +39,9 @@ const stor = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const TOMT = {
   q: "", rarity: [], farge: [], type: [],
+  // «Bare disse fargene». Av som standard: «minst én av dem» er det folk
+  // mener når de huker av hvit og blå.
+  fargeEksakt: false,
   // Forsiden viser det du faktisk har. Et tomt skjermbilde forteller ingenting.
   baresalg: true, prisFra: "", prisTil: "",
 };
@@ -202,6 +205,32 @@ export default function Butikk({ onFeil }) {
                   onVeksle={() => veksle("farge", x.kode)}
                 />
               ))}
+              {/* Står under fargene, ikke som egen gruppe: den endrer
+                  betydningen av avhukingene over, og hører til dem.
+                  Grå ut når ingen farge er valgt — da gjør den ingenting,
+                  og en bryter som ikke gjør noe er verre enn ingen. */}
+              <label
+                style={{
+                  display: "flex", alignItems: "center", gap: 7, cursor: f.farge.length ? "pointer" : "default",
+                  fontSize: 13, marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--strek)",
+                  color: f.farge.length ? "var(--blekk)" : "var(--dempet)",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={f.fargeEksakt}
+                  disabled={!f.farge.length}
+                  onChange={(e) => endre("fargeEksakt", e.target.checked)}
+                />
+                Bare disse fargene
+              </label>
+              <p className="dempet" style={{ fontSize: 11.5, margin: "4px 0 0", lineHeight: 1.4 }}>
+                {f.fargeEksakt
+                  ? f.farge.filter((x) => x !== "C").length === 1
+                    ? "Bare monofargede kort i den fargen."
+                    : "Kort som er nøyaktig disse fargene, ikke flere."
+                  : "Uten denne: kort som har minst én av fargene."}
+              </p>
             </Gruppe>
 
             <Gruppe navn="Type" lukket>

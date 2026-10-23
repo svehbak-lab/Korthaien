@@ -386,6 +386,7 @@ app.get("/api/admin/butikk", krevAdmin, fang(async (req: any, res: any) => {
       tekst: req.query.tekst ? String(req.query.tekst) : undefined,
       rarity: req.query.rarity ? String(req.query.rarity) : undefined,
       farge: req.query.farge ? String(req.query.farge) : undefined,
+      fargeEksakt: String(req.query.fargeEksakt || "") === "1",
       type: req.query.type ? String(req.query.type) : undefined,
       baresalg: String(req.query.baresalg || "") === "1",
       prisFra: tall(req.query.prisFra),
