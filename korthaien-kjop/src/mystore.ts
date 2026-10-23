@@ -388,6 +388,18 @@ export async function synkMystore(
       // uten at produktnavnet røper det.
       const tokenKrav = erToken ? " AND er_token = 1" : "";
       const tokenKravC = erToken ? " AND c.er_token = 1" : "";
+
+      // Serienummererte utgaver nås bare når samlernummeret sier det — «120z»
+      // treffer z-utgaven over, og det er riktig. Oppslagene under gjetter:
+      // de sorterer på CAST(collector_number AS INTEGER), og både «120» og
+      // «120z» blir 120. Da er rekkefølgen mellom dem vilkårlig, og et
+      // foilprodukt uten nummer kan havne på serieutgaven.
+      //
+      // Det skjer stille. Serieutgaver er holdt utenfor kjøpslista,
+      // prisingen og kupplista, men ingenting hindrer beholdning i å bli
+      // ført på dem — og da står kortet i butikken til en pris som gjelder
+      // et eksemplar du ikke har. Derfor er de ikke gyldige gjetninger.
+      const ikkeSerie = " AND c.er_serialized = 0";
       if (erToken) rent = rent.replace(/\b(token|emblem)\b/gi, "").replace(/\s{2,}/g, " ").trim();
 
       const n = normaliser(rent);
@@ -450,7 +462,7 @@ export async function synkMystore(
         const streng = await db().execute({
           sql: `SELECT c.id, c.has_nonfoil, c.has_foil FROM cards c LEFT JOIN sets s ON s.code = c.set_code
                  WHERE c.set_code IN (${plass}) AND c.variant = ?
-                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}
+                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}${ikkeSerie}
                  ORDER BY (c.set_code = ?) DESC,
                           CAST(c.collector_number AS INTEGER) ASC,
                           s.released_at ASC
@@ -473,7 +485,7 @@ export async function synkMystore(
         const ikkeVanlig = await db().execute({
           sql: `SELECT c.id, c.has_nonfoil, c.has_foil FROM cards c LEFT JOIN sets s ON s.code = c.set_code
                  WHERE c.set_code IN (${plass}) AND c.variant <> 'vanlig'
-                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}
+                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}${ikkeSerie}
                  ORDER BY (c.set_code = ?) DESC,
                           CAST(c.collector_number AS INTEGER) ASC,
                           s.released_at ASC
@@ -487,7 +499,7 @@ export async function synkMystore(
         treff = await db().execute({
           sql: `SELECT c.id, c.has_nonfoil, c.has_foil FROM cards c LEFT JOIN sets s ON s.code = c.set_code
                  WHERE c.set_code IN (${plass})
-                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}
+                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}${ikkeSerie}
                  ORDER BY (c.variant = ?) DESC,
                           (c.set_code = ?) DESC,
                           (c.name_norm = ? OR c.name_norm = ?) DESC,
@@ -532,7 +544,7 @@ export async function synkMystore(
           : await db().execute({
               sql: `SELECT c.id, c.has_nonfoil, c.has_foil FROM cards c LEFT JOIN sets s ON s.code = c.set_code
                      WHERE c.set_code IN (${plass}) AND c.has_nonfoil = 1
-                       AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}
+                       AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}${ikkeSerie}
                        ${behandling ? "AND c.variant <> 'vanlig'" : ""}
                      ORDER BY (c.set_code = ?) DESC,
                               CAST(c.collector_number AS INTEGER) ASC,

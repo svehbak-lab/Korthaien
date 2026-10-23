@@ -141,6 +141,28 @@ export default function Lagerrapport({ onFeil }) {
         </div>
       )}
 
+      {/* Serienummererte utgaver skal nesten aldri ha beholdning. Står det
+          noe her, har et produkt sannsynligvis koblet seg til feil trykk —
+          og kortet står i butikken til en pris som gjelder et eksemplar du
+          ikke har. Normalt er tallet null og linjen usynlig. */}
+      {data.serienummererte?.kort > 0 && (
+        <div className="varsel info" style={{ marginBottom: 16 }}>
+          <b>
+            {data.serienummererte.kort}{" "}
+            {data.serienummererte.kort === 1 ? "serienummerert utgave har" : "serienummererte utgaver har"}{" "}
+            beholdning
+          </b>{" "}
+          — {data.serienummererte.eksemplarer}{" "}
+          {data.serienummererte.eksemplarer === 1 ? "eksemplar" : "eksemplarer"}
+          {data.serienummererte.navn.length > 0 && (
+            <>: {data.serienummererte.navn.join(", ")}</>
+          )}
+          . Sjekk at du faktisk eier dem. Serienummererte trykk er holdt utenfor
+          kjøpslista, prisingen og kupplista, så et feilkoblet kort er usynlig
+          overalt ellers — men i butikken står det til serieutgavens pris.
+        </div>
+      )}
+
       <LagerGraf onFeil={onFeil} />
 
       {!vanlig && !foil && <div className="varsel info">Huk av vanlig eller foil for å se noe.</div>}

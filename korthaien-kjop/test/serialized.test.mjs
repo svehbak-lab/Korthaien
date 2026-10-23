@@ -79,3 +79,35 @@ test("det ordinære kortet er upåvirket", async () => {
   const foil = t.find((x) => x.finish === "foil");
   assert.ok(foil.conditions[0].ore > 0);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KOBLEREN SKAL IKKE GJETTE PÅ EN SERIEUTGAVE
+// ─────────────────────────────────────────────────────────────────────────────
+// «120z» treffer z-utgaven fordi nummeret sier det. Det er riktig, og det
+// skal fortsette å virke. Men oppslagene som gjetter — de som sorterer på
+// CAST(collector_number AS INTEGER) — ser «120» og «120z» som samme tall, og
+// da er rekkefølgen mellom dem vilkårlig.
+//
+// Det går galt stille: serieutgaver er holdt utenfor kjøpslista, prisingen
+// og kupplista, men ingenting hindrer beholdning i å bli ført på dem. Kortet
+// havner i butikken til en pris som gjelder et eksemplar du ikke har.
+
+test("de to trykkene er uskillelige for den som sorterer på tall", async () => {
+  // Dette er grunnen til at gjetningen måtte stenges. Sorteringsnøkkelen
+  // som oppslagene bruker gir samme verdi for begge, så uten et eksplisitt
+  // vern er valget mellom dem opp til basen.
+  const r = await db().execute(
+    `SELECT id, CAST(collector_number AS INTEGER) AS tall FROM cards
+      WHERE id IN ('vanlig','serial') ORDER BY id`
+  );
+  const tall = r.rows.map((x) => Number(x.tall));
+  assert.equal(tall[0], tall[1], "samme sorteringsverdi — nøkkelen kan ikke skille dem");
+});
+
+test("serieutgaven er merket, ikke bare nummerert annerledes", async () => {
+  // Vernet hviler på flagget. Står det ikke, virker ingenting av det over.
+  const r = await db().execute(
+    "SELECT er_serialized FROM cards WHERE id = 'serial'"
+  );
+  assert.equal(Number(r.rows[0].er_serialized), 1);
+});

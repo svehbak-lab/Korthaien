@@ -170,6 +170,7 @@ export async function lagerrapport(): Promise<{
   sett: LagerSett[];
   butikk: { kort: number; verdi_ore: number };
   ukoblet: { produkter: number; kort: number };
+  serienummererte: { kort: number; eksemplarer: number; navn: string[] };
 }> {
   const opp = await hentSalgsOppsett();
 
@@ -271,6 +272,31 @@ export async function lagerrapport(): Promise<{
   );
   const ukr = (uk.rows[0] || {}) as any;
 
+  // Beholdning ført på en serienummerert utgave. Den skal nesten aldri
+  // finnes: serieutgaver er holdt utenfor kjøpslista, prisingen og
+  // kupplista, så et kort som havner her er usynlig i alt annet enn
+  // butikken — der det til gjengjeld står til en pris som gjelder et
+  // eksemplar du sannsynligvis ikke har.
+  //
+  // Kobleren gjetter ikke lenger på dem, men det som allerede er ført, står
+  // der til noen ser det. Derfor står tallet her i stedet for å bli
+  // oppdaget den dagen noen kjøper kortet.
+  const se = await db().execute(
+    `SELECT COUNT(*) AS kort, COALESCE(SUM(m.qty), 0) AS eksemplarer
+       FROM mystore_stock m JOIN cards c ON c.id = m.card_id
+      WHERE m.qty > 0 AND c.er_serialized = 1`
+  );
+  const ser = (se.rows[0] || {}) as any;
+
+  // Navnene, så varselet kan si hvilke kort det gjelder i stedet for bare
+  // hvor mange. Fem er nok til å kjenne dem igjen.
+  const senavn = Number(ser.kort || 0)
+    ? await db().execute(
+        `SELECT DISTINCT c.name FROM mystore_stock m JOIN cards c ON c.id = m.card_id
+          WHERE m.qty > 0 AND c.er_serialized = 1 ORDER BY c.name LIMIT 5`
+      )
+    : { rows: [] as any[] };
+
   return {
     sett: [...sett.values()].sort((a, b2) =>
       (b2.released_at || "").localeCompare(a.released_at || "") || a.set_name.localeCompare(b2.set_name)
@@ -282,6 +308,11 @@ export async function lagerrapport(): Promise<{
     ukoblet: {
       produkter: Number(ukr.produkter || 0),
       kort: Number(ukr.kort || 0),
+    },
+    serienummererte: {
+      kort: Number(ser.kort || 0),
+      eksemplarer: Number(ser.eksemplarer || 0),
+      navn: (senavn.rows as any[]).map((x) => String(x.name)),
     },
   };
 }
