@@ -370,6 +370,31 @@ textarea { width: 100%; font-family: inherit; }
 }
 .butikk .b-selg:hover { background: #ffbe74; color: #181818; }
 
+/* ── galleri ─────────────────────────────────────────────────────────────── */
+/* Bildet først og alt annet under. Den tetteste måten å se mange kort på når
+   det er bildet man kjenner dem igjen på. */
+.butikk .b-galleri {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+}
+.butikk .b-gflis { margin-bottom: 0; display: flex; flex-direction: column; }
+.butikk .b-gflis .krop { padding: 10px 12px 12px; display: flex; flex-direction: column; flex: 1; }
+.butikk .b-gbilde {
+  border: none; background: none; padding: 10px 10px 0; cursor: pointer; display: block;
+}
+.butikk .b-gbilde img, .butikk .b-gtomt {
+  width: 100%; aspect-ratio: 488 / 680; display: block;
+  border-radius: 7px; background: var(--papir); object-fit: cover;
+}
+.butikk .b-gbilde:hover img { box-shadow: 0 2px 10px rgb(0 0 0 / 16%); }
+.butikk .b-gsett { font-size: 11.5px; line-height: 1.3; }
+.butikk .b-gnavn { font-weight: 600; font-size: 13.5px; line-height: 1.3; margin-top: 1px; }
+.butikk .b-gnr { font-size: 11.5px; }
+/* Prisen dyttes ned, så knappene står på linje bortover raden selv når
+   navnet over tar to linjer. */
+.butikk .b-gpris { font-size: 16px; margin-top: auto; padding-top: 8px; }
+.butikk .b-gflis .cond-valg button { padding: 3px 0; font-size: 12px; }
+
 /* ── alle sett ───────────────────────────────────────────────────────────── */
 /* Bokstavene øverst. Med hundrevis av sett er lista flere skjermhøyder lang,
    og den som leter etter Zendikar skal slippe å rulle forbi alt annet. */

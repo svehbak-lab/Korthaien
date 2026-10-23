@@ -295,16 +295,25 @@ export default function Butikk({ onFeil }) {
                     ))}
 
                     <div style={{ marginLeft: "auto", display: "flex", gap: 2, paddingBottom: 8 }}>
+                      {/* Rekkefølgen er tetthet: tettest til venstre, mest
+                          plass per kort til høyre. */}
                       <VisningsIkon
                         aktiv={visning === "tekst"}
                         tittel="Tekstvisning"
                         onClick={() => setVisning("tekst")}
-                        strek
+                        form="strek"
                       />
                       <VisningsIkon
                         aktiv={visning === "detalj"}
                         tittel="Detaljvisning"
                         onClick={() => setVisning("detalj")}
+                        form="detalj"
+                      />
+                      <VisningsIkon
+                        aktiv={visning === "galleri"}
+                        tittel="Galleri"
+                        onClick={() => setVisning("galleri")}
+                        form="rutenett"
                       />
                     </div>
                   </div>
@@ -350,23 +359,38 @@ export default function Butikk({ onFeil }) {
                     )}
                   </p>
 
-                  {visning === "tekst"
-                    ? synlige.map((k) => (
-                        <Tekstrad
-                          key={k.id}
-                          kort={k}
-                          onÅpne={() => setÅpentKort(k.id)}
-                          onSett={() => setSett(k.set_code)}
-                        />
-                      ))
-                    : synlige.map((k) => (
-                        <Detaljrad
+                  {/* Samme kort, tre tettheter. Galleriet er ett rutenett og
+                      ikke en rekke paneler, så det må stå for seg. */}
+                  {visning === "galleri" ? (
+                    <div className="b-galleri">
+                      {synlige.map((k) => (
+                        <Galleriflis
                           key={k.id}
                           kort={k}
                           onÅpne={() => setÅpentKort(k.id)}
                           onSett={() => setSett(k.set_code)}
                         />
                       ))}
+                    </div>
+                  ) : visning === "tekst" ? (
+                    synlige.map((k) => (
+                      <Tekstrad
+                        key={k.id}
+                        kort={k}
+                        onÅpne={() => setÅpentKort(k.id)}
+                        onSett={() => setSett(k.set_code)}
+                      />
+                    ))
+                  ) : (
+                    synlige.map((k) => (
+                      <Detaljrad
+                        key={k.id}
+                        kort={k}
+                        onÅpne={() => setÅpentKort(k.id)}
+                        onSett={() => setSett(k.set_code)}
+                      />
+                    ))
+                  )}
 
                   {!synlige.length && <div className="tom">Ingen kort passer filteret.</div>}
 
@@ -586,7 +610,34 @@ function FoilMerke({ variant }) {
 
 // To ikoner i stedet for ordene «Tekst» og «Detalj». Symbolene er kjente fra
 // enhver nettbutikk, og de tar mindre plass enn teksten de erstatter.
-function VisningsIkon({ aktiv, tittel, onClick, strek }) {
+function VisningsIkon({ aktiv, tittel, onClick, form }) {
+  const tegning = {
+    strek: (
+      <>
+        <rect x="1" y="2" width="14" height="2" rx="1" />
+        <rect x="1" y="7" width="14" height="2" rx="1" />
+        <rect x="1" y="12" width="14" height="2" rx="1" />
+      </>
+    ),
+    detalj: (
+      <>
+        <rect x="1" y="2" width="5" height="12" rx="1" />
+        <rect x="8" y="3" width="7" height="2" rx="1" />
+        <rect x="8" y="7" width="7" height="2" rx="1" />
+        <rect x="8" y="11" width="5" height="2" rx="1" />
+      </>
+    ),
+    // Fire ruter. Ikonet skal ligne det det gir deg.
+    rutenett: (
+      <>
+        <rect x="1" y="1" width="6" height="6" rx="1" />
+        <rect x="9" y="1" width="6" height="6" rx="1" />
+        <rect x="1" y="9" width="6" height="6" rx="1" />
+        <rect x="9" y="9" width="6" height="6" rx="1" />
+      </>
+    ),
+  }[form];
+
   return (
     <button
       title={tittel}
@@ -603,20 +654,7 @@ function VisningsIkon({ aktiv, tittel, onClick, strek }) {
       }}
     >
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-        {strek ? (
-          <>
-            <rect x="1" y="2" width="14" height="2" rx="1" />
-            <rect x="1" y="7" width="14" height="2" rx="1" />
-            <rect x="1" y="12" width="14" height="2" rx="1" />
-          </>
-        ) : (
-          <>
-            <rect x="1" y="2" width="5" height="12" rx="1" />
-            <rect x="8" y="3" width="7" height="2" rx="1" />
-            <rect x="8" y="7" width="7" height="2" rx="1" />
-            <rect x="8" y="11" width="5" height="2" rx="1" />
-          </>
-        )}
+        {tegning}
       </svg>
     </button>
   );
@@ -876,6 +914,78 @@ function Detaljrad({ kort, onÅpne, onSett }) {
             Legg i kurven
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Galleri: bildet først og alt annet under. Den tetteste måten å se mange
+// kort på når det er bildet man kjenner dem igjen på — og det er det man
+// gjør med Magic-kort.
+//
+// Tilstandsvelgeren er den samme som i detaljvisningen, og oppfører seg likt:
+// trykker du på en fane, bytter prisen og antallet over og under.
+function Galleriflis({ kort, onÅpne, onSett }) {
+  const første = kort.valgt.tilstander.find((t) => t.lager > 0) || kort.valgt.tilstander[0];
+  const [valgt, setValgt] = useState(første.condition);
+  const t = kort.valgt.tilstander.find((x) => x.condition === valgt) || første;
+
+  return (
+    <div className="panel b-gflis">
+      <button className="b-gbilde" onClick={onÅpne} title={kort.name}>
+        {kort.image_uri ? (
+          <img src={kort.image_uri} alt={kort.name} loading="lazy" />
+        ) : (
+          <div className="b-gtomt" />
+        )}
+      </button>
+
+      <div className="krop">
+        <div className="b-gsett">
+          <button className="lenke" onClick={onSett}>{kort.set_name}</button>
+        </div>
+        {/* Knapp og ikke lenke: kortsiden er en tilstand i dette panelet,
+            ikke en adresse. En href hadde navigert ut av admin. Det endrer
+            seg når butikken flyttes ut og sidene får egne adresser. */}
+        <div className="b-gnavn">
+          <button className="lenke" onClick={onÅpne}>{kort.name}</button>
+        </div>
+        <div className="dempet b-gnr">
+          Collector #: {kort.collector_number}
+        </div>
+        {kort.valgt.finish === "foil" && <FoilMerke variant={kort.variant} />}
+
+        <div className="cond-valg" style={{ marginTop: 8 }}>
+          {CONDITIONS.map((c) => {
+            const x = kort.valgt.tilstander.find((y) => y.condition === c);
+            if (!x) return null;
+            return (
+              <button
+                key={c}
+                onClick={() => setValgt(c)}
+                aria-pressed={valgt === c}
+                className={x.lager ? undefined : "tom"}
+                title={x.lager ? `${x.lager} på lager` : "Utsolgt — prisen vises likevel"}
+              >
+                {c}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="tall pris b-gpris">{kroner(t.ore)}</div>
+        <div className="dempet b-gnr">
+          {t.lager > 0 ? `${t.lager} tilgjengelig` : "Utsolgt"}
+        </div>
+
+        <button
+          className="knapp primar"
+          style={{ width: "100%", marginTop: 8 }}
+          disabled
+          title="Kurven kommer når kassen bygges"
+        >
+          Legg i kurven
+        </button>
       </div>
     </div>
   );
