@@ -50,6 +50,14 @@ function kompakt(øre, spenn = øre) {
 const antallKompakt = (n, spenn = n) =>
   n >= 1000 ? `${komma(n / 1000, desimaler(spenn, 1000))}k` : String(Math.round(n));
 
+// Radene som faller innenfor en periode. Skilt ut fordi den trengs to
+// steder: når kurven tegnes, og når startperioden velges.
+function iPeriode(rader, p) {
+  if (!rader?.length || !p.dager) return rader || [];
+  const grense = dagNr(rader[rader.length - 1].dato) - p.dager;
+  return rader.filter((r) => dagNr(r.dato) > grense);
+}
+
 function grupper(rader, gruppe) {
   if (gruppe === "dag") return rader;
   const sisteDag = dagNr(rader[rader.length - 1].dato);
@@ -92,7 +100,13 @@ export default function LagerGraf({ onFeil }) {
   useEffect(() => {
     api
       .lagerhistorikk()
-      .then((d) => setRader(d.rader))
+      .then((d) => {
+        setRader(d.rader);
+        const egnet = PERIODER.find(
+          (x) => grupper(iPeriode(d.rader, x), x.gruppe).length >= 2
+        );
+        setPeriode((egnet || PERIODER[1]).id);
+      })
       .catch((e) => {
         setFeil(e?.message || String(e));
         onFeil(e);
@@ -163,7 +177,9 @@ export default function LagerGraf({ onFeil }) {
             ? "Ingen målinger ennå. Den første skrives etter neste lagersynk."
             : punkter.length === 0
               ? "Ingen målinger i denne perioden. Velg «Alt»."
-              : "Bare én måling så langt — kurven trenger minst to punkter."}
+              : rader.length >= 2
+                ? `Målingene faller innenfor samme ${p.gruppe}. Velg en kortere periode for å se dem hver for seg.`
+                : "Bare én måling så langt — kurven trenger minst to punkter."}
         </div>
       ) : (
         <>

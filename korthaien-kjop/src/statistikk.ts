@@ -166,7 +166,11 @@ export type Grunnsett = {
 
 const RARITET_REKKEFØLGE = ["mythic", "rare", "uncommon", "common", "special", "bonus", "ukjent"];
 
-export async function lagerrapport(): Promise<{ sett: LagerSett[]; butikk: { kort: number; verdi_ore: number } }> {
+export async function lagerrapport(): Promise<{
+  sett: LagerSett[];
+  butikk: { kort: number; verdi_ore: number };
+  ukoblet: { produkter: number; kort: number };
+}> {
   const opp = await hentSalgsOppsett();
 
   // Beholdningen leses fra Mystore-speilet, ikke fra lager_bevegelser.
@@ -258,6 +262,15 @@ export async function lagerrapport(): Promise<{ sett: LagerSett[]; butikk: { kor
   );
   const br = (b.rows[0] || {}) as any;
 
+  // Produkter som har kort på lager, men ingen kobling. Normalt null — og
+  // det er nettopp derfor tallet er verdt å vise: enhver verdi over null
+  // betyr at noe nytt har kommet inn uten å finne kortet sitt. Uten
+  // varselet oppdages de tilfeldig i kupplista, uker senere.
+  const uk = await db().execute(
+    "SELECT COUNT(*) AS produkter, SUM(stock) AS kort FROM mystore_unmatched WHERE stock > 0"
+  );
+  const ukr = (uk.rows[0] || {}) as any;
+
   return {
     sett: [...sett.values()].sort((a, b2) =>
       (b2.released_at || "").localeCompare(a.released_at || "") || a.set_name.localeCompare(b2.set_name)
@@ -265,6 +278,10 @@ export async function lagerrapport(): Promise<{ sett: LagerSett[]; butikk: { kor
     butikk: {
       kort: Number(br.kort || 0),
       verdi_ore: Number(br.ore || 0),
+    },
+    ukoblet: {
+      produkter: Number(ukr.produkter || 0),
+      kort: Number(ukr.kort || 0),
     },
   };
 }

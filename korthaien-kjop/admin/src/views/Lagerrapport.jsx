@@ -127,6 +127,20 @@ export default function Lagerrapport({ onFeil }) {
       </div>
 
       {/* Under totalen, over settlista: først hva du har, så hvor det går. */}
+      {/* Står det noe her, har et produkt fått beholdning uten å være koblet.
+          Normalt er tallet null og linjen usynlig. */}
+      {data.ukoblet?.produkter > 0 && (
+        <div className="varsel info" style={{ marginBottom: 16 }}>
+          <b>
+            {data.ukoblet.produkter} {data.ukoblet.produkter === 1 ? "produkt" : "produkter"} med
+            beholdning er ikke koblet
+          </b>{" "}
+          — til sammen {data.ukoblet.kort}{" "}
+          {data.ukoblet.kort === 1 ? "kort" : "kort"}. De er usynlige i butikken og teller ikke i
+          verdien, og kjøpskvoten for dem regnes som om du ikke eier dem.
+        </div>
+      )}
+
       <LagerGraf onFeil={onFeil} />
 
       {!vanlig && !foil && <div className="varsel info">Huk av vanlig eller foil for å se noe.</div>}
