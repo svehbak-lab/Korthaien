@@ -96,8 +96,14 @@ export default function App() {
       </aside>
 
       <main className="hoved">
-        <h1 className="tittel">{SIDER.find((s) => s.id === side).navn}</h1>
-        <p className="undertittel">{FORKLARING[side]}</p>
+        {/* Butikken har sin egen topp med logo og meny. En admin-overskrift
+            over den ser ut som om siden begynner to ganger. */}
+        {side !== "butikk" && (
+          <>
+            <h1 className="tittel">{SIDER.find((s) => s.id === side).navn}</h1>
+            <p className="undertittel">{FORKLARING[side]}</p>
+          </>
+        )}
 
         {feil && <div className="varsel feil">{feil}</div>}
         {melding && <div className="varsel ok">{melding}</div>}
