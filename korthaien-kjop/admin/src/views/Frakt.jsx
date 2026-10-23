@@ -19,6 +19,113 @@ const tilKr = (ore) => (ore === null || ore === undefined ? "" : String(ore / 10
 const TOM = { navn: "", pris_kr: "", forsikret_kr: "", beskrivelse: "", sortering: 0 };
 
 export default function Frakt({ onFeil, onMelding }) {
+  return (
+    <>
+      <Fraktalternativer onFeil={onFeil} onMelding={onMelding} />
+      <Foretaket onFeil={onFeil} onMelding={onMelding} />
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FORETAKET OG RETUR
+// ─────────────────────────────────────────────────────────────────────────────
+// Returssiden i butikken skrives av disse feltene. Et organisasjonsnummer som
+// står i koden er et som ingen finner den dagen det skal rettes — og dette er
+// opplysninger loven krever at kunden ser, så de skal ikke ligge et sted som
+// krever en utrulling.
+//
+// Hvem som betaler returfrakten er et valg loven lar deg ta, men bare hvis du
+// sier det på forhånd. Sier du ingenting, må du dekke den selv. Derfor er
+// valget her, og teksten på returssiden følger det du velger.
+function Foretaket({ onFeil, onMelding }) {
+  const [s, setS] = useState(null);
+  const [lagrer, setLagrer] = useState(false);
+
+  useEffect(() => {
+    api.innstillinger().then(setS).catch(onFeil);
+  }, []);
+
+  const endre = (felt, verdi) => setS((f) => ({ ...f, [felt]: verdi }));
+
+  async function lagre() {
+    setLagrer(true);
+    try {
+      setS(await api.lagreInnstillinger(s));
+      onMelding("Lagret. Returssiden i butikken er oppdatert.");
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setLagrer(false);
+    }
+  }
+
+  if (!s) return null;
+
+  return (
+    <div className="panel">
+      <header><h3>Foretaket og retur</h3></header>
+      <div className="krop">
+        <p className="dempet" style={{ marginTop: 0 }}>
+          Dette står på «Retur og angrerett» i butikken. Loven krever at kunden
+          ser hvem selgeren er og hvor varen skal returneres, så feltene står
+          her og ikke i koden.
+        </p>
+
+        <Felt navn="Registrert foretaksnavn">
+          <input
+            type="text" value={s.firmanavn || ""} style={{ width: 320 }}
+            onChange={(e) => endre("firmanavn", e.target.value)}
+          />
+        </Felt>
+        <Felt navn="Organisasjonsnummer">
+          <input
+            type="text" inputMode="numeric" value={s.org_nr || ""} style={{ width: 140 }}
+            onChange={(e) => endre("org_nr", e.target.value)}
+          />
+        </Felt>
+        <Felt navn="Returfrakten betales av">
+          <select value={s.retur_frakt || "kunde"} onChange={(e) => endre("retur_frakt", e.target.value)}>
+            <option value="kunde">Kunden</option>
+            <option value="butikk">Korthaien</option>
+          </select>
+        </Felt>
+        <p className="dempet">
+          Velger du «Kunden», må det stå på returssiden før kjøpet — og det
+          gjør det. Står det ingenting, er det du som må dekke frakten.
+        </p>
+
+        <Felt navn="Returadresse">
+          <span className="dempet" style={{ whiteSpace: "pre-line" }}>
+            {s.ship_to?.trim() || "— ikke lagt inn —"}
+          </span>
+        </Felt>
+        <p className="dempet">
+          Samme adresse som kunden sender salgskort til. Den endres under
+          fanen <b>Innkjøp</b>, slik at det bare finnes én adresse å holde
+          oppdatert.
+        </p>
+
+        <div className="rad-flex" style={{ marginTop: 4 }}>
+          <button className="knapp primar" onClick={lagre} disabled={lagrer}>
+            {lagrer ? "Lagrer…" : "Lagre"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Felt({ navn, children }) {
+  return (
+    <div className="rad-flex" style={{ alignItems: "baseline", gap: 12, marginBottom: 10 }}>
+      <div className="dempet" style={{ width: 210, flex: "none", fontSize: 13 }}>{navn}</div>
+      {children}
+    </div>
+  );
+}
+
+function Fraktalternativer({ onFeil, onMelding }) {
   const [alternativer, setAlternativer] = useState(null);
   const [ny, setNy] = useState(TOM);
   const [redigerer, setRedigerer] = useState(null);

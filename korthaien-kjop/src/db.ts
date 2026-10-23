@@ -385,6 +385,13 @@ export type Settings = {
   // automatisk» — og det er det den skal gjøre, så ingen trenger å huske å
   // bytte den.
   forside_sett: string[];
+  // Foretaket. Staar paa returssiden og i kassen, og skal kunne rettes uten
+  // en utrulling — et organisasjonsnummer i koden er et som ingen finner.
+  firmanavn: string;
+  org_nr: string;
+  // Hvem som betaler returfrakten naar kunden angrer. Loven lar deg velge,
+  // men du maa si det paa forhaand: sier du ingenting, maa du dekke den selv.
+  retur_frakt: "kunde" | "butikk";
 };
 
 const STANDARD: Settings = {
@@ -408,6 +415,9 @@ const STANDARD: Settings = {
   ship_to: "Svein Bakke\nLørenvangen 23C\n0585 Oslo\n91774561",
   tema: "dagens",
   forside_sett: [],
+  firmanavn: "KORTHAIEN SVEIN-HARALD BAKKE",
+  org_nr: "914503493",
+  retur_frakt: "kunde",
 };
 
 export async function hentSettings(): Promise<Settings> {

@@ -21,7 +21,7 @@ const SPALTER = [
     punkter: [
       { tekst: "Kontakt oss", skjerm: "kontakt" },
       { tekst: "Frakt og levering", skjerm: "frakt" },
-      { tekst: "Retur og angrerett" },
+      { tekst: "Retur og angrerett", skjerm: "retur" },
     ],
   },
   {
@@ -97,8 +97,8 @@ export default function Bunn({ onSkjerm }) {
 // SIDENE BUNNEN PEKER TIL
 // ─────────────────────────────────────────────────────────────────────────────
 // De som kan skrives av data eller av beslutninger vi allerede har tatt. De
-// som krever dine ord — om oss, retur, spørsmål og svar — er ikke laget, og
-// står som «kommer» i bunnen til teksten finnes.
+// som ikke er laget står som «kommer» i bunnen til teksten finnes — en lenke
+// som ikke fører noe sted er verre enn ingen lenke.
 
 export function Kontakt({ onFeil }) {
   const [felt, setFelt] = useState({ navn: "", epost: "", emne: "", melding: "" });
@@ -233,6 +233,132 @@ export function Frakt({ onFeil }) {
             </tbody>
           </table>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RETUR OG ANGRERETT
+// ─────────────────────────────────────────────────────────────────────────────
+// Bygget på angrerettloven og forbrukerkjøpsloven, og på de valgene du har
+// tatt i Admin → Frakt: foretaksnavn, organisasjonsnummer, returadresse og
+// hvem som betaler returfrakten. Teksten følger valgene, så den kan ikke
+// komme i utakt med dem.
+//
+// To ting loven krever, og som ikke kan løses her inne:
+//
+//  1. Angreskjemaet må nå kunden på et varig medium — vedlagt kvitteringen
+//     som PDF, ikke som en lenke. Får de bare en lenke, forlenges fristen
+//     til inntil ett år og fjorten dager. Du sa du ordner skjemaet selv.
+//
+//  2. Angrer kunden, skal pengene tilbake med samme betalingsmåte, ikke som
+//     butikkreditt — med mindre kunden selv sier ja til kreditt i stedet.
+//     Det må kassen tåle den dagen den bygges.
+//
+// Og: dette er skrevet av en maskin, ikke av en jurist. Få en jurist til å
+// lese det før butikken åpnes.
+export function Retur() {
+  const [s, setS] = useState(null);
+
+  useEffect(() => {
+    let avbrutt = false;
+    api.innstillinger().then((r) => !avbrutt && setS(r)).catch(() => !avbrutt && setS({}));
+    return () => {
+      avbrutt = true;
+    };
+  }, []);
+
+  if (!s) return <p className="dempet">Henter…</p>;
+
+  const kundenBetaler = (s.retur_frakt || "kunde") === "kunde";
+  const adresse = (s.ship_to || "").trim();
+  const orgnr = (s.org_nr || "").replace(/\s/g, "");
+  const pentOrgnr = orgnr.length === 9
+    ? `${orgnr.slice(0, 3)} ${orgnr.slice(3, 6)} ${orgnr.slice(6)}`
+    : orgnr;
+
+  return (
+    <div className="panel" style={{ maxWidth: 720 }}>
+      <div className="krop" style={{ lineHeight: 1.7 }}>
+        <h1 style={{ fontSize: 22, marginTop: 0 }}>Retur og angrerett</h1>
+
+        <h3 style={{ fontSize: 15, marginBottom: 4 }}>Du har 14 dagers angrerett</h3>
+        <p>
+          Handler du på nett, har du etter angrerettloven rett til å gå fra
+          kjøpet innen 14 dager. Fristen løper fra den dagen du — eller noen du
+          har pekt ut — får kortene i hendene. Du behøver ikke oppgi noen grunn.
+        </p>
+
+        <h3 style={{ fontSize: 15, marginBottom: 4 }}>Slik angrer du</h3>
+        <p>
+          Gi beskjed innen fristen, enten med angreskjemaet som følger
+          ordrebekreftelsen, eller med en melding til{" "}
+          <a href="mailto:korthaien@gmail.com">korthaien@gmail.com</a> der det
+          går klart fram at du vil gå fra kjøpet. Ta med ordrenummeret. Det er
+          nok at beskjeden er sendt innen de 14 dagene — den trenger ikke være
+          besvart.
+        </p>
+        <p>
+          Kortene skal sendes tilbake innen 14 dager etter at du har gitt
+          beskjed, til:
+        </p>
+        <p style={{ whiteSpace: "pre-line", paddingLeft: 16, borderLeft: "3px solid currentColor" }}>
+          {adresse || "Adressen oppgis i ordrebekreftelsen."}
+        </p>
+        <p>
+          {kundenBetaler
+            ? "Du betaler returfrakten. Det er derfor det står her, før du handler."
+            : "Vi dekker returfrakten."}{" "}
+          Pakk kortene så de tåler turen — en bøyd pakke er en bøyd samling.
+        </p>
+
+        <h3 style={{ fontSize: 15, marginBottom: 4 }}>Pengene tilbake</h3>
+        <p>
+          Du får tilbake det du betalte, inkludert den billigste frakten vi
+          tilbyr, senest 14 dager etter at vi har fått beskjeden. Vi kan vente
+          med utbetalingen til kortene er tilbake hos oss, eller til du har
+          dokumentert at de er sendt. Pengene går tilbake med samme
+          betalingsmåte du brukte, med mindre du selv ønsker butikkreditt i
+          stedet. Du betaler ikke noe gebyr for å angre.
+        </p>
+        <p>
+          Du kan undersøke kortene slik du ville gjort i en butikk. Blir de
+          brukt eller skadet utover det — spilt med, sortert ut av sleeve og
+          tilbake med nye merker, skrevet på — kan vi trekke fra det verdien
+          har falt med.
+        </p>
+
+        <h3 style={{ fontSize: 15, marginBottom: 4 }}>Hvis noe er galt med kortene</h3>
+        <p>
+          Angrerett og reklamasjon er to ulike ting. Er et kort i dårligere
+          stand enn oppgitt, feil kort, eller skadet i posten, er det en
+          reklamasjon etter forbrukerkjøpsloven — den gjelder i to år, og helt
+          uavhengig av angrefristen. Send en melding med ordrenummer og gjerne
+          et bilde, så ordner vi det. Vi dekker frakten ved berettiget
+          reklamasjon.
+        </p>
+
+        <h3 style={{ fontSize: 15, marginBottom: 4 }}>Henting på Løren</h3>
+        <p>
+          Henter du kortene selv i Oslo, gjelder angreretten likevel — kjøpet
+          ble gjort på nett. Fristen løper fra dagen du hentet dem.
+        </p>
+
+        <h3 style={{ fontSize: 15, marginBottom: 4 }}>Hvis vi blir uenige</h3>
+        <p>
+          Si det til oss først — det meste løser seg der. Kommer vi ikke til
+          enighet, kan du ta saken til Forbrukerrådet, som megler, og videre
+          til Forbrukerklageutvalget.
+        </p>
+
+        <h3 style={{ fontSize: 15, marginBottom: 4 }}>Selgeren</h3>
+        <p className="dempet" style={{ marginBottom: 0, whiteSpace: "pre-line" }}>
+          {s.firmanavn || "Korthaien"}
+          {pentOrgnr ? `\nOrganisasjonsnummer ${pentOrgnr}` : ""}
+          {"\nkorthaien@gmail.com"}
+          {adresse ? `\n\n${adresse}` : ""}
+        </p>
       </div>
     </div>
   );
