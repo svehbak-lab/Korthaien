@@ -68,6 +68,9 @@ app.get("/api/config", grense(REGLER.søk), fang(async (_req: any, res: any) => 
     order_expiry_days: s.order_expiry_days,
     ship_to: s.ship_to,
     oppgjor: "butikkreditt",
+    // Butikkens utseende. Står her slik at den dagen butikken flyttes ut av
+    // admin, henter den temaet fra en rute den allerede har lov til å lese.
+    tema: s.tema,
   });
 }));
 
@@ -1087,7 +1090,7 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
   const lov: (keyof Settings)[] = [
     "usd_nok", "buy_pct", "min_buy_ore", "min_order_ore", "min_usd",
     "salg_trapp", "salg_faktor", "salg_avrunding", "default_conditions",
-    "default_ladder", "order_expiry_days", "ship_to",
+    "default_ladder", "order_expiry_days", "ship_to", "tema",
   ];
   for (const [k, v] of Object.entries(req.body || {})) {
     if (lov.includes(k as any)) await settSetting(k as keyof Settings, v);

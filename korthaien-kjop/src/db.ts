@@ -378,6 +378,9 @@ export type Settings = {
   default_ladder: Ladder;
   order_expiry_days: number;
   ship_to: string;
+  // Butikkens utseende. Ligger her og ikke i nettleseren: det er butikkens
+  // utseende, ikke den enkeltes. Temaene er definert i admin/src/styles.css.
+  tema: string;
 };
 
 const STANDARD: Settings = {
@@ -399,6 +402,7 @@ const STANDARD: Settings = {
   default_ladder: { NM: 100, EX: 85, VG: 70, G: 55 },
   order_expiry_days: 14,
   ship_to: "Svein Bakke\nLørenvangen 23C\n0585 Oslo\n91774561",
+  tema: "dagens",
 };
 
 export async function hentSettings(): Promise<Settings> {

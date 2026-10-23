@@ -61,6 +61,14 @@ export default function Butikk({ onFeil }) {
   // Forsiden først. Lista er fortsatt det arbeidsredskapet den alltid har
   // vært — den er ett klikk unna, og søket herfra lander rett i den.
   const [skjerm, setSkjerm] = useState("forside");
+  // Temaet kommer fra innstillingene, ikke fra nettleseren: det er butikkens
+  // utseende og ikke den enkeltes. Null som startverdi, ikke "dagens" — da
+  // rekker ikke siden aa blinke i feil tema foer svaret er inne.
+  const [tema, setTema] = useState(null);
+
+  useEffect(() => {
+    api.innstillinger().then((s) => setTema(s.tema || "dagens")).catch(() => setTema("dagens"));
+  }, []);
 
   useEffect(() => {
     api.sett().then((r) => setAlle(r.sett.filter((s) => Number(s.enabled)))).catch(onFeil);
@@ -127,7 +135,7 @@ export default function Butikk({ onFeil }) {
   // returneres, og React beholder tilstanden til en komponent som ikke
   // flytter på seg.
   const skall = (innhold) => (
-    <div className="butikk">
+    <div className="butikk" data-tema={tema || "dagens"}>
       <Topp
         onHjem={() => { setÅpentKort(null); setSkjerm("forside"); }}
         onSøk={(t) => {

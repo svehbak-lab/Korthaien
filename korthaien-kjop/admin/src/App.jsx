@@ -163,6 +163,7 @@ const ADMINFANER = [
   { id: "utsalg", navn: "Utsalg" },
   { id: "frakt", navn: "Frakt" },
   { id: "kreditt", navn: "Kreditt" },
+  { id: "utseende", navn: "Utseende" },
   { id: "innlogging", navn: "Innlogging" },
 ];
 

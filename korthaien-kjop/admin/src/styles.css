@@ -300,6 +300,27 @@ textarea { width: 100%; font-family: inherit; }
   --topp1: #0b3f38;
   --topp2: #15594e;
   --oransje: #ffa94d;
+  --oransje-tekst: #181818;
+  --topp-tekst: #fff;
+  --topp2-tekst: #eaf4f1;
+  --logo-finne: #8fd4c0;
+  /* Skriften temaet bruker. Alt annet arver den, saa et tema bytter font
+     ett sted. */
+  --skrift: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --skrift-navn: var(--skrift);
+  --skrift-tall: var(--skrift);
+  --logo-font: 700 19px/1.2 var(--skrift);
+  --logo-sperre: -0.015em;
+  --nav-font: 600 14px/1.2 var(--skrift);
+  --selg-font: 700 13.5px/1.2 var(--skrift);
+  --tall-font: 700 10px/1.4 var(--skrift-tall);
+  --sok-kant: none;
+  --sok-bg: #0f5248;
+  --sok-tekst: #fff;
+  --runding: 6px;
+  --pille: 999px;
+  --fiber: none;
+  font-family: var(--skrift);
 }
 
 /* Bryter ut av luften i .hoved, så linjene går helt ut til kanten og leses
@@ -307,8 +328,8 @@ textarea { width: 100%; font-family: inherit; }
 .butikk .b-skall-topp { margin: -22px -26px 0; }
 .butikk .b-innhold { padding-top: 22px; }
 
-.butikk .b-linje1 { background: var(--topp1); color: #fff; }
-.butikk .b-linje2 { background: var(--topp2); }
+.butikk .b-linje1 { background: var(--topp1); color: var(--topp-tekst); }
+.butikk .b-linje2 { background: var(--topp2); color: var(--topp2-tekst); }
 .butikk .b-midt {
   max-width: 1180px; margin: 0 auto; padding: 0 26px;
   display: flex; align-items: center; gap: 18px;
@@ -318,38 +339,40 @@ textarea { width: 100%; font-family: inherit; }
 
 .butikk .b-logo {
   display: flex; align-items: center; gap: 9px; flex: none;
-  border: none; background: none; color: #fff; cursor: pointer; padding: 0;
-  font-size: 19px; font-weight: 700; letter-spacing: -0.015em;
+  border: none; background: none; color: var(--topp-tekst); cursor: pointer; padding: 0;
+  font: var(--logo-font); letter-spacing: var(--logo-sperre);
 }
-.butikk .b-logo svg { width: 26px; height: 26px; color: #8fd4c0; flex: none; }
+.butikk .b-logo svg { width: 26px; height: 26px; color: var(--logo-finne); flex: none; }
 
 .butikk .b-toppsok { flex: 1 1 300px; max-width: 560px; display: flex; }
 .butikk .b-toppsok input {
-  flex: 1; min-width: 0; border: none; border-radius: 6px 0 0 6px;
-  padding: 9px 13px; font-size: 14px; background: #fff; color: var(--blekk);
+  flex: 1; min-width: 0; border: var(--sok-kant); border-right: 0;
+  border-radius: var(--runding) 0 0 var(--runding);
+  padding: 9px 13px; font: inherit; font-size: 14px; background: var(--flate); color: var(--blekk);
 }
 .butikk .b-toppsok input:focus-visible { outline: 2px solid var(--oransje); outline-offset: -2px; }
 .butikk .b-toppsok button {
-  border: none; border-radius: 0 6px 6px 0; padding: 0 15px;
-  background: #0f5248; color: #fff; display: grid; place-items: center;
+  border: var(--sok-kant); border-left: 0; border-radius: 0 var(--runding) var(--runding) 0;
+  padding: 0 15px; background: var(--sok-bg); color: var(--sok-tekst);
+  display: grid; place-items: center;
 }
-.butikk .b-toppsok button:hover { background: #156a5d; }
+
 
 .butikk .b-hoyre { margin-left: auto; display: flex; align-items: center; gap: 16px; flex: none; }
-.butikk .b-toppknapp { border: none; background: none; color: #fff; font-size: 14px; padding: 4px 2px; }
+.butikk .b-toppknapp { border: none; background: none; color: var(--topp-tekst); font: inherit; font-size: 14px; padding: 4px 2px; }
 /* Symbol med tallet oppå, ordet under. Samme symbol på kjøp og salg — det er
    ordet som skiller dem, og to ulike symboler ville latt som om det var to
    ulike slags kurv. */
 .butikk .b-kurv {
-  border: none; background: none; color: #fff; padding: 2px 2px;
+  border: none; background: none; color: var(--topp-tekst); padding: 2px 2px;
   display: flex; flex-direction: column; align-items: center; gap: 1px;
 }
 .butikk .b-kurvikon { position: relative; display: block; line-height: 0; }
 .butikk .b-kurvnavn { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
 .butikk .b-antall {
   position: absolute; top: -6px; right: -10px;
-  background: var(--oransje); color: #181818; border-radius: 20px;
-  font-size: 10px; font-weight: 700; padding: 1px 5px; min-width: 17px;
+  background: var(--oransje); color: var(--oransje-tekst); border-radius: 20px;
+  font: var(--tall-font); font-size: 10px; font-weight: 700; padding: 1px 5px; min-width: 17px;
   text-align: center; line-height: 1.4;
 }
 /* Deaktivert, men ikke blass: det er plasseringen som skal vurderes nå, og
@@ -357,18 +380,18 @@ textarea { width: 100%; font-family: inherit; }
 .butikk .b-toppknapp:disabled, .butikk .b-kurv:disabled { opacity: 0.8; cursor: default; }
 
 .butikk .b-navvalg {
-  border: none; background: none; color: #eaf4f1;
-  font-size: 14px; font-weight: 600; padding: 10px 0; cursor: pointer;
+  border: none; background: none; color: var(--topp2-tekst);
+  font: var(--nav-font); padding: 10px 0; cursor: pointer;
 }
-.butikk .b-navvalg:hover { color: #fff; }
+.butikk .b-navvalg:hover { color: var(--topp-tekst); }
 /* Pilleform i oransje med sort skrift. Som tekst forsvant den i linja; som
    en flate med farge bak er den det ene elementet øyet finner uten å lete. */
 .butikk .b-selg {
-  margin-left: auto; background: var(--oransje); color: #181818;
-  font-weight: 700; font-size: 13.5px; text-decoration: none;
-  padding: 5px 15px; border-radius: 999px; white-space: nowrap;
+  margin-left: auto; background: var(--oransje); color: var(--oransje-tekst);
+  font: var(--selg-font); text-decoration: none;
+  padding: 5px 15px; border-radius: var(--pille); white-space: nowrap;
 }
-.butikk .b-selg:hover { background: #ffbe74; color: #181818; }
+.butikk .b-selg:hover { filter: brightness(1.12); }
 
 /* ── galleri ─────────────────────────────────────────────────────────────── */
 /* Bildet først og alt annet under. Den tetteste måten å se mange kort på når
@@ -493,3 +516,187 @@ textarea { width: 100%; font-family: inherit; }
   .butikk .panel { overflow-x: visible; }
   .butikk .panel table { min-width: 0; }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TEMAER
+   ─────────────────────────────────────────────────────────────────────────────
+   Tre utseender på den samme butikken. Ingenting flytter seg — et tema bytter
+   farge, skrift og form, aldri plassering. Velges under Admin → Utseende, og
+   ligger i innstillingene, ikke i nettleseren: det er butikkens utseende, ikke
+   ditt.
+
+   Temaene setter variabler. Trenger et tema en ny regel, er det et tegn på at
+   variabelen mangler — da hører regelen hjemme i strukturen over, ikke her.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Avis ────────────────────────────────────────────────────────────────────
+   Gammel avis: avispapir, tung antikva i tittelen, doble streker, og rødt
+   bare til det ene som skal ropes ut. Ingen runde hjørner og ingen skygger —
+   trykksverte kaster ikke skygge. */
+.butikk[data-tema="avis"] {
+  --papir: #f1eee4; --flate: #fbf9f3; --strek: #d6cebc; --strek-sterk: #a89f8d;
+  --blekk: #14110d; --dempet: #6d6457;
+  --dyp: #14110d; --sjo: #8c2f1c; --sjo-svak: #f6e9e3; --brass: #14110d;
+  --aksent: #8c2f1c; --aksent-svak: #f6e9e3;
+  --topp1: #fbf9f3; --topp2: #fbf9f3;
+  --topp-tekst: #14110d; --topp2-tekst: #14110d;
+  --oransje: #8c2f1c; --oransje-tekst: #fbf9f3;
+  --logo-finne: #14110d;
+  --skrift: "IBM Plex Sans", system-ui, sans-serif;
+  --skrift-navn: Fraunces, Georgia, "Times New Roman", serif;
+  --skrift-tall: Fraunces, Georgia, serif;
+  --logo-font: 700 27px/1 var(--skrift-navn);
+  --logo-sperre: -0.02em;
+  --nav-font: 600 12px/1.2 var(--skrift);
+  --selg-font: 700 12px/1.2 var(--skrift);
+  --runding: 0; --pille: 0;
+  --sok-kant: 1.5px solid var(--blekk); --sok-bg: var(--blekk); --sok-tekst: #fbf9f3;
+}
+/* Doble streker under toppen, slik en avishode har det. */
+.butikk[data-tema="avis"] .b-linje1 { border-bottom: 2px solid var(--blekk); }
+.butikk[data-tema="avis"] .b-linje2 { border-bottom: 1px solid var(--blekk); }
+.butikk[data-tema="avis"] .b-navvalg,
+.butikk[data-tema="avis"] .b-selg { letter-spacing: 0.1em; text-transform: uppercase; }
+.butikk[data-tema="avis"] .faner button { font: 600 17px/1 var(--skrift-navn); }
+.butikk[data-tema="avis"] .faner button[aria-selected="true"] { border-bottom-color: var(--blekk); }
+.butikk[data-tema="avis"] .panel { border-radius: 0; }
+.butikk[data-tema="avis"] .knapp { border-radius: 0; }
+.butikk[data-tema="avis"] .cond-valg button { border-radius: 0; }
+.butikk[data-tema="avis"] .cond-valg button[aria-pressed="true"] {
+  background: var(--blekk); color: var(--flate); border-color: var(--blekk);
+}
+.butikk[data-tema="avis"] .knapp.primar { background: var(--blekk); border-color: var(--blekk); }
+.butikk[data-tema="avis"] .b-band { border-radius: 0; }
+.butikk[data-tema="avis"] .b-flis img, .butikk[data-tema="avis"] .b-gbilde img { border-radius: 2px; }
+
+/* ── Katalog ─────────────────────────────────────────────────────────────────
+   En varefortegnelse. Monospace på alt som er tall og koder, så sifrene står
+   rett under hverandre nedover lista — øyet lærer hvor tallene er og slutter
+   å lete. Ingen runde hjørner, ingen skygger, ingen pynt. */
+.butikk[data-tema="katalog"] {
+  --papir: #edf0f1; --flate: #ffffff; --strek: #c8d1d5; --strek-sterk: #9db0b6;
+  --blekk: #12161a; --dempet: #62717a;
+  --dyp: #0f5f6b; --sjo: #0f5f6b; --sjo-svak: #e3eff1; --brass: #12161a;
+  --aksent: #0f5f6b; --aksent-svak: #e3eff1;
+  --topp1: #ffffff; --topp2: #edf0f1;
+  --topp-tekst: #12161a; --topp2-tekst: #12161a;
+  --oransje: #b4451f; --oransje-tekst: #ffffff;
+  --logo-finne: #0f5f6b;
+  --skrift: "IBM Plex Sans", system-ui, sans-serif;
+  --skrift-navn: "IBM Plex Sans", system-ui, sans-serif;
+  --skrift-tall: "IBM Plex Mono", ui-monospace, monospace;
+  --logo-font: 700 15px/1 var(--skrift-tall);
+  --logo-sperre: 0.14em;
+  --nav-font: 600 11px/1.2 var(--skrift-tall);
+  --selg-font: 600 11px/1.2 var(--skrift-tall);
+  --runding: 0; --pille: 0;
+  --sok-kant: 1px solid var(--blekk); --sok-bg: var(--blekk); --sok-tekst: #fff;
+}
+.butikk[data-tema="katalog"] .b-linje1 { border-bottom: 1px solid var(--strek); }
+.butikk[data-tema="katalog"] .b-linje2 { border-bottom: 1px solid var(--strek); }
+.butikk[data-tema="katalog"] .b-logo span,
+.butikk[data-tema="katalog"] .b-navvalg,
+.butikk[data-tema="katalog"] .b-selg { text-transform: uppercase; letter-spacing: 0.14em; }
+.butikk[data-tema="katalog"] .b-selg { border: 1px solid var(--oransje); background: none; color: var(--oransje); }
+.butikk[data-tema="katalog"] .b-selg:hover { background: var(--oransje); color: #fff; filter: none; }
+/* Tall, koder og tilstander i monospace. Det er hele poenget med temaet. */
+.butikk[data-tema="katalog"] .tall,
+.butikk[data-tema="katalog"] .pris,
+.butikk[data-tema="katalog"] .pris-stor,
+.butikk[data-tema="katalog"] .kode,
+.butikk[data-tema="katalog"] .cond-valg button,
+.butikk[data-tema="katalog"] .b-gnr,
+.butikk[data-tema="katalog"] .b-bokstaver button { font-family: var(--skrift-tall); }
+.butikk[data-tema="katalog"] .pris-stor { font-weight: 700; letter-spacing: -0.02em; }
+.butikk[data-tema="katalog"] .panel,
+.butikk[data-tema="katalog"] .knapp,
+.butikk[data-tema="katalog"] .cond-valg button,
+.butikk[data-tema="katalog"] .b-band,
+.butikk[data-tema="katalog"] .b-info div { border-radius: 0; }
+.butikk[data-tema="katalog"] .b-flis img, .butikk[data-tema="katalog"] .b-gbilde img { border-radius: 2px; }
+
+/* ── Pergament ───────────────────────────────────────────────────────────────
+   Tar farge av varen selv: blekkblått og pergament, gull til prisen, antikva
+   til kortnavnene — det er slik navnene står på kortene.
+   Cinzel brukes ÉN gang, i ordmerket, og aldri i en liste. Det er den ene
+   bremsen som skiller dette fra fantasy-kitsch.
+   Fiberen er feTurbulence, ikke et bilde: den veier ingenting, kan ikke bli
+   uskarp, og gjentas uten søm. */
+.butikk[data-tema="pergament"] {
+  --papir: #efe4cd; --flate: #faf4e6; --strek: #d9c9a9; --strek-sterk: #bda987;
+  --blekk: #16203a; --dempet: #7a6f5c;
+  --dyp: #0d1424; --sjo: #1d3557; --sjo-svak: #e6eaf1; --brass: #8f6b1a;
+  --aksent: #1d3557; --aksent-svak: #e6eaf1;
+  --topp1: #0d1424; --topp2: #1d3557;
+  --topp-tekst: #f7f1e3; --topp2-tekst: #e4ddcc;
+  --oransje: #c9a227; --oransje-tekst: #1a1205;
+  --logo-finne: #c9a227;
+  --skrift: "IBM Plex Sans", system-ui, sans-serif;
+  --skrift-navn: "EB Garamond", Garamond, Georgia, serif;
+  --skrift-tall: "EB Garamond", Garamond, Georgia, serif;
+  --logo-font: 700 19px/1 Cinzel, Georgia, serif;
+  --logo-sperre: 0.1em;
+  --nav-font: 600 12.5px/1.2 var(--skrift);
+  --selg-font: 600 12.5px/1.2 var(--skrift);
+  --runding: 3px; --pille: 2px;
+  --sok-kant: 1px solid #2b3550; --sok-bg: var(--oransje); --sok-tekst: #1a1205;
+  --fiber: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23f)' opacity='0.38'/%3E%3C/svg%3E");
+}
+.butikk[data-tema="pergament"] .b-logo span { text-transform: uppercase; }
+.butikk[data-tema="pergament"] .b-navvalg { letter-spacing: 0.11em; text-transform: uppercase; }
+.butikk[data-tema="pergament"] .b-selg { letter-spacing: 0.06em; }
+/* Fiberen legges på både sida og panelene, ellers ligger panelene som glatte
+   lapper oppå et papir med struktur. */
+.butikk[data-tema="pergament"],
+.butikk[data-tema="pergament"] .panel,
+.butikk[data-tema="pergament"] .b-info div { background-image: var(--fiber); }
+.butikk[data-tema="pergament"] .faner button { font: 600 17px/1 var(--skrift-navn); }
+.butikk[data-tema="pergament"] .pris,
+.butikk[data-tema="pergament"] .pris-stor { font-family: var(--skrift-tall); font-weight: 600; }
+.butikk[data-tema="pergament"] .pris-stor { font-size: 26px; }
+.butikk[data-tema="pergament"] .b-band { background: var(--dyp); }
+.butikk[data-tema="pergament"] .knapp.primar { background: var(--sjo); border-color: var(--sjo); }
+.butikk[data-tema="pergament"] .b-flis img,
+.butikk[data-tema="pergament"] .b-gbilde img { box-shadow: 0 2px 10px rgb(22 32 58 / 18%); }
+
+/* Kortnavn i temaets egen skrift. Det er navnet man leter etter, og det er
+   derfor navnet som får bære temaet. */
+.butikk[data-tema="avis"] .lenke,
+.butikk[data-tema="pergament"] .lenke { font-family: var(--skrift-navn); }
+.butikk[data-tema="avis"] .b-gnavn,
+.butikk[data-tema="pergament"] .b-gnavn { font-size: 15px; }
+.butikk[data-tema="avis"] .pris-stor,
+.butikk[data-tema="avis"] .pris { font-family: var(--skrift-tall); }
+
+/* ── temavelgeren i Admin ────────────────────────────────────────────────── */
+.temavalg { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); }
+.temakort {
+  border: 1px solid var(--strek); border-radius: 9px; background: var(--flate);
+  padding: 0 0 14px; text-align: left; cursor: pointer; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.temakort:hover { border-color: var(--dempet); }
+.temakort.valgt { border-color: var(--aksent); box-shadow: 0 0 0 2px var(--aksent-svak); }
+.temakort .temanavn {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 600; font-size: 15px; padding: 12px 14px 0;
+}
+.temakort p { margin: 5px 14px 0; font-size: 12.5px; line-height: 1.45; }
+
+/* Prøven er butikken i miniatyr. Målene er skrudd ned, ikke stilen — den
+   arver temaet sitt fra de samme reglene som butikken bruker. */
+.prove { pointer-events: none; }
+.prove .b-skall-topp { margin: 0; }
+.prove .b-midt { padding: 0 12px; gap: 8px; }
+.prove .b-linje1 .b-midt { min-height: 38px; }
+.prove .b-linje2 .b-midt { min-height: 26px; }
+.prove .b-logo { font-size: 14px; }
+.prove .b-logo svg { width: 16px; height: 16px; }
+.prove .b-navvalg { font-size: 10.5px; padding: 5px 0; }
+.prove .b-selg { font-size: 10px; padding: 3px 10px; margin-left: auto; }
+.prove .provekrop { padding: 12px 14px 14px; background: var(--papir); background-image: var(--fiber); }
+.prove .provenavn { font-size: 16px; font-weight: 600; color: var(--sjo); }
+.prove .provesett { font-size: 11.5px; margin-bottom: 7px; }
+.prove .pris-stor { font-size: 19px; }
+.prove .cond-valg { margin-top: 8px; max-width: 150px; }
+.prove .cond-valg button { padding: 3px 0; font-size: 11px; }
