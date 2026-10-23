@@ -402,16 +402,18 @@ export async function butikkvisning(opts: ButikkFilter) {
   // fanen. Står de to i utakt, lyver det ene av dem — og det er den slags
   // feil ingen oppdager før en kunde ikke finner et kort.
   //
-  // «Enkeltkort» er ikke det motsatte av «Foils». Fanene finnes for å slippe
-  // å vise samme kort to ganger, én gang vanlig og én gang foil. Derfor:
+  //   Alle treff  alt søket fant. Ingen avgrensning, og derfor den eneste
+  //               fanen et kort aldri kan falle ut av. Den er standard.
+  //   Vanlig      kort du har i vanlig utgave.
+  //   Foil        kort du har i foil.
   //
-  //   Enkeltkort  alt du selger. Finnes kortet ikke i vanlig utgave, er foil
-  //               den eneste måten å kjøpe det på — da hører det hjemme her.
-  //               Kaladesh Inventions er slike kort.
-  //   Foils       bare foil. Her er foil hele poenget, og fallet tilbake
-  //               gjelder ikke andre veien.
+  // De to siste er avgrensninger av den første, ikke to halvdeler av
+  // katalogen. Et kort som bare finnes i foil, som Kaladesh Inventions, er
+  // med i Alle treff og i Foil — det blir aldri borte fordi man står i feil
+  // fane. Det var nettopp dét som gjorde at søk på «Sol Ring» ikke fant den
+  // dyreste utgaven.
   //
-  // Med baresalg på telles det på beholdning og ikke på hva kortet kan
+  // Med baresalg på avgrenses det på beholdning og ikke på hva kortet kan
   // trykkes som: et kort du bare har i vanlig utgave skal ikke stå i
   // foil-fanen fordi det finnes en foil-trykning et sted i verden.
   const påLager = (f: string) =>
@@ -420,25 +422,19 @@ export async function butikkvisning(opts: ButikkFilter) {
               GROUP BY b.card_id HAVING SUM(b.antall) > 0)`;
 
   const VISES = opts.baresalg
-    ? {
-        nonfoil: `(${påLager("nonfoil")} OR (c.has_nonfoil = 0 AND ${påLager("foil")}))`,
-        foil: påLager("foil"),
-      }
-    : {
-        nonfoil: "(c.has_nonfoil = 1 OR c.has_foil = 1)",
-        foil: "c.has_foil = 1",
-      };
+    ? { nonfoil: påLager("nonfoil"), foil: påLager("foil") }
+    : { nonfoil: "c.has_nonfoil = 1", foil: "c.has_foil = 1" };
 
   const FINISH_KRAV =
     opts.finish === "foil" ? VISES.foil : opts.finish === "nonfoil" ? VISES.nonfoil : null;
   const hvorMedFinish = FINISH_KRAV ? [...hvor, FINISH_KRAV] : hvor;
 
   // Totalen og fanetallene telles i databasen. Å telle det som ligger på
-  // siden ville gitt «Enkeltkort (25)» uansett hvor mange det er.
+  // siden ville gitt «Alle treff (25)» uansett hvor mange det er.
   //
-  // Begge fanene telles her, hver etter sin egen regel. Tidligere ble de
-  // talt inni hverandre: sto du på Foils, viste «Enkeltkort» hvor mange
-  // enkeltkort det var blant foilene.
+  // Alle tre telles her, hver etter sin egen regel og uten hverandres
+  // avgrensning. Tidligere ble de talt inni hverandre: sto du på Foils,
+  // viste den andre fanen hvor mange den hadde til felles med foilene.
   const tellinger = await db().execute({
     sql: `SELECT COUNT(*) AS n,
                  SUM(CASE WHEN ${VISES.nonfoil} THEN 1 ELSE 0 END) AS nonfoil,
@@ -447,6 +443,7 @@ export async function butikkvisning(opts: ButikkFilter) {
     args,
   });
   const antall = {
+    alle: Number(tellinger.rows[0]?.n || 0),
     nonfoil: Number(tellinger.rows[0]?.nonfoil || 0),
     foil: Number(tellinger.rows[0]?.foil || 0),
   };
@@ -456,7 +453,7 @@ export async function butikkvisning(opts: ButikkFilter) {
       ? antall.foil
       : opts.finish === "nonfoil"
         ? antall.nonfoil
-        : Number(tellinger.rows[0]?.n || 0);
+        : antall.alle;
 
   const r = await db().execute({
     sql: `SELECT c.id, c.name, c.collector_number, c.rarity, c.variant,

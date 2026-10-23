@@ -49,7 +49,7 @@ export default function Butikk({ onFeil }) {
   const [data, setData] = useState(null);
   const [laster, setLaster] = useState(false);
   const [visning, setVisning] = useState("detalj");
-  const [finish, setFinish] = useState("nonfoil");
+  const [finish, setFinish] = useState("alle");
   const [sortering, setSortering] = useState("pris_ned");
   const [perSide, setPerSide] = useState(25);
   const [side, setSide] = useState(1);
@@ -92,14 +92,16 @@ export default function Butikk({ onFeil }) {
     return data.kort
       .map((k) => ({
         ...k,
-        // Fallet tilbake går bare én vei. Enkeltkort viser alt du selger, så
-        // finnes kortet ikke i vanlig utgave, vises foilen — den er den
-        // eneste måten å kjøpe det på. Foil-fanen gjør ikke det motsatte:
-        // der er foil hele poenget, og et kort du bare har vanlig skal ikke
-        // dukke opp der uten engang å bære foilmerket.
+        // I «Vanlig» og «Foil» er det den utførelsen og ingen annen — står
+        // du i foil-fanen, skal du ikke få et kort uten foilmerke.
+        //
+        // I «Alle treff» vises kortet én gang. Da er det den vanlige
+        // utgaven, for det er den folk flest leter etter, og foil hvis den
+        // er den eneste som finnes. Begge prisene står uansett på kortsiden.
         valgt:
-          k.varianter.find((v) => v.finish === finish) ||
-          (finish === "nonfoil" ? k.varianter[0] || null : null),
+          finish === "alle"
+            ? k.varianter.find((v) => v.finish === "nonfoil") || k.varianter[0] || null
+            : k.varianter.find((v) => v.finish === finish) || null,
       }))
       .filter((k) => k.valgt?.tilstander.length);
   }, [data, finish]);
@@ -239,11 +241,18 @@ export default function Butikk({ onFeil }) {
               <div className="panel" style={{ paddingBottom: 0 }}>
                 <div className="krop" style={{ paddingBottom: 0 }}>
                   {/* Fanene er sidenavigasjon, ikke knapper. Antallet i
-                      parentes er det som gjør dem verdt å ha. */}
+                      parentes er det som gjør dem verdt å ha.
+
+                      «Alle treff» står først og er standard. De to andre er
+                      avgrensninger av den, ikke to halvdeler av katalogen —
+                      derfor kan ingen kort bli borte fordi man står i feil
+                      fane. Det var dét som gjorde at Kaladesh Inventions
+                      ikke dukket opp når man søkte «Sol Ring». */}
                   <div className="faner" role="tablist">
                     {[
-                      { id: "nonfoil", navn: "Enkeltkort" },
-                      { id: "foil", navn: "Foils" },
+                      { id: "alle", navn: "Alle treff" },
+                      { id: "nonfoil", navn: "Vanlig" },
+                      { id: "foil", navn: "Foil" },
                     ].map((x) => (
                       <button
                         key={x.id}
@@ -518,13 +527,21 @@ function AlleSett({ sett, onVelg }) {
 
 // Gult merke, som hos Card Kingdom. Foil og vanlig er samme kort med samme
 // bilde, og uten et tydelig merke er det lett å bestille feil.
-function FoilMerke() {
+//
+// Foil-etched er en annen vare enn vanlig foil og koster noe annet, så den
+// skal ikke stå med samme ord. Den kjenner vi igjen på variant = 'etched'.
+//
+// De andre — surge foil, galaxy foil, textured — ligger i Scryfalls
+// promo_types, som ikke lagres hos oss. Skal de merkes, må kolonnen inn
+// først; importen leser feltet allerede.
+function FoilMerke({ variant }) {
+  const etched = variant === "etched";
   return (
     <span
       style={{
         display: "inline-block",
         marginTop: 5,
-        background: "#f5d020",
+        background: etched ? "#d9c08a" : "#f5d020",
         color: "#3b2f05",
         fontSize: 11,
         fontWeight: 700,
@@ -533,7 +550,7 @@ function FoilMerke() {
         borderRadius: 3,
       }}
     >
-      FOIL
+      {etched ? "FOIL-ETCHED" : "FOIL"}
     </span>
   );
 }
@@ -702,7 +719,7 @@ function Tekstrad({ kort, onÅpne, onSett }) {
             Collector #: {kort.collector_number}
             {kort.mana_cost ? <> · <MedSymboler tekst={kort.mana_cost} størrelse={12} /></> : null}
           </div>
-          {kort.valgt.finish === "foil" && <FoilMerke />}
+          {kort.valgt.finish === "foil" && <FoilMerke variant={kort.variant} />}
         </div>
 
         {/* Tilstand, pris, antall, og til slutt handlingen. Rekkefølgen er
@@ -778,7 +795,7 @@ function Detaljrad({ kort, onÅpne, onSett }) {
           <div className="dempet" style={{ fontSize: 13 }}>
             Collector #: {kort.collector_number}
           </div>
-          {kort.valgt.finish === "foil" && <FoilMerke />}
+          {kort.valgt.finish === "foil" && <FoilMerke variant={kort.variant} />}
 
           <div className="dempet" style={{ fontSize: 13, margin: "8px 0 0" }}>
             <MedSymboler tekst={kort.mana_cost} /> {kort.type_line}
