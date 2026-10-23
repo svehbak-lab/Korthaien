@@ -92,12 +92,14 @@ export default function Butikk({ onFeil }) {
     return data.kort
       .map((k) => ({
         ...k,
-        // Finnes kortet bare i én utførelse, er det den som vises uansett
-        // hvilken fane du står i. Kaladesh Inventions finnes bare i foil, og
-        // uten dette falt de ut av «Enkeltkort» selv om serveren sendte dem.
+        // Fallet tilbake går bare én vei. Enkeltkort viser alt du selger, så
+        // finnes kortet ikke i vanlig utgave, vises foilen — den er den
+        // eneste måten å kjøpe det på. Foil-fanen gjør ikke det motsatte:
+        // der er foil hele poenget, og et kort du bare har vanlig skal ikke
+        // dukke opp der uten engang å bære foilmerket.
         valgt:
           k.varianter.find((v) => v.finish === finish) ||
-          (k.varianter.length === 1 ? k.varianter[0] : null),
+          (finish === "nonfoil" ? k.varianter[0] || null : null),
       }))
       .filter((k) => k.valgt?.tilstander.length);
   }, [data, finish]);
