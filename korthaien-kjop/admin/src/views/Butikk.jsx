@@ -66,9 +66,16 @@ export default function Butikk({ onFeil }) {
   // utseende og ikke den enkeltes. Null som startverdi, ikke "dagens" — da
   // rekker ikke siden aa blinke i feil tema foer svaret er inne.
   const [tema, setTema] = useState(null);
+  // Hvor mange sealed og komplette sett som finnes paa lager. Styrer om
+  // menypunktet og forsideseksjonen vises i det hele tatt.
+  const [produktantall, setProduktantall] = useState(null);
 
   useEffect(() => {
     api.innstillinger().then((s) => setTema(s.tema || "dagens")).catch(() => setTema("dagens"));
+  }, []);
+
+  useEffect(() => {
+    api.produkter({ bareLager: 1 }).then((r) => setProduktantall(r.antall || {})).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -138,6 +145,8 @@ export default function Butikk({ onFeil }) {
   const skall = (innhold) => (
     <div className="butikk" data-tema={tema || "dagens"}>
       <Topp
+        produkter={produktantall}
+        onProdukt={(t) => { setÅpentKort(null); setSkjerm(t); }}
         onHjem={() => { setÅpentKort(null); setSkjerm("forside"); }}
         onSøk={(t) => {
           // Søket i toppen er det samme filteret som feltet i søyla. Ett sted
@@ -169,6 +178,8 @@ export default function Butikk({ onFeil }) {
   if (skjerm === "forside") {
     return skall(
       <Forside
+        produktantall={produktantall}
+        onProdukt={(t) => setSkjerm(t)}
         onButikk={() => setSkjerm("liste")}
         onÅpne={setÅpentKort}
         onSett={(kode) => { setSett(kode); setSkjerm("liste"); }}
@@ -182,6 +193,9 @@ export default function Butikk({ onFeil }) {
   if (skjerm === "kreditt") return skall(<Kredittside />);
   if (skjerm === "omoss") return skall(<OmOss />);
   if (skjerm === "retur") return skall(<Retur />);
+  if (PRODUKTTYPER.some((t) => t.id === skjerm)) {
+    return skall(<Produktliste type={skjerm} onFeil={onFeil} />);
+  }
 
   if (skjerm === "sett") {
     return skall(
@@ -451,7 +465,14 @@ export default function Butikk({ onFeil }) {
 // Innlogging og kurvene finnes ikke ennå. De står her likevel, deaktivert,
 // fordi det er plasseringen som skal vurderes nå — og fordi en topp som
 // mangler halve innholdet ikke sier noe om hvordan den blir.
-function Topp({ onHjem, onSøk, onAlleSett }) {
+// Produkttypene staar ett sted. Menyen i toppen, skjermene og seksjonene paa
+// forsiden leser alle herfra, saa en ny type blir én linje og ikke tre.
+const PRODUKTTYPER = [
+  { id: "sealed", navn: "Sealed", ingress: "Forseglede bokser, bundles og displayer." },
+  { id: "komplettsett", navn: "Komplette sett", ingress: "Hele sett, ferdig samlet." },
+];
+
+function Topp({ onHjem, onSøk, onAlleSett, produkter, onProdukt }) {
   const [q, setQ] = useState("");
 
   return (
@@ -510,6 +531,19 @@ function Topp({ onHjem, onSøk, onAlleSett }) {
       <div className="b-linje2">
         <div className="b-midt">
           <button className="b-navvalg" onClick={onAlleSett}>Alle sett</button>
+          {/* Sealed og komplette sett staar her og ikke bare paa forsiden:
+              toppen vises alltid, og det er der folk leter naar de staar et
+              annet sted enn forsiden.
+
+              Punktet vises bare naar det finnes noe aa vise. En meny som
+              lenker til en tom side er et loefte den ikke holder. */}
+          {PRODUKTTYPER.map((t) =>
+            (produkter?.[t.id] || 0) > 0 ? (
+              <button key={t.id} className="b-navvalg" onClick={() => onProdukt(t.id)}>
+                {t.navn}
+              </button>
+            ) : null
+          )}
           <a className="b-selg" href="https://kortsalg.korthaien.no">Selg dine kort</a>
         </div>
       </div>
@@ -1183,7 +1217,7 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil }) {
 // Det kunden møter før lista: hva stedet er, et søkefelt, den andre halvparten
 // av butikken, og noen kort å se på. Ingen filtre — de hører til når man
 // allerede leter etter noe bestemt.
-function Forside({ onButikk, onÅpne, onSett, onFeil }) {
+function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }) {
   const [kort, setKort] = useState(null);
   const [nyeste, setNyeste] = useState(null);
 
@@ -1224,6 +1258,24 @@ function Forside({ onButikk, onÅpne, onSett, onFeil }) {
           kort. Søk i feltet øverst, eller bla gjennom butikken.
         </p>
       </div>
+
+      {/* Sealed og komplette sett, oeverst og ved siden av hverandre. De
+          staar foerst fordi de er det faerreste og dyreste du har — og de
+          vises bare naar det finnes noe i dem. En seksjon som lenker til en
+          tom side er verre enn ingen seksjon. */}
+      {produktantall && PRODUKTTYPER.some((t) => (produktantall[t.id] || 0) > 0) && (
+        <div className="b-seksjoner">
+          {PRODUKTTYPER.filter((t) => (produktantall[t.id] || 0) > 0).map((t) => (
+            <button key={t.id} className="b-seksjon" onClick={() => onProdukt(t.id)}>
+              <h2>{t.navn}</h2>
+              <p>{t.ingress}</p>
+              <span className="b-seksjontall">
+                {produktantall[t.id]} {produktantall[t.id] === 1 ? "produkt" : "produkter"} på lager →
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="b-band">
         <div>
@@ -1339,6 +1391,75 @@ function Flis({ kort, onÅpne }) {
       </span>
       <span className="linje">{antall} på lager</span>
     </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRODUKTLISTE
+// ─────────────────────────────────────────────────────────────────────────────
+// Sealed og komplette sett har ingen tilstand aa velge mellom og ingen
+// varianter aa bla i. Derfor ingen kortside og ingen fanerad — bare navn,
+// bilde, pris og hvor mange du har. Et skjermbilde som later som om det er
+// mer komplisert enn det er, er et skjermbilde i veien.
+function Produktliste({ type, onFeil }) {
+  const [produkter, setProdukter] = useState(null);
+  const valgt = PRODUKTTYPER.find((t) => t.id === type);
+
+  useEffect(() => {
+    let avbrutt = false;
+    setProdukter(null);
+    api
+      .produkter({ type, bareLager: 1 })
+      .then((r) => !avbrutt && setProdukter(r.produkter || []))
+      .catch((e) => {
+        if (avbrutt) return;
+        onFeil(e);
+        setProdukter([]);
+      });
+    return () => {
+      avbrutt = true;
+    };
+  }, [type]);
+
+  return (
+    <>
+      <div className="b-rad">
+        <h2>{valgt?.navn || "Produkter"}</h2>
+      </div>
+      {valgt?.ingress && <p className="dempet" style={{ marginTop: -6 }}>{valgt.ingress}</p>}
+
+      {produkter === null && <p className="dempet">Henter…</p>}
+      {produkter !== null && produkter.length === 0 && (
+        <div className="tom">Ingenting på lager her akkurat nå.</div>
+      )}
+      {produkter !== null && produkter.length > 0 && (
+        <div className="b-rute">
+          {produkter.map((p) => <Produktflis key={p.id} produkt={p} />)}
+        </div>
+      )}
+    </>
+  );
+}
+
+function Produktflis({ produkt: p }) {
+  return (
+    <div className="b-flis b-flis-stille">
+      {p.bilde_url ? (
+        <img src={p.bilde_url} alt={p.navn} loading="lazy" />
+      ) : (
+        <div
+          className="b-flis-tomt"
+          style={{ width: "100%", aspectRatio: "488 / 680", borderRadius: 8 }}
+        />
+      )}
+      <span className="navn">{p.navn}</span>
+      {p.beskrivelse && <span className="linje">{p.beskrivelse}</span>}
+      {/* Én pris. En forseglet boks har ingen tilstand aa velge mellom, saa
+          det staar ingen «fra» her — det ville vaert et forbehold mot
+          ingenting. */}
+      <span className="pris tall">{kroner(p.pris_ore)}</span>
+      <span className="linje">{p.antall} på lager</span>
+    </div>
   );
 }
 

@@ -134,6 +134,14 @@ export const api = {
   kredittKonto: (epost) => kall(`/api/admin/kreditt/${encodeURIComponent(epost)}`),
   bokførKreditt: (felt) => kall("/api/admin/kreditt", { method: "POST", body: felt }),
 
+  produkter: (o = {}) =>
+    kall("/api/admin/produkter?" + new URLSearchParams(
+      Object.entries(o).filter(([, v]) => v !== undefined && v !== "")
+    )),
+  leggTilProdukt: (p) => kall("/api/admin/produkter", { method: "POST", body: p }),
+  endreProdukt: (id, p) => kall(`/api/admin/produkter/${id}`, { method: "PUT", body: p }),
+  slåAvProdukt: (id) => kall(`/api/admin/produkter/${id}`, { method: "DELETE" }),
+
   innstillinger: () => kall("/api/admin/settings"),
   lagreInnstillinger: (felt) => kall("/api/admin/settings", { method: "PUT", body: felt }),
   jobb: (navn) => kall(`/api/admin/jobs/${navn}`, { method: "POST" }),

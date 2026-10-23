@@ -486,6 +486,33 @@ textarea { width: 100%; font-family: inherit; }
 }
 .butikk .b-band a:hover { background: #ffbe74; }
 
+/* Sealed og komplette sett, side om side oeverst paa forsiden. To like
+   store flater: ingen av dem er viktigere enn den andre, og en seksjon som
+   er dobbelt saa bred ville sagt at den var det.
+
+   Paa mobil legger de seg under hverandre av seg selv — to kolonner paa 360
+   piksler gir to flater ingen kan lese. */
+.butikk .b-seksjoner {
+  display: grid; gap: 14px; margin: 22px 0;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.butikk .b-seksjon {
+  display: block; text-align: left; cursor: pointer;
+  background: var(--kort); border: 1px solid var(--kant);
+  border-radius: var(--runding, 10px); padding: 18px 20px;
+  font: inherit; color: inherit;
+  transition: border-color .12s, transform .12s;
+}
+.butikk .b-seksjon:hover { border-color: var(--dyp); transform: translateY(-1px); }
+.butikk .b-seksjon h2 { margin: 0 0 5px; font-size: 17px; }
+.butikk .b-seksjon p { margin: 0 0 10px; font-size: 13.5px; color: var(--svak); }
+.butikk .b-seksjontall { font-size: 13px; font-weight: 700; color: var(--dyp); }
+
+/* Produktflisene er ikke klikkbare ennaa — et sealed-produkt har ingen
+   kortside aa aapne. Markoeren skal da ikke love at det finnes en. */
+.butikk .b-flis-stille { cursor: default; }
+.butikk .b-flis-tomt { background: var(--papir); border: 1px dashed var(--kant); }
+
 .butikk .b-rad { display: flex; align-items: baseline; gap: 12px; margin: 26px 0 12px; }
 .butikk .b-rad h2 { margin: 0; font-size: 16px; }
 .butikk .b-rad .hoyre { margin-left: auto; }

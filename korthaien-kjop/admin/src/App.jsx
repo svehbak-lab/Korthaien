@@ -4,6 +4,7 @@ import Ordrer from "./views/Ordrer.jsx";
 import Sett from "./views/Sett.jsx";
 import Kort from "./views/Kort.jsx";
 import Hurtig from "./views/Hurtig.jsx";
+import Produkter from "./views/Produkter.jsx";
 import Kobling from "./views/Kobling.jsx";
 import Butikk from "./views/Butikk.jsx";
 import Lagerrapport from "./views/Lagerrapport.jsx";
@@ -18,6 +19,9 @@ const SIDER = [
   // naas der den hoerer hjemme: fra Sett. Lageret er en annen jobb, og gjoeres
   // ofte nok til aa fortjene sin egen inngang.
   { id: "hurtig", navn: "Hurtigredigering" },
+  // Sealed og komplette sett. Egen inngang fordi de legges inn for haand og
+  // ikke av importen — og fordi de ikke er kort, og ikke skal se ut som det.
+  { id: "produkter", navn: "Produkter" },
   // Kobling er ute av menyen. Visningen og ruten staar igjen, saa den er en
   // linje unna aa komme tilbake — men merk at tellingen av ukoblede
   // produkter forsvinner med den. Varselet i Lagerrapport fanger fortsatt
@@ -119,6 +123,7 @@ export default function App() {
           />
         )}
         {side === "hurtig" && <Hurtig onFeil={håndterFeil} />}
+        {side === "produkter" && <Produkter onFeil={håndterFeil} onMelding={visMelding} />}
         {/* Naas fra Sett, ikke fra menyen. */}
         {side === "kort" && (
           <Kort
@@ -174,6 +179,8 @@ const FORKLARING = {
     "Kortene ligger i samme rekkefølge som kunden ble bedt om å sortere bunken, så du kan gå gjennom stabelen og lista i takt.",
   sett: "Kjøpslista: settene du kjøper fra. Bestem hvor mange du vil ha og hvilke tilstander du tar imot.",
   kort: "Overstyr enkeltkort. Tomt felt betyr at kortet følger settregelen.",
+  produkter:
+    "Sealed og komplette sett — det du selger som ikke er et enkeltkort. Én pris per produkt, og de dukker opp i butikken så snart antallet er over null.",
   // Kobling staar ikke i menyen lenger, men forklaringen blir staaende saa
   // den foelger med hvis den settes inn igjen.
   kobling:

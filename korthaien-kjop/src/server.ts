@@ -10,6 +10,10 @@ import {
   butikkvisning, kortdetaljer,
 } from "./salgspris.js";
 import { hentFrakt, leggTilFrakt, endreFrakt, slåAvFrakt } from "./frakt.js";
+import {
+  hentProdukter, hentProdukt, leggTilProdukt, endreProdukt, slåAvProdukt,
+  antallPerType, erType,
+} from "./produkter.js";
 import { forsideSett } from "./forside.js";
 import { kontoer, bevegelser, saldo, leggTil as leggTilKreditt, settSaldo } from "./kreditt.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
@@ -1085,6 +1089,52 @@ app.put("/api/admin/frakt/:id", krevAdmin, fang(async (req: any, res: any) => {
 // fortsatt kunne vise hva den ble sendt med.
 app.delete("/api/admin/frakt/:id", krevAdmin, fang(async (req: any, res: any) => {
   await slåAvFrakt(Number(req.params.id));
+  res.json({ ok: true });
+}));
+
+// ── egne produkter ───────────────────────────────────────────────────────────
+// Sealed og komplette sett. Butikken spør med bareLager=1 og får bare det som
+// finnes; admin spør uten og ser alt den har lagt inn — samme skille som
+// kortene har.
+app.get("/api/admin/produkter", krevAdmin, fang(async (req: any, res: any) => {
+  const type = String(req.query.type || "");
+  res.json({
+    produkter: await hentProdukter({
+      type: erType(type) ? type : undefined,
+      barePåLager: String(req.query.bareLager || "") === "1",
+      bareAktive: String(req.query.alle || "") !== "1",
+    }),
+    antall: await antallPerType(),
+  });
+}));
+
+app.get("/api/admin/produkter/:id", krevAdmin, fang(async (req: any, res: any) => {
+  const p = await hentProdukt(Number(req.params.id));
+  if (!p) throw new HttpFeil(404, "Fant ikke produktet.");
+  res.json({ produkt: p });
+}));
+
+app.post("/api/admin/produkter", krevAdmin, fang(async (req: any, res: any) => {
+  try {
+    const id = await leggTilProdukt(req.body || {});
+    res.json({ produkt: await hentProdukt(id) });
+  } catch (e: any) {
+    throw new HttpFeil(400, e.message);
+  }
+}));
+
+app.put("/api/admin/produkter/:id", krevAdmin, fang(async (req: any, res: any) => {
+  try {
+    await endreProdukt(Number(req.params.id), req.body || {});
+    res.json({ produkt: await hentProdukt(Number(req.params.id)) });
+  } catch (e: any) {
+    throw new HttpFeil(400, e.message);
+  }
+}));
+
+// Slås av, slettes ikke — som fraktalternativene, og av samme grunn.
+app.delete("/api/admin/produkter/:id", krevAdmin, fang(async (req: any, res: any) => {
+  await slåAvProdukt(Number(req.params.id));
   res.json({ ok: true });
 }));
 

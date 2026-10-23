@@ -420,3 +420,35 @@ CREATE TABLE IF NOT EXISTS kreditt_bevegelser (
   created_at TEXT NOT NULL);
 
 CREATE INDEX IF NOT EXISTS idx_kreditt_epost ON kreditt_bevegelser (email, created_at);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- EGNE PRODUKTER
+-- ─────────────────────────────────────────────────────────────────────────
+-- Sealed og komplette sett. De står her og ikke i cards fordi alt i cards
+-- kommer fra Scryfall: settkode, samlernummer, raritet, og en nattlig
+-- prisimport som overskriver. En boosterboks har ingen av delene. Legges
+-- den inn der, må kjøpslista, prisintervallene og importen alle lære seg å
+-- hoppe over den — en lekkasje som aldri tetter seg.
+--
+-- Antallet står som et tall og ikke som bevegelser slik kortene har det.
+-- Bevegelsestabellen er nøklet på card_id og finnes fordi kjøpslista må
+-- kunne svare på hvor hvert eksemplar kom fra. Et produkt kjøpes ikke inn
+-- av kunder, så den historikken har ingen å svare for.
+CREATE TABLE IF NOT EXISTS produkter (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  -- 'sealed' eller 'komplettsett'.
+  type        TEXT NOT NULL,
+  navn        TEXT NOT NULL,
+  beskrivelse TEXT,
+  pris_ore    INTEGER NOT NULL,
+  antall      INTEGER NOT NULL DEFAULT 0,
+  bilde_url   TEXT,
+  -- Valgfri kobling til et sett, slik at produktet kan vises på settsiden.
+  set_code    TEXT,
+  sortering   INTEGER NOT NULL DEFAULT 0,
+  -- Produkter slettes ikke mens de kan stå på en ordre. De slås av.
+  aktiv       INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL);
+
+CREATE INDEX IF NOT EXISTS idx_produkter_type ON produkter (type, aktiv, sortering);
