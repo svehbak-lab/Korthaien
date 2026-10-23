@@ -1063,7 +1063,7 @@ function Lagerliste({ kort, sett, onFeil }) {
 
 // Svaret på «hvor kom disse fra». Bevegelser, ikke et tall — derfor kan
 // spørsmålet stilles i det hele tatt.
-function Historikk({ data, onLukk }) {
+export function Historikk({ data, onLukk }) {
   const GRUNN = {
     ordre: "Fra kjøpsordre",
     mystore: "Åpningsbeholdning fra Mystore",

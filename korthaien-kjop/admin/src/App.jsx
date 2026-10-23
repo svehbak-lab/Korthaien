@@ -3,6 +3,7 @@ import { api, UtloggetFeil } from "./api.js";
 import Ordrer from "./views/Ordrer.jsx";
 import Sett from "./views/Sett.jsx";
 import Kort from "./views/Kort.jsx";
+import Hurtig from "./views/Hurtig.jsx";
 import Kobling from "./views/Kobling.jsx";
 import Butikk from "./views/Butikk.jsx";
 import Lagerrapport from "./views/Lagerrapport.jsx";
@@ -12,7 +13,11 @@ import Innstillinger from "./views/Innstillinger.jsx";
 const SIDER = [
   { id: "ordrer", navn: "Ordrer" },
   { id: "sett", navn: "Sett" },
-  { id: "kort", navn: "Enkeltkort" },
+  // Enkeltkort byttet plass med Hurtigredigering. Enkeltkort-siden handler om
+  // innkjøp — hva du tar imot, hvor mange du vil ha, hva du betaler — og den
+  // naas der den hoerer hjemme: fra Sett. Lageret er en annen jobb, og gjoeres
+  // ofte nok til aa fortjene sin egen inngang.
+  { id: "hurtig", navn: "Hurtigredigering" },
   { id: "kobling", navn: "Kobling" },
   // Midlertidig: forhåndsvisning av butikken. Flyttes ut når salgssiden bygges.
   { id: "butikk", navn: "Butikk" },
@@ -101,6 +106,8 @@ export default function App() {
             }}
           />
         )}
+        {side === "hurtig" && <Hurtig onFeil={håndterFeil} />}
+        {/* Naas fra Sett, ikke fra menyen. */}
         {side === "kort" && (
           <Kort
             sett={valgtSett}
