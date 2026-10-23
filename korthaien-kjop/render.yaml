@@ -90,13 +90,19 @@ services:
       - key: EPOST_TIL_MEG
         value: korthaien@gmail.com
 
-  # Beholdningen endrer seg gjennom dagen, så denne går oftere.
+  # Beholdningen endrer seg gjennom dagen, men to kjøringer holder: kvoten
+  # tåler å være noen timer gammel, og hver kjøring koster tusenvis av kall
+  # til Mystore.
+  #
+  # Tidene er UTC, som alle cron-tider hos Render. 00 og 12 UTC er 02 og 14
+  # norsk sommertid, 01 og 13 om vinteren — altså én om natta og én midt på
+  # dagen, ikke to om natta.
   - type: cron
     name: korthaien-kjop-mystore
     runtime: node
     rootDir: korthaien-kjop
     region: frankfurt
-    schedule: "0 */4 * * *"
+    schedule: "0 0,12 * * *"
     buildCommand: npm ci --include=dev && npm run build
     startCommand: node dist/cli.js mystore
     envVars:
