@@ -1034,8 +1034,12 @@ function Lagerliste({ kort, sett, onFeil }) {
                 );
               })}
               <td className="h">
+                {/* Utenfor tab-rekkefølgen. Tab skal gå fra tall til tall
+                    nedover tabellen; en knapp innimellom gjør at man må
+                    trykke to ganger for hvert felt. */}
                 <button
                   className="knapp handling"
+                  tabIndex={-1}
                   onClick={() =>
                     api
                       .lagerHistorikk(k.id, finish)

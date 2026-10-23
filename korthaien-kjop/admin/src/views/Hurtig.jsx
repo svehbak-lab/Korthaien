@@ -328,8 +328,13 @@ export default function Hurtig({ onFeil }) {
                     );
                   })}
                   <td className="h">
+                    {/* Utenfor tab-rekkefølgen. Tab skal gå fra tall til tall
+                        nedover tabellen; en knapp innimellom gjør at man må
+                        trykke to ganger for hvert felt. Museklikk virker som
+                        før. */}
                     <button
                       className="knapp handling"
+                      tabIndex={-1}
                       onClick={() =>
                         api
                           .lagerHistorikk(k.id, finish)
