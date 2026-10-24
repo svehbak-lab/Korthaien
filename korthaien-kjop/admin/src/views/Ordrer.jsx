@@ -83,13 +83,17 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
   // Kunden varsles som standard. Hakes den av, gjøres endringen stille — for
   // rettinger hen ikke trenger å vite om.
   const [varsle, setVarsle] = useState(true);
+  const [jobber, setJobber] = useState(false);
 
   async function sett(status) {
+    setJobber(true);
     try {
       await api.endreOrdre(ordre.id, { status, varsle });
       onEndret();
     } catch (e) {
       onFeil(e);
+    } finally {
+      setJobber(false);
     }
   }
 
@@ -114,6 +118,19 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
           <span className="merkelapp m-ok" title="Rabattkode lagt inn">{ordre.discount_code}</span>
         )}
         <span style={{ marginLeft: "auto" }} className="sum">{kroner(ordre.total_ore)}</span>
+        {/* Rett i oversikten, så du slipper å åpne ordren og bla til bunnen
+            når en pakke kommer. Samme handling som «Merk mottatt» nederst,
+            og kunden varsles på samme måte. */}
+        {ordre.status === "pending" && (
+          <button
+            className="knapp primar liten"
+            disabled={jobber}
+            onClick={() => sett("received")}
+            title={varsle ? "Merk som mottatt og varsle kunden" : "Merk som mottatt uten å varsle kunden"}
+          >
+            {jobber ? "…" : "Mottatt"}
+          </button>
+        )}
       </header>
 
       {åpen && (
@@ -159,7 +176,7 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
               {ordre.status === "pending" && (
                 <>
                   <button className="knapp fare" onClick={() => sett("cancelled")}>Kanseller</button>
-                  <button className="knapp primar" onClick={() => sett("received")}>Merk mottatt</button>
+                  <button className="knapp primar" disabled={jobber} onClick={() => sett("received")}>Merk mottatt</button>
                 </>
               )}
               {ordre.status === "received" && (
