@@ -588,9 +588,11 @@ textarea { width: 100%; font-family: inherit; }
    trykksverte kaster ikke skygge. */
 .butikk[data-tema="avis"] {
   --papir: #f1eee4; --flate: #fbf9f3; --strek: #d6cebc; --strek-sterk: #a89f8d;
-  --blekk: #14110d; --dempet: #6d6457;
-  --dyp: #14110d; --sjo: #8c2f1c; --sjo-svak: #f6e9e3; --brass: #14110d;
-  --aksent: #8c2f1c; --aksent-svak: #f6e9e3;
+  /* Dempet mørket fra #6d6457 (5,0:1) til 7,2:1 — fortsatt grå trykksverte,
+     tydelig lysere enn brødteksten. */
+  --blekk: #14110d; --dempet: #534c42;
+  --dyp: #14110d; --sjo: #882e1b; --sjo-svak: #f6e9e3; --brass: #14110d;
+  --aksent: #882e1b; --aksent-svak: #f6e9e3;
   /* Toppen er samme ark som resten. En avis har ikke et lysere felt oeverst
      — det er hodet paa den samme sida. */
   --topp1: #f1eee4; --topp2: #f1eee4;
@@ -608,6 +610,10 @@ textarea { width: 100%; font-family: inherit; }
   --selg-font: 700 12px/1.2 var(--skrift);
   --runding: 0; --pille: 0;
   --sok-kant: 1.5px solid var(--blekk); --sok-bg: var(--blekk); --sok-tekst: #fbf9f3;
+  /* Båndet er svart; teksten i det er avispapirets egen farge, ikke den
+     grønnlige fra Dagens. Knappen er rød med lys tekst (7,9:1). */
+  --band-dempet: #d6cebc; --bunn-dempet: #534c42;
+  --kort: var(--flate); --kant: var(--strek); --svak: var(--dempet);
 }
 /* Doble streker under toppen, slik en avishode har det. */
 .butikk[data-tema="avis"] .b-linje1 { border-bottom: 2px solid var(--blekk); }
@@ -680,11 +686,14 @@ textarea { width: 100%; font-family: inherit; }
    Fiberen er feTurbulence, ikke et bilde: den veier ingenting, kan ikke bli
    uskarp, og gjentas uten søm. */
 .butikk[data-tema="pergament"] {
-  --papir: #efe4cd; --flate: #faf4e6; --strek: #d9c9a9; --strek-sterk: #bda987;
-  /* Dempet og gull er mørket så de holder WCAG 4,5 også oppå fiberen
-     (simulert, verste 5 % av flekkene, både på papir og flate). */
-  --blekk: #16203a; --dempet: #5f5645;
-  --dyp: #0d1424; --sjo: #1d3557; --sjo-svak: #e6eaf1; --brass: #6b4e0f;
+  /* Papiret er lysnet litt (fra #efe4cd), så fiberen har rom til å synes
+     uten å spise kontrasten. */
+  --papir: #f4ead6; --flate: #fbf6ea; --strek: #d9c9a9; --strek-sterk: #bda987;
+  /* Gullet i prisen er gammelt bronsegull: 7:1 på typisk papir, ~6,3:1 i de
+     mørkeste 5 % av fiberflekkene. Lyst gull holder bare på mørk bunn, og
+     brukes der: logoen, søkeknappen, «Selg dine kort». */
+  --blekk: #16203a; --dempet: #4b4438;
+  --dyp: #0d1424; --sjo: #1d3557; --sjo-svak: #e6eaf1; --brass: #584210;
   --aksent: #1d3557; --aksent-svak: #e6eaf1;
   --topp1: #0d1424; --topp2: #1d3557;
   --topp-tekst: #f7f1e3; --topp2-tekst: #e4ddcc;
@@ -699,6 +708,8 @@ textarea { width: 100%; font-family: inherit; }
   --selg-font: 600 12.5px/1.2 var(--skrift);
   --runding: 3px; --pille: 2px;
   --sok-kant: 1px solid #2b3550; --sok-bg: var(--oransje); --sok-tekst: #1a1205;
+  --band-dempet: #e4ddcc; --bunn-dempet: #cfc6b2;
+  --kort: var(--flate); --kant: var(--strek); --svak: var(--dempet);
   --fiber: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23f)' opacity='0.25'/%3E%3C/svg%3E");
 }
 .butikk[data-tema="pergament"] .b-logo span { text-transform: uppercase; }
@@ -711,7 +722,7 @@ textarea { width: 100%; font-family: inherit; }
 .butikk[data-tema="pergament"] .b-info div { background-image: var(--fiber); }
 .butikk[data-tema="pergament"] .faner button { font: 600 17px/1 var(--skrift-navn); }
 .butikk[data-tema="pergament"] .pris,
-.butikk[data-tema="pergament"] .pris-stor { font-family: var(--skrift-tall); font-weight: 600; }
+.butikk[data-tema="pergament"] .pris-stor { font-family: var(--skrift-tall); font-weight: 600; font-variant-numeric: tabular-nums; }
 .butikk[data-tema="pergament"] .pris-stor { font-size: 26px; }
 .butikk[data-tema="pergament"] .b-band { background: var(--dyp); }
 .butikk[data-tema="pergament"] .knapp.primar { background: var(--sjo); border-color: var(--sjo); }
@@ -729,8 +740,8 @@ textarea { width: 100%; font-family: inherit; }
    der får avisserifen beholde karakteren. */
 .butikk[data-tema="avis"] .pris-stor { font-family: var(--skrift-navn); }
 
-/* ── tre temaer bygget mot målingene ──────────────────────────────────────
-   Lesesal, Natt og Signal er laget for å score høyt på det som kan måles:
+/* ── temaer bygget mot målingene ──────────────────────────────────────
+   Lesesal og Signal er laget for å score høyt på det som kan måles:
    - all tekst minst 7:1 (WCAG AAA), både på panel og sidebakgrunn — også
      dempet tekst, prisen, lenkene, toppen, båndet og bunnen
    - like brede sifre i alle priser (tabular-nums), så kolonnene flukter
@@ -762,33 +773,6 @@ textarea { width: 100%; font-family: inherit; }
   --fiber: none;
 }
 
-/* Mørkt: kortbildene er lyse og mettede, og står sterkest mot en mørk flate. */
-.butikk[data-tema="natt"] {
-  color-scheme: dark;
-  --papir: #0f1216; --flate: #181c22; --strek: #2b323b; --strek-sterk: #4a5562;
-  --blekk: #eef1f4; --dempet: #a0aab5;
-  --dyp: #1d4a43; --sjo: #6ecab7; --sjo-svak: #16302c; --brass: #e99716;
-  --aksent: #6ecab7; --aksent-svak: #16302c;
-  --topp1: #07090b; --topp2: #181c22;
-  --topp-tekst: #f4f6f8; --topp2-tekst: #dfe4ea;
-  --oransje: #f2a65a; --oransje-tekst: #1a1004;
-  --logo-finne: #f2a65a;
-  --skrift: Inter, system-ui, sans-serif;
-  --skrift-navn: Inter, system-ui, sans-serif;
-  --skrift-tall: Inter, system-ui, sans-serif;
-  --logo-font: 800 20px/1 var(--skrift);
-  --logo-sperre: -0.02em;
-  --nav-font: 600 13px/1.2 var(--skrift);
-  --selg-font: 700 13px/1.2 var(--skrift);
-  --runding: 8px; --pille: 999px;
-  --sok-kant: 1px solid #2b323b; --sok-bg: #2b323b; --sok-tekst: #eef1f4;
-  --band-dempet: #d3e6e1; --bunn-dempet: #b4bdc7;
-  --kort: var(--flate); --kant: var(--strek); --svak: var(--dempet);
-  --advarsel: #f0b860; --ok: #7fd49a; --feil: #ff9a9a;
-  --fiber: none;
-}
-.butikk[data-tema="natt"] .m-vent { border-color: #4a3b1e; background: #241d10; }
-
 /* Card Kingdom i temperament — mørkeblå topp, oransje til salg — men med
    AAA-kontrast og en navneskrift tegnet for å være entydig. */
 .butikk[data-tema="signal"] {
@@ -814,34 +798,33 @@ textarea { width: 100%; font-family: inherit; }
   --fiber: none;
 }
 
-:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) {
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="signal"]) {
   /* Tekstfargen settes her og ikke arves fra body, som leser admins blekk
      fra roten. I Natt ville det gitt mørk tekst på mørk flate. */
   color: var(--blekk);
 }
-:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"])
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="signal"])
   :is(.pris, .pris-stor, .tall, .b-gnr) {
   font-family: var(--skrift-tall); font-variant-numeric: tabular-nums;
 }
-:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"])
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="signal"])
   :is(.lenke, .b-gnavn) { font-family: var(--skrift-navn); }
-:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) .b-band {
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="signal"]) .b-band {
   color: var(--topp-tekst);
 }
-:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) .b-band p {
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="signal"], .butikk[data-tema="avis"], .butikk[data-tema="pergament"]) .b-band p {
   color: var(--band-dempet);
 }
-:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) .b-band a {
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="signal"], .butikk[data-tema="avis"], .butikk[data-tema="pergament"]) .b-band a {
   color: var(--oransje-tekst);
 }
-:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) .b-bunnjus .dempet {
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="signal"], .butikk[data-tema="avis"], .butikk[data-tema="pergament"]) .b-bunnjus .dempet {
   color: var(--bunn-dempet); opacity: 1;
 }
-:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) .b-toppsok input::placeholder {
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="signal"], .butikk[data-tema="avis"], .butikk[data-tema="pergament"]) .b-toppsok input::placeholder {
   color: var(--dempet); opacity: 1;
 }
 .butikk[data-tema="lesesal"] .faner button { font: 600 17px/1 var(--skrift-navn); }
-.butikk[data-tema="natt"] .b-band { border: 1px solid var(--strek); }
 
 /* ── temavelgeren i Admin ────────────────────────────────────────────────── */
 .temavalg { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); }

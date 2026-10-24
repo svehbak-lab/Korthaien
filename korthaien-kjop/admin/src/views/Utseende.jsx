@@ -38,11 +38,6 @@ const TEMAER = [
     om: "Varmt papir og mørk topp. Literata i kortnavnene, Inter i alt annet, priser i rustrødt. All tekst minst 7:1.",
   },
   {
-    id: "natt",
-    navn: "Natt",
-    om: "Mørk butikk der kortbildene lyser. Rav til prisen, mint til lenkene, Inter overalt. All tekst minst 7:1.",
-  },
-  {
     id: "signal",
     navn: "Signal",
     om: "Mørkeblå topp og oransje salg, som Card Kingdom, men strammere. Atkinson Hyperlegible i kortnavnene. All tekst minst 7:1.",
