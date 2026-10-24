@@ -291,14 +291,15 @@ textarea { width: 100%; font-family: inherit; }
    ───────────────────────────────────────────────────────────────────────── */
 
 .butikk .b-hero { margin-bottom: 20px; }
-/* Toppbildet av neste sett. Bildet fyller bredden og beskjæres i høyden,
-   så et bilde i et annet format ikke skyver resten av forsiden ned. Teksten
-   står nede til venstre på en mørk toning, så den kan leses over et hvilket
-   som helst bilde. */
+/* Toppbildet av neste sett. Det vises helt, i sine egne proporsjoner —
+   et salgsbilde har logo og ansikter helt ut i kantene, og et utsnitt kuttet
+   dem bort. Proporsjonene settes fra bildets mål; 16:9 er bare reserven.
+   Teksten står nede til venstre på en mørk toning, så den kan leses over et
+   hvilket som helst bilde. */
 .butikk .b-banner {
   position: relative; margin-bottom: 22px; overflow: hidden;
   border-radius: var(--runding, 10px); background: #111;
-  aspect-ratio: 16 / 6; max-height: 440px;
+  aspect-ratio: 16 / 9;
 }
 .butikk .b-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .butikk .b-banner::after {
@@ -311,7 +312,6 @@ textarea { width: 100%; font-family: inherit; }
   letter-spacing: -0.01em; text-shadow: 0 1px 12px rgb(0 0 0 / 45%);
 }
 @media (max-width: 560px) {
-  .butikk .b-banner { aspect-ratio: 16 / 9; }
   .butikk .b-banner-tekst { left: 16px; bottom: 14px; }
 }
 .butikk .b-hero h1 { font-size: 27px; letter-spacing: -0.02em; margin: 0 0 6px; }

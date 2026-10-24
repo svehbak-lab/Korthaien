@@ -176,11 +176,11 @@ function Toppbilde({ start, onFeil, onMelding }) {
           gjerne fra butikkpakken til settet. Mindre bilder blir uskarpe på store skjermer.
         </p>
         {b.bilde_id ? (
-          <div style={{ position: "relative", maxWidth: 640, aspectRatio: "16 / 6", overflow: "hidden", borderRadius: 8, background: "#111" }}>
+          <div style={{ maxWidth: 640, overflow: "hidden", borderRadius: 8, background: "#111" }}>
             <img
               src={bildeUrl(b.bilde_id)}
-              alt="Toppbildet slik det beskjæres på forsiden"
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              alt="Toppbildet slik det vises på forsiden"
+              style={{ width: "100%", height: "auto", display: "block" }}
               onLoad={(e) => setStørrelse((s) => s || { bredde: e.target.naturalWidth, hoyde: e.target.naturalHeight })}
             />
           </div>

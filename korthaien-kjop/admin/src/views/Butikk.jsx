@@ -1391,7 +1391,10 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
   return (
     <>
       {banner ? (
-        <div className="b-banner">
+        <div
+          className="b-banner"
+          style={banner.bredde && banner.hoyde ? { aspectRatio: `${banner.bredde} / ${banner.hoyde}` } : undefined}
+        >
           <img src={bildeUrl(banner.bilde_id)} alt="" />
           <div className="b-banner-tekst">{banner.tekst}</div>
         </div>
