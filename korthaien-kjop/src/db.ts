@@ -95,6 +95,7 @@ async function leggTilNyeKolonner(): Promise<void> {
     ["reserved", "INTEGER NOT NULL DEFAULT 0"],
     ["er_token", "INTEGER NOT NULL DEFAULT 0"],
     ["er_serialized", "INTEGER NOT NULL DEFAULT 0"],
+    ["er_display", "INTEGER NOT NULL DEFAULT 0"],
   ] as const) {
     if (kortKol.size && !kortKol.has(navn)) {
       await db().execute(`ALTER TABLE cards ADD COLUMN ${navn} ${type}`);
@@ -358,16 +359,15 @@ async function leggTilNyeKolonner(): Promise<void> {
     }
   }
 
-  // Displaykort som ble koblet til et annet kort før erIkkeSpillekort fantes
-  // (The Wise Mothman til showcasen #343). Synken fjerner dem når den ser
-  // produktet igjen, men ikke alle sett synkes hver natt — derfor her også.
-  // Kjøres ved hver oppstart, men finner ingenting etter første gang.
+  // Displaykort som er koblet til noe annet enn en displayutgave (The Wise
+  // Mothman landet på showcasen #343). Synken kobler dem riktig neste gang
+  // den ser produktet, men ikke alle sett synkes hver natt — derfor ryddes de
+  // feilkoblede her også. Manuelle koblinger røres ikke.
   if (lager.size) {
     await db().execute(`DELETE FROM mystore_stock
-      WHERE product_id NOT IN (SELECT product_id FROM mystore_links WHERE card_id IS NOT NULL AND product_id IS NOT NULL)
-        AND (lower(product_name) LIKE '%display commander%'
-          OR lower(product_name) LIKE '%not tournament legal%'
-          OR lower(product_name) LIKE '%oversized%')`);
+      WHERE lower(product_name) LIKE '%display commander%'
+        AND card_id NOT IN (SELECT id FROM cards WHERE er_display = 1)
+        AND product_id NOT IN (SELECT product_id FROM mystore_links WHERE card_id IS NOT NULL AND product_id IS NOT NULL)`);
   }
 
   const ku = await kolonner("kunder");

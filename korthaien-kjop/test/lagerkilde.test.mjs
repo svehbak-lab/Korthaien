@@ -57,21 +57,25 @@ test("med LAGERKILDE=bok leser butikken lagerboken", async () => {
   delete process.env.LAGERKILDE;
 });
 
-test("displaykort kobles ikke til et annet kort, og en gammel feilkobling fjernes", async () => {
-  const { erIkkeSpillekort } = await import("../src/varianter.ts");
-  assert.equal(erIkkeSpillekort("The Wise Mothman (Display Commander) (Not Tournament Legal)"), true);
-  assert.equal(erIkkeSpillekort("The Wise Mothman - Display Commander"), true);
-  assert.equal(erIkkeSpillekort("Atraxa (Oversized)"), true);
-  assert.equal(erIkkeSpillekort("The Wise Mothman (Showcase)"), false);
-  assert.equal(erIkkeSpillekort("Thick-Skinned Goblin"), false);
+test("displaykort kobles bare til displayutgaven; NTL og Oversized er vanlige kort i sitt sett", async () => {
+  const { erDisplayProdukt, oppgirBehandling } = await import("../src/varianter.ts");
+  assert.equal(erDisplayProdukt("The Wise Mothman (Display Commander) (Not Tournament Legal)"), true);
+  assert.equal(erDisplayProdukt("The Wise Mothman (Showcase)"), false);
+  // Collector's Edition, World Championship Decks og Vanguard: ordene sier
+  // hva slags sett det er, ikke at det er en annen utgave i settet.
+  assert.equal(oppgirBehandling("Black Lotus (Not Tournament Legal)"), false);
+  assert.equal(oppgirBehandling("Gix (Oversized)"), false);
+  assert.equal(oppgirBehandling("The Wise Mothman (Showcase)"), true);
 
-  // Koblingen som allerede ligger der, ryddes ved oppstart.
+  // En displaykobling til et kort som ikke er displayutgaven, ryddes ved
+  // oppstart. Et NTL-produkt koblet til sitt eget kort, blir stående.
   await db().execute({
     sql: `INSERT INTO mystore_stock (card_id,finish,qty,product_id,product_name,synced_at)
-          VALUES ('k2','foil',1,'p-mothman','The Wise Mothman (Display Commander) (Not Tournament Legal)',?)`,
-    args: [new Date().toISOString()],
+          VALUES ('k2','foil',1,'p-mothman','The Wise Mothman (Display Commander) (Not Tournament Legal)',?),
+                 ('k1','foil',1,'p-ce','Black Lotus (Not Tournament Legal)',?)`,
+    args: [new Date().toISOString(), new Date().toISOString()],
   });
   await migrate();
-  const r = await db().execute("SELECT COUNT(*) AS n FROM mystore_stock WHERE product_id = 'p-mothman'");
-  assert.equal(Number(r.rows[0].n), 0);
+  const r = await db().execute("SELECT product_id FROM mystore_stock WHERE product_id IN ('p-mothman','p-ce')");
+  assert.deepEqual(r.rows.map((x) => x.product_id), ["p-ce"]);
 });

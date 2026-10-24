@@ -160,9 +160,14 @@ export function oppgirBehandling(navn: string): boolean {
     // «(009)», «(#297)», «(250 A)» — samlernummer, håndteres et annet sted.
     if (I_PARENTES.test(t)) continue;
     // «(Foil)», «(FOIL)», «(Non-foil)» — finish, ikke utgave.
+    // «(Not Tournament Legal)» og «(Oversized)» sier hva slags sett kortet er
+    // fra — Collector's Edition, World Championship Decks, Vanguard — ikke at
+    // det er en annen utgave i settet. Der er kortet grunnutgaven.
     const rest = t
       .replace(/\bnon[\s-]?foil\b/gi, "")
       .replace(/\bfoil\b/gi, "")
+      .replace(/\bnot\s*tournament\s*legal\b/gi, "")
+      .replace(/\boversized\b/gi, "")
       .replace(/[,\s]+/g, "");
     if (!rest) continue;
     return true;
@@ -170,18 +175,12 @@ export function oppgirBehandling(navn: string): boolean {
   return false;
 }
 
-// ── ikke spillekort ──────────────────────────────────────────────────────────
-// Displaykort og overstore kort finnes ikke som egne kort hos Scryfall. Står
-// det «Not Tournament Legal» i navnet, slo regelen over til — «oppgir en
-// behandling, så er grunnutgaven feil» — og valgte en hvilken som helst annen
-// utgave i settet. «The Wise Mothman (Display Commander) (Not Tournament
-// Legal)» havnet på Pip-Boy-showcasen #343: et annet kort, med en annen pris,
-// som da sto på lager i butikken og i kupplista uten at du hadde det.
-//
-// Slike produkter kobles derfor ikke automatisk. Vil du selge dem i den nye
-// butikken, hører de hjemme under Produkter.
-const IKKE_SPILLEKORT = /\b(display\s*commanders?|not\s*tournament\s*legal|oversized)\b/i;
-
-export function erIkkeSpillekort(navn: string): boolean {
-  return IKKE_SPILLEKORT.test(navn);
+// ── displaykort ──────────────────────────────────────────────────────────────
+// «Display Commander» er en egen utgave: den tykke displayversjonen av
+// commanderen, som Scryfall merker «thick». Produktet skal kobles dit og
+// ingen andre steder. Uten dette gjaldt den vanlige regelen — navnet oppgir
+// en behandling, så velg en annen utgave enn grunnkortet — og «The Wise
+// Mothman (Display Commander)» landet på Pip-Boy-showcasen #343.
+export function erDisplayProdukt(navn: string): boolean {
+  return /\bdisplay\s*commanders?\b/i.test(navn);
 }
