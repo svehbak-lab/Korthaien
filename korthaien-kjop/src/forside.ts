@@ -21,6 +21,10 @@ export type ForsideSett = {
   utgitt: string | null;
   kort: number;
   image_uri: string | null;
+  // Bare illustrasjonen, uten ramme og tekst. Scryfall har den som egen
+  // utgave av hvert bilde, på samme adresse med «art_crop» i stedet for
+  // «normal». Det er den Card Kingdom bruker i settraden sin.
+  kunst_uri: string | null;
   kort_navn: string | null;
 };
 
@@ -64,6 +68,7 @@ export async function forsideSett(antall = 5): Promise<ForsideSett[]> {
   return valgte.map((s) => ({
     ...s,
     image_uri: bilde.get(s.code)?.image_uri ?? null,
+    kunst_uri: kunstAv(bilde.get(s.code)?.image_uri ?? null),
     kort_navn: bilde.get(s.code)?.name ?? null,
   }));
 }
@@ -113,6 +118,13 @@ async function settene(n: number) {
     args: [n],
   });
   return (r.rows as any[]).map(rad);
+}
+
+export function kunstAv(bilde: string | null): string | null {
+  if (!bilde) return null;
+  return /\/(normal|large|small|png)\/(front|back)\//.test(bilde)
+    ? bilde.replace(/\/(normal|large|small|png)\/(front|back)\//, "/art_crop/$2/")
+    : null;
 }
 
 const rad = (x: any) => ({

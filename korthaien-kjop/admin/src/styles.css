@@ -935,15 +935,15 @@ textarea { width: 100%; font-family: inherit; }
   display: flex; flex-direction: column; gap: 2px;
 }
 .butikk .b-settflis:hover { border-color: var(--sjo); }
-/* Bildet er et utsnitt av illustrasjonen, og det skal slutte foer
-   regelteksten begynner: en halv regeltekst i en rad med settbilder ser ut
-   som en feil. Hoeyden foelger derfor bredden (forholdet 1,63 er det gamle
-   utsnittet, 108 px hoeyt med seks i bredden), saa utsnittet er det samme
-   uansett hvor bred flisen er. Med fem i bredden blir bildet rundt 131 px. */
+/* Kvadratisk, som hos Card Kingdom. Bildet er bare illustrasjonen
+   (Scryfalls «art_crop»), uten ramme og regeltekst, beskåret til et
+   kvadrat fra midten. Mangler den utgaven, faller flisen tilbake til hele
+   kortbildet, beskåret fra toppen så rammen og teksten holdes utenfor. */
 .butikk .b-settflis img, .butikk .b-settflis-tom {
-  width: 100%; aspect-ratio: 1.63; height: auto; object-fit: cover; object-position: 50% 22%;
+  width: 100%; aspect-ratio: 1 / 1; height: auto; object-fit: cover; object-position: 50% 18%;
   display: block; background: var(--papir); margin-bottom: 8px;
 }
+.butikk .b-settflis img.kunst { object-position: 50% 40%; }
 .butikk .b-settflis .navn { font-weight: 600; font-size: 13px; line-height: 1.25; padding: 0 8px; }
 .butikk .b-settflis .linje { font-size: 11.5px; color: var(--dempet); }
 

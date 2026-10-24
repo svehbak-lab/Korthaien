@@ -133,3 +133,13 @@ test("sortering nyeste gir det som sist ble lagt inn", async () => {
   assert.equal(d.kort[0].id, sent, "det sist innlagte kortet skal ligge først");
   assert.notEqual(d.kort[0].id, gammelt, "et uttak gjør ikke et kort nytt");
 });
+
+test("settflisen får illustrasjonen alene fra Scryfall, ikke hele kortet", async () => {
+  const { kunstAv } = await import("../src/forside.ts");
+  assert.equal(
+    kunstAv("https://cards.scryfall.io/normal/front/6/d/6da045f8.jpg?1562"),
+    "https://cards.scryfall.io/art_crop/front/6/d/6da045f8.jpg?1562"
+  );
+  assert.equal(kunstAv("/bilde/k1.jpg"), null);
+  assert.equal(kunstAv(null), null);
+});

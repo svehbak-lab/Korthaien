@@ -1450,8 +1450,13 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
           <div className="b-settrad">
             {nyeste.map((s) => (
               <button key={s.code} className="b-settflis" onClick={() => onSett(s.code)}>
-                {s.image_uri ? (
-                  <img src={s.image_uri} alt="" loading="lazy" />
+                {s.kunst_uri || s.image_uri ? (
+                  <img
+                    src={s.kunst_uri || s.image_uri}
+                    alt=""
+                    loading="lazy"
+                    className={s.kunst_uri ? "kunst" : undefined}
+                  />
                 ) : (
                   <div className="b-settflis-tom" />
                 )}
