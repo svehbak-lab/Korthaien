@@ -197,14 +197,10 @@ export type KasseInn = {
   vilkar?: boolean;
 };
 
+// S-15000, S-15001 … Fortløpende fra nummerserien.
 async function nyttOrdrenummer(): Promise<string> {
-  const d = nå().slice(2, 10).replace(/-/g, "");
-  for (let i = 0; i < 12; i++) {
-    const nr = `KS-${d}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const f = await db().execute({ sql: "SELECT 1 FROM salgsordrer WHERE ordrenr = ?", args: [nr] });
-    if (!f.rows.length) return nr;
-  }
-  throw new SalgFeil(500, "Klarte ikke lage ordrenummer.");
+  const { nesteNummer } = await import("./db.js");
+  return nesteNummer("salg");
 }
 
 // Kreditt som allerede er holdt av i åpne kasser for samme adresse — av

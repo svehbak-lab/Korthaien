@@ -41,7 +41,7 @@ export default function Oppslag({ onFeil, onTilbake }) {
               type="text"
               value={nr}
               onChange={(e) => setNr(e.target.value)}
-              placeholder="KH-260908-1234"
+              placeholder="K-00034"
             />
           </label>
           <label>

@@ -502,3 +502,16 @@ export function normaliser(s: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]/g, "");
 }
+
+// Neste nummer i en serie, formatert: K-00034, S-15000. Atomisk — telleren
+// økes og leses i samme setning.
+export async function nesteNummer(serie: "kjop" | "salg"): Promise<string> {
+  const r = await db().execute({
+    sql: `UPDATE nummerserier SET neste = neste + 1 WHERE navn = ?
+          RETURNING prefiks, neste - 1 AS nr, siffer`,
+    args: [serie],
+  });
+  const x: any = r.rows[0];
+  if (!x) throw new Error(`Nummerserien «${serie}» finnes ikke.`);
+  return `${x.prefiks}${String(x.nr).padStart(Number(x.siffer) || 0, "0")}`;
+}

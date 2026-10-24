@@ -202,15 +202,11 @@ export function instruksjoner(ordreNr: string, adresse: string, utløp: Date) {
   ];
 }
 
-async function nyttOrdrenummer(nå: Date): Promise<string> {
-  const d = nå.toISOString().slice(2, 10).replace(/-/g, "");
-  for (let forsøk = 0; forsøk < 12; forsøk++) {
-    const rand = Math.floor(1000 + Math.random() * 9000);
-    const nr = `KH-${d}-${rand}`;
-    const finnes = await db().execute({ sql: "SELECT 1 FROM orders WHERE order_no = ?", args: [nr] });
-    if (!finnes.rows.length) return nr;
-  }
-  throw new HttpFeil(500, "Klarte ikke lage ordrenummer");
+// K-00034, K-00035 … Fortløpende fra nummerserien. Ordrene fra før heter
+// KH-ÅÅMMDD-NNNN og beholder det.
+async function nyttOrdrenummer(_nå: Date): Promise<string> {
+  const { nesteNummer } = await import("./db.js");
+  return nesteNummer("kjop");
 }
 
 // ── utløp ────────────────────────────────────────────────────────────────────

@@ -593,3 +593,23 @@ CREATE TABLE IF NOT EXISTS kunde_tokens (
 CREATE INDEX IF NOT EXISTS idx_kunde_sesjoner_kunde ON kunde_sesjoner (kunde_id);
 
 CREATE INDEX IF NOT EXISTS idx_salgsordrer_betalt ON salgsordrer (status, betalt_at);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- ORDRENUMMER
+-- ─────────────────────────────────────────────────────────────────────────
+-- Fortløpende numre: K-00034 for kjøpsordrer, S-15000 for salgsordrer. Et
+-- nummer deles ut med én UPDATE ... RETURNING, så to ordrer i samme øyeblikk
+-- aldri får det samme. Ordrene fra før beholder numrene de har — kundene
+-- har dem i e-postene sine.
+--
+-- Startverdiene settes bare første gang (INSERT OR IGNORE). Telleren
+-- fortsetter derfra, også etter omstart.
+CREATE TABLE IF NOT EXISTS nummerserier (
+  navn    TEXT PRIMARY KEY,
+  prefiks TEXT NOT NULL,
+  neste   INTEGER NOT NULL,
+  -- Antall siffer, fylt ut med nuller foran. 0 betyr ingen utfylling.
+  siffer  INTEGER NOT NULL DEFAULT 0);
+
+INSERT OR IGNORE INTO nummerserier (navn, prefiks, neste, siffer) VALUES ('kjop', 'K-', 34, 5);
+INSERT OR IGNORE INTO nummerserier (navn, prefiks, neste, siffer) VALUES ('salg', 'S-', 15000, 0);

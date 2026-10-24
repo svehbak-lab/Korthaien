@@ -196,8 +196,16 @@ app.post("/api/orders", grense(REGLER.ordre), fang(async (req: any, res: any) =>
   res.status(201).json(ordre);
 }));
 
+// Kunden kan skrive «k-34» eller «K34»; det er K-00034. Gamle numre
+// (KH-ÅÅMMDD-NNNN) slås opp som de er, bare med store bokstaver.
+function normaliserKjøpsnummer(inn: string): string {
+  const t = String(inn || "").trim().toUpperCase();
+  const m = /^K-?\s*0*(\d{1,7})$/.exec(t);
+  return m ? `K-${m[1].padStart(5, "0")}` : t;
+}
+
 app.get("/api/orders/:orderNo", grense(REGLER.søk), fang(async (req: any, res: any) => {
-  const o = await hentOrdre(String(req.params.orderNo));
+  const o = await hentOrdre(normaliserKjøpsnummer(String(req.params.orderNo)));
   if (!o) throw new HttpFeil(404, "Fant ikke ordren");
   // Ordrenummeret alene er ikke hemmelig nok — det er kort og datobasert, og
   // uten innlogging er e-posten det eneste vi kan sjekke mot.
