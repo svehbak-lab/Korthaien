@@ -628,8 +628,8 @@ export async function tilhørerKunde(o: any, kunde: { id: number; email: string;
 export async function adminOrdrer(status: string) {
   await utløpGamle();
   const grupper: Record<string, string[]> = {
-    pakkes: ["betalt"],
-    pakket: ["pakket"],
+    // «Ikke behandlet» er alt som er betalt og ikke sendt.
+    pakkes: ["betalt", "pakket"],
     sendt: ["sendt"],
     kansellert: ["kansellert"],
     apen: ["apen", "utlopt"],

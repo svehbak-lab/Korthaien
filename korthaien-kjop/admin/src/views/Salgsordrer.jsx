@@ -12,8 +12,10 @@ import { api, kroner } from "../api.js";
 // Hakene i plukklisten er bare her på skjermen, til hjelp mens du plukker.
 
 const FANER = [
-  { id: "pakkes", navn: "Til pakking", status: ["betalt"] },
-  { id: "pakket", navn: "Pakket", status: ["pakket"] },
+  // Tre steg er alt som trengs: inn, sendt, eller kansellert. «Pakket»
+  // finnes ikke i menyen; en ordre som eventuelt står slik, er ikke
+  // behandlet ferdig og ligger sammen med de andre.
+  { id: "pakkes", navn: "Ikke behandlet", status: ["betalt", "pakket"] },
   { id: "sendt", navn: "Sendt", status: ["sendt"] },
   { id: "kansellert", navn: "Kansellert", status: ["kansellert"] },
   { id: "apen", navn: "Åpne kasser", status: ["apen", "utlopt"] },
@@ -21,8 +23,8 @@ const FANER = [
 
 const STATUS = {
   apen: "I kassen",
-  betalt: "Betalt",
-  pakket: "Pakket",
+  betalt: "Ikke behandlet",
+  pakket: "Ikke behandlet",
   sendt: "Sendt",
   kansellert: "Kansellert",
   utlopt: "Forlatt",
@@ -41,7 +43,7 @@ export default function Salgsordrer({ onFeil, onMelding, onAntall }) {
     try {
       const r = await api.salgsordrer(fane);
       setData(r);
-      onAntall?.(r.antall?.betalt || 0);
+      onAntall?.((r.antall?.betalt || 0) + (r.antall?.pakket || 0));
     } catch (e) {
       onFeil(e);
     }
@@ -81,7 +83,7 @@ export default function Salgsordrer({ onFeil, onMelding, onAntall }) {
         <p className="dempet">Henter…</p>
       ) : !data.ordrer.length ? (
         <div className="tom">
-          <b>{fane === "pakkes" ? "Ingenting å pakke." : "Ingen ordrer her."}</b>
+          <b>{fane === "pakkes" ? "Ingen ubehandlede ordrer." : "Ingen ordrer her."}</b>
           {fane === "pakkes" && "Nye ordrer dukker opp her så snart de er betalt."}
         </div>
       ) : (
@@ -206,7 +208,6 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
 
   if (!o) return <p className="dempet">Henter…</p>;
   const etterBetaling = ["betalt", "pakket", "sendt"].includes(o.status);
-  const alle = o.linjer.length > 0 && plukket.size === o.linjer.length;
 
   return (
     <>
@@ -299,11 +300,6 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
             <div className="panel">
               <header><h3>Status</h3></header>
               <div className="krop skjema">
-                {o.status === "betalt" && (
-                  <button className="knapp" disabled={jobber} onClick={() => endre({ status: "pakket" }, "Merket som pakket.")}>
-                    {alle ? "Alt plukket — merk som pakket" : "Merk som pakket"}
-                  </button>
-                )}
                 {o.status !== "sendt" && (
                   <>
                     <label>
@@ -323,15 +319,10 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                 {o.status === "sendt" && (
                   <>
                     <div>Sendt {tid(o.sendt_at)}{o.sporingsnr ? ` · ${o.sporingsnr}` : ""}</div>
-                    <button className="knapp liten" disabled={jobber} onClick={() => endre({ status: "pakket" })}>
+                    <button className="knapp liten" disabled={jobber} onClick={() => endre({ status: "betalt" })}>
                       Angre «sendt»
                     </button>
                   </>
-                )}
-                {o.status === "pakket" && (
-                  <button className="knapp liten" disabled={jobber} onClick={() => endre({ status: "betalt" })}>
-                    Angre «pakket»
-                  </button>
                 )}
               </div>
             </div>
