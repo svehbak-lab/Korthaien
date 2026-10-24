@@ -112,3 +112,40 @@ test("bulkvarianten svarer det samme som enkeltoppslaget", async () => {
   const en = await hentKvote("k1", "nonfoil", "blb", await regel());
   assert.equal(bulk.get("k1:nonfoil").reserved, en.reserved);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPPGJØR OG HYLLE ER TO HENDELSER
+// ─────────────────────────────────────────────────────────────────────────────
+// Oppgjøret er pengene til kunden. Innleggingen er kortene i hylla. De kan
+// ligge dager eller måneder fra hverandre, og dag 1 i den nye butikken skal
+// beholdningen være Mystores — ikke Mystores pluss alt som tilfeldigvis var
+// gjort opp. Derfor bokføres ikke lenger kortene ved oppgjør.
+
+const { bokførOrdre } = await import("../src/lager.ts");
+
+const påLager = async () => {
+  const r = await db().execute(
+    `SELECT COALESCE(SUM(antall), 0) AS n FROM lager_bevegelser WHERE card_id = 'k1'`
+  );
+  return Number(r.rows[0].n);
+};
+
+test("en gjort opp ordre har ikke lagt noe i hylla av seg selv", async () => {
+  // Testordrene over er laget med status 'stocked' uten at noe ble bokført.
+  // Står det kort her, har oppgjøret begynt å gjøre hyllas jobb igjen.
+  assert.equal(await påLager(), 0);
+});
+
+test("knappen fører kortene inn med mottatt antall", async () => {
+  const id = await lagOrdre("stocked", 7);
+  await bokførOrdre(id);
+  assert.equal(await påLager(), 7);
+});
+
+test("to trykk gir ikke kortene to ganger", async () => {
+  const før = await påLager();
+  const id = await lagOrdre("stocked", 3);
+  await bokførOrdre(id);
+  await bokførOrdre(id);
+  assert.equal(await påLager(), før + 3);
+});

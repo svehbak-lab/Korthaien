@@ -244,17 +244,25 @@ app.post("/api/admin/logout", (_req, res) => {
 
 app.get("/api/admin/me", krevAdmin, (_req, res) => res.json({ ok: true }));
 
-// Kortene er lagt inn i Mystore — fra naa teller beholdningen dem, og
-// reservasjonen ville telt dem en gang til.
+// Kortene settes i hylla. Én handling, to virkninger — og de to hoerer
+// sammen, for det er samme hendelse:
 //
-// Midlertidig, til var egen varebeholdning overtar. Da kan innleggingen og
-// frigivelsen skje i samme handling, fordi systemet selv vet naar kortene er
-// paa plass. I dag vet det ikke det, og en knapp er aerligere enn en gjetning.
+//   1. Kortene foeres inn i varebeholdningen, med antallet og tilstanden du
+//      satte ved kontroll.
+//   2. Kvoten slippes, fordi beholdningen fra naa teller dem. Gjorde den
+//      ikke det, ville de samme kortene telt to ganger.
+//
+// Tidspunktet er ditt. Det kan vaere samme dag som oppgjoeret, det kan vaere
+// fire maaneder senere. Ordren ligger og venter til du rekker det, og helt
+// til da holder den kvoten sin.
 app.post("/api/admin/orders/:id/frigi", krevAdmin, fang(async (req: any, res: any) => {
   const id = Number(req.params.id);
   const f = await db().execute({ sql: "SELECT id FROM orders WHERE id = ?", args: [id] });
   if (!f.rows.length) throw new HttpFeil(404, "Fant ikke ordren.");
-  res.json({ kvote_frigitt_at: await frigiKvote(id) });
+  // Bokfoeringen foerst. Feiler den, skal kvoten ikke slippes — da ville
+  // kortene vaert borte fra begge sider av regnestykket.
+  const lager = await bokførOrdre(id);
+  res.json({ kvote_frigitt_at: await frigiKvote(id), lager });
 }));
 
 app.get("/api/admin/orders", krevAdmin, fang(async (req: any, res: any) => {
@@ -1077,9 +1085,12 @@ app.put("/api/admin/orders/:id/kreditt", krevAdmin, fang(async (req: any, res: a
   await settRabattkode(id, req.body?.discount_code ?? null, req.body?.credit_note ?? null);
   if (req.body?.sendt) {
     await markerKredittSendt(id);
-    // Kortene går inn på lager her. Bokføringen er idempotent, så to klikk
-    // gir dem ikke to ganger.
-    await bokførOrdre(id);
+    // Kortene går IKKE inn på lager her. Oppgjøret er pengene til kunden;
+    // innlegging på hylla er en annen handling, på et annet tidspunkt — ofte
+    // mange uker senere. Det skjer med «Legg inn i beholdningen».
+    //
+    // Sto de to sammen, måtte beholdningen alltid vært à jour i samme
+    // øyeblikk som kunden fikk betalt. Den er den aldri.
     if (req.body?.varsle !== false) iBakgrunnen("oppgjør", sendOppgjør(id));
   }
   const r = await db().execute({ sql: "SELECT * FROM orders WHERE id = ?", args: [id] });

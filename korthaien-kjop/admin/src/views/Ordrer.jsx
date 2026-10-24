@@ -145,8 +145,8 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
               {ordre.status === "pending"
                 ? "Kortene er ikke kommet ennå."
                 : ordre.kvote_frigitt_at
-                ? `Kvoten ble frigitt ${dato(ordre.kvote_frigitt_at)}.`
-                : "Kvoten holdes til kortene er lagt inn i Mystore."}
+                ? `Lagt inn i beholdningen ${dato(ordre.kvote_frigitt_at)}.`
+                : "Kortene er ikke lagt inn i beholdningen ennå. Kvoten holdes til de er."}
             </span>
             <div className="rad-flex">
               <label className="dempet" style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 4 }}>
@@ -180,24 +180,26 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FRIGI ANTALL
+// LEGG INN I BEHOLDNINGEN
 // ─────────────────────────────────────────────────────────────────────────────
-// Kvoten fulgte før oppgjøret: gjorde du opp, var kortene frie. Men
-// oppgjøret skjer når kunden skal ha pengene sine, og innleggingen i Mystore
-// skjer når du rekker det. I mellomrommet var kortene verken i beholdningen
-// eller reservert — og da kunne de samme kortene loves bort på nytt.
+// Én handling, to virkninger, fordi det er samme hendelse: kortene settes i
+// hylla. De føres inn i varebeholdningen med antallet og tilstanden du satte
+// ved kontroll, og kvoten slippes — for fra nå teller beholdningen dem, og
+// ellers ville de telt to ganger.
 //
-// Nå holder ordren kvoten til du sier fra. Knappen er bekreftelsen på at
-// kortene står i hylla.
+// Dette lå før i oppgjøret. Men oppgjøret er pengene til kunden, og hylla er
+// noe annet: den kan vente en dag eller fire måneder. Bandt vi dem sammen,
+// måtte beholdningen alltid vært à jour i samme øyeblikk som kunden fikk
+// betalt — og den er den aldri.
 function Frigi({ ordre, onEndret, onFeil }) {
   const [jobber, setJobber] = useState(false);
 
   async function frigi() {
     if (
       !confirm(
-        `Frigi antallet på ${ordre.order_no}?\n\n` +
-          "Gjør dette først når kortene er lagt inn i Mystore. Fra nå teller " +
-          "beholdningen dem, og kvoten åpnes for nye innsendinger."
+        `Legge kortene fra ${ordre.order_no} inn i beholdningen?\n\n` +
+          "Kortene føres inn med antallet og tilstanden du satte ved kontroll, " +
+          "og kvoten slippes samtidig. Gjør det når kortene faktisk står i hylla."
       )
     )
       return;
@@ -214,7 +216,7 @@ function Frigi({ ordre, onEndret, onFeil }) {
 
   return (
     <button className="knapp primar" disabled={jobber} onClick={frigi}>
-      {jobber ? "Frigir…" : "Frigi antall"}
+      {jobber ? "Legger inn…" : "Legg inn i beholdningen"}
     </button>
   );
 }
@@ -762,8 +764,9 @@ function Oppgjør({ ordre, onEndret, onFeil }) {
           </div>
           {!ordre.kvote_frigitt_at && (
             <p className="dempet" style={{ margin: "8px 0 0" }}>
-              Kvoten holdes fortsatt. Trykk «Frigi antall» når kortene er lagt
-              inn i Mystore, så åpnes de for nye innsendinger.
+              Kortene er ikke lagt inn i beholdningen ennå, og ordren holder
+              derfor kvoten sin. Trykk «Legg inn i beholdningen» når de står i
+              hylla — det haster ikke, ordren blir liggende til du rekker det.
             </p>
           )}
         </div>
@@ -777,8 +780,9 @@ function Oppgjør({ ordre, onEndret, onFeil }) {
         <strong>Gjør opp</strong>
         <p className="dempet" style={{ margin: "4px 0 12px" }}>
           Lag en rabattkode på {kroner(ordre.total_ore)} i Mystore, lim den inn her,
-          og bekreft. Kvoten blir stående til du trykker «Frigi antall» — den
-          slippes når kortene er lagt inn, ikke når kunden har fått oppgjøret.
+          og bekreft. Dette er pengene til kunden — kortene kommer ikke på lager
+          av det. Det skjer når du trykker «Legg inn i beholdningen», og det kan
+          vente så lenge du vil.
         </p>
         <div className="rad-flex" style={{ marginBottom: 10 }}>
           <label>
