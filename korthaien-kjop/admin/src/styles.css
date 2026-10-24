@@ -298,7 +298,8 @@ textarea { width: 100%; font-family: inherit; }
    hvilket som helst bilde. */
 .butikk .b-banner {
   position: relative; margin-bottom: 22px; overflow: hidden;
-  border-radius: var(--runding, 10px); background: #111;
+  /* Samme hjørner som «Selg dine kort»-båndet rett under, i alle temaene. */
+  border-radius: 10px; background: #111;
   aspect-ratio: 16 / 9;
 }
 .butikk .b-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -662,7 +663,8 @@ textarea { width: 100%; font-family: inherit; }
   background: var(--blekk); color: var(--flate); border-color: var(--blekk);
 }
 .butikk[data-tema="avis"] .knapp.primar { background: var(--blekk); border-color: var(--blekk); }
-.butikk[data-tema="avis"] .b-band { border-radius: 0; }
+.butikk[data-tema="avis"] .b-band,
+.butikk[data-tema="avis"] .b-banner { border-radius: 0; }
 .butikk[data-tema="avis"] .b-flis img, .butikk[data-tema="avis"] .b-gbilde img { border-radius: 2px; }
 
 /* ── Katalog ─────────────────────────────────────────────────────────────────
@@ -708,6 +710,7 @@ textarea { width: 100%; font-family: inherit; }
 .butikk[data-tema="katalog"] .knapp,
 .butikk[data-tema="katalog"] .cond-valg button,
 .butikk[data-tema="katalog"] .b-band,
+.butikk[data-tema="katalog"] .b-banner,
 .butikk[data-tema="katalog"] .b-info div { border-radius: 0; }
 .butikk[data-tema="katalog"] .b-flis img, .butikk[data-tema="katalog"] .b-gbilde img { border-radius: 2px; }
 
