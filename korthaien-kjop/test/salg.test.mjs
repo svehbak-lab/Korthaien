@@ -12,6 +12,8 @@ import { rmSync } from "node:fs";
 const DB = `/tmp/salg-${process.pid}.db`;
 rmSync(DB, { force: true });
 process.env.DATABASE_URL = `file:${DB}`;
+// Disse testene legger kort i lagerboken; butikken skal lese derfra.
+process.env.LAGERKILDE = "bok";
 delete process.env.STRIPE_SECRET_KEY;
 delete process.env.RESEND_KEY;
 

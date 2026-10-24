@@ -1,3 +1,4 @@
+import { butikklagerSql } from "./lager.js";
 import { db } from "./db.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -14,7 +15,8 @@ import { db } from "./db.js";
 // når det gjør det, og da er det bedre at ett svar bestemmer begge deler enn
 // at to kall kan bli uenige.
 
-const PÅ_LAGER = `SELECT card_id FROM lager_bevegelser
+// Butikkens lager (se butikklagerSql): Mystore-speilet fram til overgangen.
+const PÅ_LAGER_SQL = () => `SELECT card_id FROM (${butikklagerSql()})
                    GROUP BY card_id HAVING SUM(antall) > 0`;
 
 export type Settinfo = {
@@ -60,14 +62,14 @@ export async function settinfo(kode: string): Promise<Settinfo | null> {
                    COALESCE(SUM(b.antall), 0) AS eksemplarer
               FROM cards c
               JOIN (SELECT card_id, SUM(antall) AS antall
-                      FROM lager_bevegelser GROUP BY card_id
+                      FROM (${butikklagerSql()}) GROUP BY card_id
                      HAVING SUM(antall) > 0) b ON b.card_id = c.id
              WHERE c.set_code = ? AND c.er_token = 0`,
       args: [code],
     }),
     db().execute({
       sql: `SELECT c.rarity AS raritet, COUNT(DISTINCT c.id) AS antall
-              FROM cards c JOIN (${PÅ_LAGER}) l ON l.card_id = c.id
+              FROM cards c JOIN (${PÅ_LAGER_SQL()}) l ON l.card_id = c.id
              WHERE c.set_code = ? AND c.er_token = 0
              GROUP BY c.rarity`,
       args: [code],

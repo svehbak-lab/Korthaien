@@ -24,6 +24,8 @@ import { rmSync } from "node:fs";
 const DB = `/tmp/foilfane-${process.pid}.db`;
 rmSync(DB, { force: true });
 process.env.DATABASE_URL = `file:${DB}`;
+// Disse testene legger kort i lagerboken; butikken skal lese derfra.
+process.env.LAGERKILDE = "bok";
 
 const { db, migrate, normaliser, settSetting } = await import("../src/db.ts");
 const { lagreIntervaller, butikkvisning } = await import("../src/salgspris.ts");

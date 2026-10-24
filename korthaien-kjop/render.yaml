@@ -48,6 +48,11 @@ services:
       # bare denne.
       - key: SHOP_URL
         value: https://admin.kortsalg.korthaien.no
+      # Hvor butikken leser beholdningen fra. «mystore» (standard) fram til
+      # overgangen; settes til «bok» i samme operasjon som lagerboken tømmes
+      # og får ny åpningspostering.
+      - key: LAGERKILDE
+        value: mystore
       # Stripe: hemmelig nøkkel (sk_test_… i testmodus) og signeringsnøkkelen
       # til webhooken https://api.kortsalg.korthaien.no/api/stripe/webhook.
       - key: STRIPE_SECRET_KEY

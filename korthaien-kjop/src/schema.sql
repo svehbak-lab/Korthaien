@@ -197,6 +197,9 @@ CREATE TABLE IF NOT EXISTS mystore_stock (
   product_name  TEXT,
   category      TEXT,
   synced_at     TEXT NOT NULL,
+  -- Sist antallet økte: når kortet kom inn. synced_at skrives om for alle
+  -- kort hver natt og sier derfor ingenting om hva som er nytt.
+  inn_at        TEXT,
   PRIMARY KEY (card_id, finish)
 );
 

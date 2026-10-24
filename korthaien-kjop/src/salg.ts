@@ -6,6 +6,7 @@ import { hentManuellePriser } from "./pricing.js";
 import { hentFrakt } from "./frakt.js";
 import { normaliserEpost, saldo as kredittSaldo } from "./kreditt.js";
 import { SORTERING } from "./orders.js";
+import { butikklagerSql } from "./lager.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SALG
@@ -97,7 +98,7 @@ async function tilgjengeligFor(linjer: { card_id: string }[], utenOrdre?: number
   if (!ider.length) return kart;
   const ph = ider.map(() => "?").join(",");
   const lager = await db().execute({
-    sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM lager_bevegelser
+    sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM (${butikklagerSql()})
            WHERE card_id IN (${ph}) GROUP BY card_id, finish, condition`,
     args: ider,
   });
@@ -279,7 +280,7 @@ export async function åpneKasse(
     const ph = ider.map(() => "?").join(",");
     const ledig = new Map<string, number>();
     const lager = await tx.execute({
-      sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM lager_bevegelser
+      sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM (${butikklagerSql()})
              WHERE card_id IN (${ph}) GROUP BY card_id, finish, condition`,
       args: ider,
     });

@@ -137,6 +137,15 @@ async function leggTilNyeKolonner(): Promise<void> {
   if (lager.size && !lager.has("pris_ore")) {
     await db().execute("ALTER TABLE mystore_stock ADD COLUMN pris_ore INTEGER");
   }
+  if (lager.size && !lager.has("inn_at")) {
+    await db().execute("ALTER TABLE mystore_stock ADD COLUMN inn_at TEXT");
+    // Første gang: når kortet sist kom inn i lagerboken. Kort som har kommet
+    // inn i Mystore etter september, får tidspunktet ved neste synk der
+    // antallet øker.
+    await db().execute(`UPDATE mystore_stock SET inn_at = (
+      SELECT MAX(b.created_at) FROM lager_bevegelser b
+       WHERE b.card_id = mystore_stock.card_id AND b.finish = mystore_stock.finish AND b.antall > 0)`);
+  }
 
   // Beløp gikk fra hele kroner til øre. De gamle kolonnene blir stående —
   // de er NOT NULL, og å bygge om tabellen for å bli kvitt dem er ikke verdt

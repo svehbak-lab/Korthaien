@@ -1,3 +1,4 @@
+import { butikklagerSql } from "./lager.js";
 import { db, hentSettings, type Condition, type Settings } from "./db.js";
 import { prisenFor, hentManuellePriser } from "./pricing.js";
 
@@ -333,12 +334,12 @@ export async function butikkvisning(opts: ButikkFilter) {
   // uten det — ellers telles fanene inni hverandre, og «Enkeltkort» viser
   // hvor mange enkeltkort det er blant foilene.
   if (opts.baresalg) {
-    hvor.push(`EXISTS (SELECT 1 FROM lager_bevegelser b
+    hvor.push(`EXISTS (SELECT 1 FROM (${butikklagerSql()}) b
                         WHERE b.card_id = c.id
                         GROUP BY b.card_id HAVING SUM(b.antall) > 0)`);
   } else if (!opts.sett && !opts.q) {
     // Uten sett, uten søk og uten lagerfilter ville vi hentet hele katalogen.
-    hvor.push(`EXISTS (SELECT 1 FROM lager_bevegelser b
+    hvor.push(`EXISTS (SELECT 1 FROM (${butikklagerSql()}) b
                         WHERE b.card_id = c.id
                         GROUP BY b.card_id HAVING SUM(b.antall) > 0)`);
   }
@@ -426,7 +427,7 @@ export async function butikkvisning(opts: ButikkFilter) {
     navn_ned: "c.name COLLATE NOCASE DESC",
     // Sist lagt inn. Bare bevegelser som la noe TIL teller — en linje som
     // tok kort ut av hylla gjør ikke kortet nytt i butikken.
-    nyeste: `(SELECT MAX(b.created_at) FROM lager_bevegelser b
+    nyeste: `(SELECT MAX(b.created_at) FROM (${butikklagerSql()}) b
                WHERE b.card_id = c.id AND b.antall > 0) DESC, c.name`,
   }[String(opts.sortering || "")] || (opts.sett
     ? "CAST(c.collector_number AS INTEGER), c.collector_number"
@@ -452,7 +453,7 @@ export async function butikkvisning(opts: ButikkFilter) {
   // trykkes som: et kort du bare har i vanlig utgave skal ikke stå i
   // foil-fanen fordi det finnes en foil-trykning et sted i verden.
   const påLager = (f: string) =>
-    `EXISTS (SELECT 1 FROM lager_bevegelser b
+    `EXISTS (SELECT 1 FROM (${butikklagerSql()}) b
               WHERE b.card_id = c.id AND b.finish = '${f}'
               GROUP BY b.card_id HAVING SUM(b.antall) > 0)`;
 

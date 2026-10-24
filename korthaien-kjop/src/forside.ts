@@ -1,3 +1,4 @@
+import { butikklagerSql } from "./lager.js";
 import { db } from "./db.js";
 import { hentSettings } from "./db.js";
 
@@ -30,7 +31,8 @@ export type ForsideSett = {
 
 // Kort du faktisk har. Samme regel som butikken bruker, så et sett ikke kan
 // stå på forsiden uten at det er noe å kjøpe i det.
-const PÅ_LAGER = `SELECT card_id FROM lager_bevegelser
+// Butikkens lager (se butikklagerSql): Mystore-speilet fram til overgangen.
+const PÅ_LAGER_SQL = () => `SELECT card_id FROM (${butikklagerSql()})
                    GROUP BY card_id HAVING SUM(antall) > 0`;
 
 export async function forsideSett(antall = 5): Promise<ForsideSett[]> {
@@ -45,7 +47,7 @@ export async function forsideSett(antall = 5): Promise<ForsideSett[]> {
   // mye, men dette kalles på hver forsidevisning.
   const plass = valgte.map(() => "?").join(",");
   const bilder = await db().execute({
-    sql: `WITH lager AS (${PÅ_LAGER}),
+    sql: `WITH lager AS (${PÅ_LAGER_SQL()}),
                rangert AS (
                  SELECT c.set_code, c.name, c.image_uri,
                         ROW_NUMBER() OVER (
@@ -84,7 +86,7 @@ async function settene(n: number) {
                    COALESCE(s.visningsnavn, s.name, c.set_code) AS name,
                    MAX(s.released_at) AS utgitt,
                    COUNT(DISTINCT c.id) AS kort
-              FROM (${PÅ_LAGER}) l
+              FROM (${PÅ_LAGER_SQL()}) l
               JOIN cards c ON c.id = l.card_id
               LEFT JOIN sets s ON s.code = c.set_code
              WHERE c.er_token = 0 AND c.set_code IN (${plass})
@@ -108,7 +110,7 @@ async function settene(n: number) {
                  COALESCE(s.visningsnavn, s.name, c.set_code) AS name,
                  MAX(s.released_at) AS utgitt,
                  COUNT(DISTINCT c.id) AS kort
-            FROM (${PÅ_LAGER}) l
+            FROM (${PÅ_LAGER_SQL()}) l
             JOIN cards c ON c.id = l.card_id
             LEFT JOIN sets s ON s.code = c.set_code
            WHERE c.er_token = 0

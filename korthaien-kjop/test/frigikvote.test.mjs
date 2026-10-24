@@ -16,6 +16,8 @@ import { rmSync } from "node:fs";
 const DB = `/tmp/frigi-${process.pid}.db`;
 rmSync(DB, { force: true });
 process.env.DATABASE_URL = `file:${DB}`;
+// Disse testene legger kort i lagerboken; butikken skal lese derfra.
+process.env.LAGERKILDE = "bok";
 
 const { migrate, db, settSetting } = await import("../src/db.ts");
 const { hentKvote, hentKvoterBulk, frigiKvote } = await import("../src/quota.ts");

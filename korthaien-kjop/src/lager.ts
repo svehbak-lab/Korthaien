@@ -60,6 +60,34 @@ export async function førBevegelser(rader: Bevegelse[]): Promise<number> {
   return gyldige.length;
 }
 
+// ── butikkens lager ──────────────────────────────────────────────────────────
+// Hvor butikken leser beholdningen fra. Fram til overgangen er det
+// Mystore-speilet, som synken holder oppdatert hver natt: lagerboken fikk
+// Mystore-beholdningen én gang i september og har ikke fulgt med siden, så
+// den viste solgte kort og manglet nye sett. Ved overgangen settes
+// LAGERKILDE=bok, og da leser butikken lagerboken.
+//
+// I Mystore-modus trekkes salg fra den nye butikken fra (og kansellerte
+// legges tilbake), så et testkjøp synes i beholdningen. Mystore fører ikke
+// tilstand, så alt står som NM til overgangen.
+//
+// Gjelder butikken: lista, kortsiden, forsiden, settinformasjonen og kassen.
+// Admin sine egne sider om lagerboken leser fortsatt boken direkte.
+export const lagerkilde = (): "bok" | "mystore" => (process.env.LAGERKILDE === "bok" ? "bok" : "mystore");
+
+// Én rad per bevegelse: card_id, finish, condition, antall, created_at.
+// created_at er når kortet kom inn — det «Nylig inn» sorterer på.
+export function butikklagerSql(): string {
+  if (lagerkilde() === "bok") {
+    return `SELECT card_id, finish, condition, antall, created_at FROM lager_bevegelser`;
+  }
+  return `SELECT card_id, finish, 'NM' AS condition, qty AS antall, inn_at AS created_at
+            FROM mystore_stock WHERE qty > 0
+          UNION ALL
+          SELECT card_id, finish, condition, antall, created_at
+            FROM lager_bevegelser WHERE grunn IN ('salg', 'reversert')`;
+}
+
 // ── beholdning ───────────────────────────────────────────────────────────────
 export async function beholdning(cardIds: string[]): Promise<Map<string, number>> {
   const kart = new Map<string, number>();
@@ -69,7 +97,7 @@ export async function beholdning(cardIds: string[]): Promise<Map<string, number>
     const del = ider.slice(i, i + 400);
     const r = await db().execute({
       sql: `SELECT card_id, finish, condition, SUM(antall) AS n
-              FROM lager_bevegelser
+              FROM (${butikklagerSql()})
              WHERE card_id IN (${del.map(() => "?").join(",")})
              GROUP BY card_id, finish, condition
             HAVING n <> 0`,
