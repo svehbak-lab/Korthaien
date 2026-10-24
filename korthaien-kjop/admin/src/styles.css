@@ -729,6 +729,120 @@ textarea { width: 100%; font-family: inherit; }
    der får avisserifen beholde karakteren. */
 .butikk[data-tema="avis"] .pris-stor { font-family: var(--skrift-navn); }
 
+/* ── tre temaer bygget mot målingene ──────────────────────────────────────
+   Lesesal, Natt og Signal er laget for å score høyt på det som kan måles:
+   - all tekst minst 7:1 (WCAG AAA), både på panel og sidebakgrunn — også
+     dempet tekst, prisen, lenkene, toppen, båndet og bunnen
+   - like brede sifre i alle priser (tabular-nums), så kolonnene flukter
+   - brødtekst i Inter, som har størst x-høyde av skriftene vi målte
+   Fargetonene er valgt; lysheten er regnet ut til hvert par når målet.
+   Ingen opasitet på tekst: gjennomsiktighet er det som stilltiende spiser
+   kontrasten. */
+
+.butikk[data-tema="lesesal"] {
+  --papir: #f3eee4; --flate: #fffcf6; --strek: #ddd3c2; --strek-sterk: #b5a68e;
+  --blekk: #1b1612; --dempet: #544c44;
+  --dyp: #1f1a15; --sjo: #225077; --sjo-svak: #e7eef5; --brass: #8c2d1c;
+  --aksent: #225077; --aksent-svak: #e7eef5;
+  --topp1: #1f1a15; --topp2: #2f271f;
+  --topp-tekst: #fbf7ef; --topp2-tekst: #efe6d6;
+  --oransje: #f0a04b; --oransje-tekst: #1f1206;
+  --logo-finne: #f0a04b;
+  --skrift: Inter, system-ui, sans-serif;
+  --skrift-navn: Literata, Georgia, serif;
+  --skrift-tall: Inter, system-ui, sans-serif;
+  --logo-font: 700 22px/1 Literata, Georgia, serif;
+  --logo-sperre: -0.01em;
+  --nav-font: 600 13px/1.2 var(--skrift);
+  --selg-font: 700 13px/1.2 var(--skrift);
+  --runding: 6px; --pille: 6px;
+  --sok-kant: none; --sok-bg: #efe6d6; --sok-tekst: #1b1612;
+  --band-dempet: #e6dccb; --bunn-dempet: #d9cdb8;
+  --kort: var(--flate); --kant: var(--strek); --svak: var(--dempet);
+  --fiber: none;
+}
+
+/* Mørkt: kortbildene er lyse og mettede, og står sterkest mot en mørk flate. */
+.butikk[data-tema="natt"] {
+  color-scheme: dark;
+  --papir: #0f1216; --flate: #181c22; --strek: #2b323b; --strek-sterk: #4a5562;
+  --blekk: #eef1f4; --dempet: #a0aab5;
+  --dyp: #1d4a43; --sjo: #6ecab7; --sjo-svak: #16302c; --brass: #e99716;
+  --aksent: #6ecab7; --aksent-svak: #16302c;
+  --topp1: #07090b; --topp2: #181c22;
+  --topp-tekst: #f4f6f8; --topp2-tekst: #dfe4ea;
+  --oransje: #f2a65a; --oransje-tekst: #1a1004;
+  --logo-finne: #f2a65a;
+  --skrift: Inter, system-ui, sans-serif;
+  --skrift-navn: Inter, system-ui, sans-serif;
+  --skrift-tall: Inter, system-ui, sans-serif;
+  --logo-font: 800 20px/1 var(--skrift);
+  --logo-sperre: -0.02em;
+  --nav-font: 600 13px/1.2 var(--skrift);
+  --selg-font: 700 13px/1.2 var(--skrift);
+  --runding: 8px; --pille: 999px;
+  --sok-kant: 1px solid #2b323b; --sok-bg: #2b323b; --sok-tekst: #eef1f4;
+  --band-dempet: #d3e6e1; --bunn-dempet: #b4bdc7;
+  --kort: var(--flate); --kant: var(--strek); --svak: var(--dempet);
+  --advarsel: #f0b860; --ok: #7fd49a; --feil: #ff9a9a;
+  --fiber: none;
+}
+.butikk[data-tema="natt"] .m-vent { border-color: #4a3b1e; background: #241d10; }
+
+/* Card Kingdom i temperament — mørkeblå topp, oransje til salg — men med
+   AAA-kontrast og en navneskrift tegnet for å være entydig. */
+.butikk[data-tema="signal"] {
+  --papir: #edf1f6; --flate: #ffffff; --strek: #d3dbe6; --strek-sterk: #a3b1c4;
+  --blekk: #0b1424; --dempet: #454f61;
+  --dyp: #0b2a5c; --sjo: #1445a3; --sjo-svak: #e3eaf8; --brass: #0d5a39;
+  --aksent: #1445a3; --aksent-svak: #e3eaf8;
+  --topp1: #0b2a5c; --topp2: #163f80;
+  --topp-tekst: #ffffff; --topp2-tekst: #eef3fc;
+  --oransje: #ffb547; --oransje-tekst: #1a0f00;
+  --logo-finne: #ffb547;
+  --skrift: Inter, system-ui, sans-serif;
+  --skrift-navn: "Atkinson Hyperlegible", Inter, system-ui, sans-serif;
+  --skrift-tall: Inter, system-ui, sans-serif;
+  --logo-font: 700 21px/1 var(--skrift-navn);
+  --logo-sperre: -0.005em;
+  --nav-font: 700 13px/1.2 var(--skrift);
+  --selg-font: 700 13px/1.2 var(--skrift);
+  --runding: 4px; --pille: 4px;
+  --sok-kant: none; --sok-bg: #1f4f9e; --sok-tekst: #ffffff;
+  --band-dempet: #d6e2f5; --bunn-dempet: #c9d6ec;
+  --kort: var(--flate); --kant: var(--strek); --svak: var(--dempet);
+  --fiber: none;
+}
+
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) {
+  /* Tekstfargen settes her og ikke arves fra body, som leser admins blekk
+     fra roten. I Natt ville det gitt mørk tekst på mørk flate. */
+  color: var(--blekk);
+}
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"])
+  :is(.pris, .pris-stor, .tall, .b-gnr) {
+  font-family: var(--skrift-tall); font-variant-numeric: tabular-nums;
+}
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"])
+  :is(.lenke, .b-gnavn) { font-family: var(--skrift-navn); }
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) .b-band {
+  color: var(--topp-tekst);
+}
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) .b-band p {
+  color: var(--band-dempet);
+}
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) .b-band a {
+  color: var(--oransje-tekst);
+}
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) .b-bunnjus .dempet {
+  color: var(--bunn-dempet); opacity: 1;
+}
+:is(.butikk[data-tema="lesesal"], .butikk[data-tema="natt"], .butikk[data-tema="signal"]) .b-toppsok input::placeholder {
+  color: var(--dempet); opacity: 1;
+}
+.butikk[data-tema="lesesal"] .faner button { font: 600 17px/1 var(--skrift-navn); }
+.butikk[data-tema="natt"] .b-band { border: 1px solid var(--strek); }
+
 /* ── temavelgeren i Admin ────────────────────────────────────────────────── */
 .temavalg { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); }
 .temakort {
