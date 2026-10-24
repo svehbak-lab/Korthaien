@@ -1020,3 +1020,17 @@ textarea { width: 100%; font-family: inherit; }
   width: 100%; border: 1px solid var(--strek-sterk); border-radius: var(--runding);
   padding: 8px 10px; font: inherit; font-size: 14px; background: var(--flate); color: var(--blekk);
 }
+
+/* ── kreditt i kassen: øverst i oppsummeringen, umulig å overse ─────────── */
+.kreditt-boks {
+  display: flex; gap: 12px; align-items: flex-start;
+  border: 2px solid var(--strek-sterk, var(--strek)); border-radius: var(--runding, 8px);
+  background: var(--flate); padding: 12px 14px; margin: 0 0 14px; cursor: default;
+}
+label.kreditt-boks { cursor: pointer; }
+.kreditt-boks.valgt { border-color: var(--aksent, var(--sjo)); background: var(--aksent-svak, var(--sjo-svak)); }
+.kreditt-boks input[type="checkbox"] { width: 22px; height: 22px; margin: 1px 0 0; flex: none; }
+.kreditt-boks > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kreditt-boks b { font-size: 15.5px; }
+.kreditt-saldo { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--blekk); }
+.kreditt-info { font-size: 13px; color: var(--dempet, var(--svak)); }

@@ -325,3 +325,41 @@ test("feil passord og en konto som bare bruker Google gir samme melding", async 
   });
   await assert.rejects(konto.loggInn("g@eksempel.no", "hvaSomHelst1"), /^Error: Feil e-postadresse eller passord\.$|Feil e-postadresse eller passord/);
 });
+
+test("kansellering til kort: bare kortdelen går til kortet, kredittdelen tilbake som kreditt", async () => {
+  const id = await kort("aaa", "Delt Betaling", "rare", 4500, 2);
+  const kari = await konto.loggInn("selger@eksempel.no", "passord123");
+  // Bruk opp eventuell rest fra tidligere tester, og gi nøyaktig 50 kr.
+  const saldo0 = await kreditt.saldo(kari.email);
+  if (saldo0) await kreditt.leggTil({ email: kari.email, ore: -saldo0, grunn: "manuell" });
+  await kreditt.leggTil({ email: kari.email, ore: 5000, grunn: "manuell" });
+
+  const refusjoner = [];
+  process.env.STRIPE_SECRET_KEY = "sk_test_falsk";
+  salg._brukStripe({
+    checkout: { sessions: { create: async () => ({ id: "cs_falsk", url: "https://stripe.test/cs" }) } },
+    refunds: { create: async (p) => { refusjoner.push(p); return { id: "re_falsk" }; } },
+  });
+  try {
+    // 45 kr kort + 55 kr frakt = 100 kr; 50 kr kreditt, 50 kr kort.
+    const r = await salg.åpneKasse(
+      { ...adresse, email: "", bruk_kreditt: true, linjer: [{ card_id: id, finish: "nonfoil", condition: "NM", antall: 1 }] },
+      kari
+    );
+    const o = (await db().execute({ sql: "SELECT id FROM salgsordrer WHERE ordrenr = ?", args: [r.ordrenr] })).rows[0];
+    await salg.fullfør(Number(o.id), "stripe", "pi_falsk");
+    await db().execute({ sql: "UPDATE salgsordrer SET stripe_betaling = 'pi_falsk' WHERE id = ?", args: [o.id] });
+    const betalt = await salg.hentOrdre(r.ordrenr);
+    assert.equal(Number(betalt.kreditt_ore), 5000);
+    assert.equal(Number(betalt.stripe_ore), 5000);
+    assert.equal(await kreditt.saldo(kari.email), 0);
+
+    await salg.kanseller(r.ordrenr, "Angret", "kort");
+    assert.equal(refusjoner.length, 1);
+    assert.equal(refusjoner[0].amount, 5000);
+    assert.equal(await kreditt.saldo(kari.email), 5000);
+  } finally {
+    delete process.env.STRIPE_SECRET_KEY;
+    salg._brukStripe(null);
+  }
+});

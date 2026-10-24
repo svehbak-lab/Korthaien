@@ -63,6 +63,8 @@ function stripe(): Stripe {
   if (!klient) klient = new Stripe(process.env.STRIPE_SECRET_KEY!);
   return klient;
 }
+// Bare for testene: en falsk Stripe-klient.
+export function _brukStripe(k: any) { klient = k; }
 // Vipps hos Stripe er i lukket forhåndsvisning. Når kontoen har fått
 // tilgang, slås den på med STRIPE_VIPPS=1. Forhåndsvisningen krever et
 // eget versjonsflagg på kallene som tar Vipps.

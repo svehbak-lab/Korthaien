@@ -310,7 +310,11 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
   const valgtFrakt = oppsett.frakt.find((f) => f.id === frakt);
   const varer = priset.reduce((n, l) => n + l.enhet_ore * l.antall, 0);
   const totalt = varer + (valgtFrakt?.pris_ore || 0);
-  const kreditt = h.kunde && brukKreditt ? Math.min(h.kreditt_ore, totalt) : 0;
+  const harKreditt = !!(h.kunde?.bekreftet && h.kreditt_ore > 0);
+  let kreditt = harKreditt && brukKreditt ? Math.min(h.kreditt_ore, totalt) : 0;
+  // Samme regel som serveren: Stripe tar ikke beløp under 3 kr, så da
+  // brukes litt mindre kreditt og resten betales med kort.
+  if (kreditt > 0 && totalt - kreditt > 0 && totalt - kreditt < 300) kreditt -= Math.min(kreditt, 300 - (totalt - kreditt));
   const åBetale = totalt - kreditt;
   const problemer = priset.some((l) => l.feil);
   const felt = (navn) => ({ value: a[navn], onChange: (e) => setA({ ...a, [navn]: e.target.value }) });
@@ -328,7 +332,7 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
         ...a,
         linjer: h.linjer.map(({ card_id, finish, condition, antall }) => ({ card_id, finish, condition, antall })),
         frakt_id: frakt,
-        bruk_kreditt: !!(h.kunde && brukKreditt),
+        bruk_kreditt: harKreditt && brukKreditt,
         notat,
         vilkar: vilkår,
       });
@@ -354,17 +358,6 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 18, alignItems: "start" }}>
         <div>
-          {!h.kunde && (
-            <div className="panel">
-              <div className="krop rad-flex">
-                <span>Har du konto? Logg inn for å bruke kreditten din og se ordren under «Min side».</span>
-                <button type="button" className="knapp liten" style={{ marginLeft: "auto" }} onClick={onLoggInn}>
-                  Logg inn
-                </button>
-              </div>
-            </div>
-          )}
-
           <div className="panel">
             <header><h3>Levering</h3></header>
             <div className="krop skjema">
@@ -422,6 +415,40 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
         <div className="panel" style={{ position: "sticky", top: 12 }}>
           <header><h3>Oppsummering</h3></header>
           <div className="krop">
+            {harKreditt && (
+              <label className={`kreditt-boks${brukKreditt ? " valgt" : ""}`}>
+                <input type="checkbox" checked={brukKreditt} onChange={(e) => setBrukKreditt(e.target.checked)} />
+                <span>
+                  <b>Bruk kreditt</b>
+                  <span className="kreditt-saldo">{kroner(h.kreditt_ore)} tilgjengelig</span>
+                  {brukKreditt && kreditt > 0 && (
+                    <span className="kreditt-info">
+                      {kroner(kreditt)} trekkes fra denne ordren
+                      {h.kreditt_ore - kreditt > 0 ? ` · ${kroner(h.kreditt_ore - kreditt)} igjen etterpå` : ""}
+                    </span>
+                  )}
+                </span>
+              </label>
+            )}
+            {h.kunde && !h.kunde.bekreftet && (
+              <div className="kreditt-boks">
+                <span>
+                  <b>Har du kreditt?</b>
+                  <span className="kreditt-info">Bekreft e-postadressen din med lenken vi sendte, så kan du bruke den her.</span>
+                </span>
+              </div>
+            )}
+            {!h.kunde && (
+              <div className="kreditt-boks">
+                <span>
+                  <b>Har du kreditt?</b>
+                  <span className="kreditt-info">Logg inn for å bruke den. Ordren havner også under «Min side».</span>
+                  <button type="button" className="knapp liten" style={{ marginTop: 8 }} onClick={onLoggInn}>
+                    Logg inn
+                  </button>
+                </span>
+              </div>
+            )}
             <table>
               <tbody>
                 <tr><td>Kort ({priset.reduce((n, l) => n + l.antall, 0)})</td><td className="h tall">{kroner(varer)}</td></tr>
@@ -435,17 +462,6 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
                 </tr>
               </tbody>
             </table>
-            {h.kunde && !h.kunde.bekreftet && (
-              <p className="dempet" style={{ fontSize: 12.5, margin: "10px 0 0" }}>
-                Bekreft e-postadressen din for å kunne bruke kreditt.
-              </p>
-            )}
-            {h.kunde && h.kreditt_ore > 0 && (
-              <label className="rad-flex" style={{ gap: 8, margin: "10px 0 0", fontSize: 13.5 }}>
-                <input type="checkbox" checked={brukKreditt} onChange={(e) => setBrukKreditt(e.target.checked)} />
-                Bruk kreditt ({kroner(h.kreditt_ore)} tilgjengelig)
-              </label>
-            )}
             <label className="rad-flex" style={{ gap: 8, margin: "12px 0", fontSize: 13.5, alignItems: "flex-start" }}>
               <input type="checkbox" checked={vilkår} onChange={(e) => setVilkår(e.target.checked)} />
               <span>
