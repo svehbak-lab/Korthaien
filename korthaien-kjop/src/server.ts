@@ -502,7 +502,7 @@ app.get("/api/admin/butikk", krevAdmin, fang(async (req: any, res: any) => {
 // Raden med nyeste sett paa forsiden. Oppdaterer seg selv fra lageret med
 // mindre forside_sett er satt i innstillingene.
 app.get("/api/admin/butikk/nyeste", krevAdmin, fang(async (req: any, res: any) => {
-  res.json({ sett: await forsideSett(Number(req.query.antall) || 6) });
+  res.json({ sett: await forsideSett(Number(req.query.antall) || 5) });
 }));
 
 app.get("/api/admin/butikk/kort/:id", krevAdmin, fang(async (req: any, res: any) => {

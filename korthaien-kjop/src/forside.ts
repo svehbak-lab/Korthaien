@@ -29,7 +29,7 @@ export type ForsideSett = {
 const PÅ_LAGER = `SELECT card_id FROM lager_bevegelser
                    GROUP BY card_id HAVING SUM(antall) > 0`;
 
-export async function forsideSett(antall = 6): Promise<ForsideSett[]> {
+export async function forsideSett(antall = 5): Promise<ForsideSett[]> {
   const n = Math.min(24, Math.max(1, Math.round(antall)));
   const valgte = await settene(n);
   if (!valgte.length) return [];
@@ -92,6 +92,9 @@ async function settene(n: number) {
     return valgt
       .map((c) => kart.get(String(c).toLowerCase()))
       .filter(Boolean)
+      // Raden har plass til et fast antall. Er det valgt flere, faller de
+      // siste ut i stedet for å brekke raden til en ny linje.
+      .slice(0, n)
       .map(rad);
   }
 

@@ -59,13 +59,13 @@ await leggInn("gammelt", "Gammelkort", 9, 1);
 await leggInn("tomt", "Aldri Solgt", 99, 0);
 
 test("lista er settene du har kort i, nyeste først", async () => {
-  const ut = await forsideSett(6);
+  const ut = await forsideSett(5);
   assert.deepEqual(ut.map((s) => s.code), ["nyest", "midt", "gammelt"]);
 });
 
 test("et sett uten kort på lager kommer ikke med", async () => {
   // En rute som leder til et tomt sett er verre enn én rute mindre.
-  const ut = await forsideSett(6);
+  const ut = await forsideSett(5);
   assert.equal(ut.find((s) => s.code === "tomt"), undefined);
 });
 
@@ -85,7 +85,7 @@ test("lista følger lageret av seg selv", async () => {
   // Kjernen i det hele: kommer det kort inn i et sett, dukker settet opp
   // uten at noen har gjort noe.
   await leggInn("tomt", "Nå Har Vi Et", 50, 4);
-  const ut = await forsideSett(6);
+  const ut = await forsideSett(5);
   assert.equal(ut[0].code, "tomt", "det nyeste settet skal ligge først");
   assert.equal(ut[0].kort_navn, "Nå Har Vi Et");
 });

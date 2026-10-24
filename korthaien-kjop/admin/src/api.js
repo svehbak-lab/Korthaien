@@ -111,7 +111,7 @@ export const api = {
   },
   butikkKort: (id) => kall(`/api/admin/butikk/kort/${id}`),
   kontakt: (felt) => kall("/api/kontakt", { method: "POST", body: felt }),
-  nyesteSett: (antall) => kall(`/api/admin/butikk/nyeste?antall=${antall || 6}`),
+  nyesteSett: (antall) => kall(`/api/admin/butikk/nyeste?antall=${antall || 5}`),
   salgspriser: () => kall("/api/admin/salgspriser"),
   lagreSalgspriser: (intervaller) =>
     kall("/api/admin/salgspriser", { method: "PUT", body: { intervaller } }),

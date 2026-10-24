@@ -877,13 +877,13 @@ textarea { width: 100%; font-family: inherit; }
 /* Et kortbilde og settnavnet under, slik Card Kingdom har det. Bildet er
    beskåret til en bred flis: hele kortet ville gjort raden tre ganger så
    høy som den trenger, og det er settet raden handler om. */
-/* Seks i bredden, alltid. Er det ikke plass — paa en telefon — blir raden en
+/* Fem i bredden, alltid. Er det ikke plass — paa en telefon — blir raden en
    karusell man drar sidelengs i stedet for aa pakke seg om til to rader med
    tre. Rekkefoelgen er nyeste foerst, og da skal den foerste ligge foerst og
    ikke et sted midt i bildet. */
 .butikk .b-settrad {
   display: grid; gap: 14px;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 @media (max-width: 900px) {
   .butikk .b-settrad {
@@ -909,11 +909,13 @@ textarea { width: 100%; font-family: inherit; }
   display: flex; flex-direction: column; gap: 2px;
 }
 .butikk .b-settflis:hover { border-color: var(--sjo); }
-/* Hoeyden er et utsnitt av illustrasjonen, og 108 er der utsnittet slutter
-   foer regelteksten begynner. Proevd med 150: da kom teksten med, og en
-   halv regeltekst i en rad med settbilder ser ut som en feil. */
+/* Bildet er et utsnitt av illustrasjonen, og det skal slutte foer
+   regelteksten begynner: en halv regeltekst i en rad med settbilder ser ut
+   som en feil. Hoeyden foelger derfor bredden (forholdet 1,63 er det gamle
+   utsnittet, 108 px hoeyt med seks i bredden), saa utsnittet er det samme
+   uansett hvor bred flisen er. Med fem i bredden blir bildet rundt 131 px. */
 .butikk .b-settflis img, .butikk .b-settflis-tom {
-  width: 100%; height: 108px; object-fit: cover; object-position: 50% 22%;
+  width: 100%; aspect-ratio: 1.63; height: auto; object-fit: cover; object-position: 50% 22%;
   display: block; background: var(--papir); margin-bottom: 8px;
 }
 .butikk .b-settflis .navn { font-weight: 600; font-size: 13px; line-height: 1.25; padding: 0 8px; }
