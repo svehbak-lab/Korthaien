@@ -613,3 +613,18 @@ CREATE TABLE IF NOT EXISTS nummerserier (
 
 INSERT OR IGNORE INTO nummerserier (navn, prefiks, neste, siffer) VALUES ('kjop', 'K-', 34, 5);
 INSERT OR IGNORE INTO nummerserier (navn, prefiks, neste, siffer) VALUES ('salg', 'S-', 15000, 0);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- BILDER
+-- ─────────────────────────────────────────────────────────────────────────
+-- Bilder du laster opp selv, som toppbildet på forsiden. De ligger i
+-- databasen fordi det ikke finnes noen fillagring ved siden av den, og de
+-- er få og små. Et bilde endres aldri: et nytt bilde får ny id, så det kan
+-- mellomlagres i nettleseren for alltid.
+CREATE TABLE IF NOT EXISTS bilder (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  mime       TEXT NOT NULL,
+  data       BLOB NOT NULL,
+  bredde     INTEGER,
+  hoyde      INTEGER,
+  created_at TEXT NOT NULL);

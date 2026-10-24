@@ -18,6 +18,7 @@ import {
 import { settinfo } from "./settinfo.js";
 import { HOLDER_KVOTE, frigiKvote } from "./quota.js";
 import { forsideSett } from "./forside.js";
+import { aktivtBanner, lagreBilde, hentBilde } from "./toppbanner.js";
 import { kontoer, bevegelser, saldo, leggTil as leggTilKreditt, settSaldo } from "./kreditt.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
@@ -498,6 +499,36 @@ app.get("/api/admin/butikk", krevAdmin, fang(async (req: any, res: any) => {
     })
   );
 }));
+
+// ── toppbildet og opplastede bilder ──────────────────────────────────────────
+app.get("/api/butikk/toppbanner", grense(REGLER.søk), fang(async (_req: any, res: any) => {
+  res.json({ banner: await aktivtBanner() });
+}));
+
+// Et bilde endres aldri — et nytt bilde får ny id — så det kan mellomlagres
+// for alltid.
+app.get("/api/bilder/:id", fang(async (req: any, res: any) => {
+  const b = await hentBilde(Number(req.params.id));
+  if (!b) throw new HttpFeil(404, "Fant ikke bildet");
+  res.setHeader("Content-Type", b.mime);
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(b.data);
+}));
+
+app.post(
+  "/api/admin/bilder",
+  krevAdmin,
+  express.raw({ type: ["image/jpeg", "image/png", "image/webp"], limit: "8mb" }),
+  fang(async (req: any, res: any) => {
+    if (!Buffer.isBuffer(req.body) || !req.body.length) throw new HttpFeil(400, "Fant ikke noe bilde i forespørselen.");
+    try {
+      res.json(await lagreBilde(req.body));
+    } catch (e: any) {
+      throw new HttpFeil(400, e.message);
+    }
+  })
+);
 
 // Raden med nyeste sett paa forsiden. Oppdaterer seg selv fra lageret med
 // mindre forside_sett er satt i innstillingene.
@@ -1456,8 +1487,16 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
     "usd_nok", "buy_pct", "min_buy_ore", "min_order_ore", "min_usd",
     "salg_trapp", "salg_faktor", "salg_avrunding", "default_conditions",
     "default_ladder", "order_expiry_days", "ship_to", "tema", "forside_sett",
-    "firmanavn", "org_nr", "retur_frakt",
+    "firmanavn", "org_nr", "retur_frakt", "toppbanner",
   ];
+  // Toppbildet tas imot i en fast form, så det som lagres alltid kan leses.
+  if (req.body && "toppbanner" in req.body) {
+    const b = req.body.toppbanner;
+    const dato = typeof b?.dato === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.dato) ? b.dato : null;
+    req.body.toppbanner = b
+      ? { bilde_id: Number(b.bilde_id) > 0 ? Number(b.bilde_id) : null, dato, aktiv: !!b.aktiv }
+      : null;
+  }
   for (const [k, v] of Object.entries(req.body || {})) {
     if (lov.includes(k as any)) await settSetting(k as keyof Settings, v);
   }

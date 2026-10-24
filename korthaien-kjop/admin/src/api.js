@@ -45,6 +45,25 @@ export async function lastNedPdf(sti, filnavn) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
+// Bilder du har lastet opp ligger bak API-et. Adressen må ha API-ets
+// domene foran seg, ellers spør nettleseren admin-domenet om bildet.
+export const bildeUrl = (id) => `${BASE}/api/bilder/${id}`;
+
+// Opplasting: selve filen som kropp, ikke JSON — et bilde på et par
+// megabyte blir en tredjedel større som base64.
+export async function lastOppBilde(fil) {
+  const r = await fetch(`${BASE}/api/admin/bilder`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": fil.type },
+    body: fil,
+  });
+  if (r.status === 401) throw new UtloggetFeil();
+  const data = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(data?.feil || `Serveren svarte ${r.status}`);
+  return data;
+}
+
 export class UtloggetFeil extends Error {
   constructor() {
     super("Sesjonen er utløpt");
@@ -258,5 +277,6 @@ export const kunde = {
   kurv: (linjer) => kundekall("/api/butikk/kurv", { method: "POST", body: { linjer } }),
   kasse: (felt) => kundekall("/api/butikk/kasse", { method: "POST", body: felt }),
   avbryt: (nr, m) => kundekall(`/api/butikk/kasse/${encodeURIComponent(nr)}/avbryt`, { method: "POST", body: { m } }),
+  toppbanner: () => kundekall("/api/butikk/toppbanner"),
   kvittering: (nr, m) => kundekall(`/api/butikk/ordre/${encodeURIComponent(nr)}?m=${encodeURIComponent(m)}`),
 };

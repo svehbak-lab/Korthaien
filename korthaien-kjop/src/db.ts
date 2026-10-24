@@ -428,6 +428,9 @@ export type Settings = {
   // automatisk» — og det er det den skal gjøre, så ingen trenger å huske å
   // bytte den.
   forside_sett: string[];
+  // Toppbildet på forsiden: et bilde av neste sett og datoen det kommer.
+  // Teksten over bildet følger datoen (se toppbanner.ts).
+  toppbanner: { bilde_id: number | null; dato: string | null; aktiv: boolean } | null;
   // Foretaket. Staar paa returssiden og i kassen, og skal kunne rettes uten
   // en utrulling — et organisasjonsnummer i koden er et som ingen finner.
   firmanavn: string;
@@ -458,6 +461,7 @@ const STANDARD: Settings = {
   ship_to: "Svein Bakke\nLørenvangen 23C\n0585 Oslo\n91774561",
   tema: "dagens",
   forside_sett: [],
+  toppbanner: null,
   firmanavn: "KORTHAIEN SVEIN-HARALD BAKKE",
   org_nr: "914503493",
   retur_frakt: "kunde",

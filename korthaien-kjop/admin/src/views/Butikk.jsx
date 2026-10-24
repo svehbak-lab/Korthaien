@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { api, kroner, CONDITIONS } from "../api.js";
 import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside, OmOss, Retur } from "./Bunn.jsx";
 import { HandelProvider, useHandel, LeggIKurven, KurvSide, Kasse, Kvittering, LoggInn, NyttPassord, MinSide, Bekreft } from "./Handel.jsx";
-import { kunde as kapi } from "../api.js";
+import { kunde as kapi, bildeUrl } from "../api.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BUTIKKVISNING
@@ -1354,6 +1354,13 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil }) {
 function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }) {
   const [kort, setKort] = useState(null);
   const [nyeste, setNyeste] = useState(null);
+  // Toppbildet av neste sett. Undefined mens vi spør, null når det ikke er
+  // noe — da står den vanlige teksten der i stedet.
+  const [banner, setBanner] = useState(undefined);
+
+  useEffect(() => {
+    kapi.toppbanner().then((r) => setBanner(r.banner)).catch(() => setBanner(null));
+  }, []);
 
   // Raden med nyeste sett. Henter seg selv fra lageret, saa ingen trenger aa
   // huske aa bytte den naar et sett kommer inn.
@@ -1383,6 +1390,12 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
 
   return (
     <>
+      {banner ? (
+        <div className="b-banner">
+          <img src={bildeUrl(banner.bilde_id)} alt="" />
+          <div className="b-banner-tekst">{banner.tekst}</div>
+        </div>
+      ) : banner === null && (
       <div className="b-hero">
         <h1>Magic-kort fra Korthaien</h1>
         <p>
@@ -1392,6 +1405,7 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
           kort. Søk i feltet øverst, eller bla gjennom butikken.
         </p>
       </div>
+      )}
 
       {/* Sealed og komplette sett, oeverst og ved siden av hverandre. De
           staar foerst fordi de er det faerreste og dyreste du har — og de
