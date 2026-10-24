@@ -599,7 +599,9 @@ textarea { width: 100%; font-family: inherit; }
   --logo-finne: #14110d;
   --skrift: "IBM Plex Sans", system-ui, sans-serif;
   --skrift-navn: Fraunces, Georgia, "Times New Roman", serif;
-  --skrift-tall: Fraunces, Georgia, serif;
+  /* Tallene i Plex, ikke Fraunces: Fraunces har sifre av ulik bredde, og
+     @fontsource-utgaven mangler tnum, så prisene sto skjevt nedover lister. */
+  --skrift-tall: "IBM Plex Sans", system-ui, sans-serif;
   --logo-font: 700 27px/1 var(--skrift-navn);
   --logo-sperre: -0.02em;
   --nav-font: 600 12px/1.2 var(--skrift);
@@ -679,8 +681,10 @@ textarea { width: 100%; font-family: inherit; }
    uskarp, og gjentas uten søm. */
 .butikk[data-tema="pergament"] {
   --papir: #efe4cd; --flate: #faf4e6; --strek: #d9c9a9; --strek-sterk: #bda987;
-  --blekk: #16203a; --dempet: #7a6f5c;
-  --dyp: #0d1424; --sjo: #1d3557; --sjo-svak: #e6eaf1; --brass: #8f6b1a;
+  /* Dempet og gull er mørket så de holder WCAG 4,5 også oppå fiberen
+     (simulert, verste 5 % av flekkene, både på papir og flate). */
+  --blekk: #16203a; --dempet: #5f5645;
+  --dyp: #0d1424; --sjo: #1d3557; --sjo-svak: #e6eaf1; --brass: #6b4e0f;
   --aksent: #1d3557; --aksent-svak: #e6eaf1;
   --topp1: #0d1424; --topp2: #1d3557;
   --topp-tekst: #f7f1e3; --topp2-tekst: #e4ddcc;
@@ -695,7 +699,7 @@ textarea { width: 100%; font-family: inherit; }
   --selg-font: 600 12.5px/1.2 var(--skrift);
   --runding: 3px; --pille: 2px;
   --sok-kant: 1px solid #2b3550; --sok-bg: var(--oransje); --sok-tekst: #1a1205;
-  --fiber: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23f)' opacity='0.38'/%3E%3C/svg%3E");
+  --fiber: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23f)' opacity='0.25'/%3E%3C/svg%3E");
 }
 .butikk[data-tema="pergament"] .b-logo span { text-transform: uppercase; }
 .butikk[data-tema="pergament"] .b-navvalg { letter-spacing: 0.11em; text-transform: uppercase; }
@@ -720,8 +724,10 @@ textarea { width: 100%; font-family: inherit; }
 .butikk[data-tema="pergament"] .lenke { font-family: var(--skrift-navn); }
 .butikk[data-tema="avis"] .b-gnavn,
 .butikk[data-tema="pergament"] .b-gnavn { font-size: 15px; }
-.butikk[data-tema="avis"] .pris-stor,
-.butikk[data-tema="avis"] .pris { font-family: var(--skrift-tall); }
+.butikk[data-tema="avis"] .pris { font-family: var(--skrift-tall); font-variant-numeric: tabular-nums; }
+/* Den store prisen står alene på kortsiden og skal ikke flukte med noe —
+   der får avisserifen beholde karakteren. */
+.butikk[data-tema="avis"] .pris-stor { font-family: var(--skrift-navn); }
 
 /* ── temavelgeren i Admin ────────────────────────────────────────────────── */
 .temavalg { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); }
