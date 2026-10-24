@@ -41,6 +41,12 @@ export const REGLER = {
   pris: { navn: "pris", perMinutt: 90, perDøgn: 5000 },
   ordre: { navn: "ordre", perMinutt: 3, perDøgn: 20 },
   innlogging: { navn: "innlogging", perMinutt: 5, perDøgn: 50 },
+  // Kundeinnlogging, registrering og «glemt passord». Strengt nok til at
+  // ingen kan prøve passord i stor skala, romslig nok for en som tastet feil.
+  konto: { navn: "konto", perMinutt: 8, perDøgn: 100 },
+  // Å åpne kassen holder av kort. Taket hindrer at noen tømmer butikken for
+  // tilgjengelige kort ved å åpne kasser i en løkke.
+  kasse: { navn: "kasse", perMinutt: 6, perDøgn: 60 },
 } as const;
 
 const MINUTT = 60_000;

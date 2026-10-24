@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import "dotenv/config";
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -36,12 +37,37 @@ import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER } from "./ratelimit.js";
 import { ordreStatistikk, lagerrapport, lagerhistorikk, lagreLagermåling } from "./statistikk.js";
 import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./rapporter.js";
+import {
+  COOKIE as KUNDE_COOKIE, KontoFeil, registrer, loggInn, nySesjon, avsluttSesjon, settKundeCookie,
+  fjernKundeCookie, kundeValgfri, krevKunde, oppdaterProfil, byttPassord, lagTilbakestilling,
+  brukTilbakestilling, harGoogle, googleUrl, googleKunde,
+} from "./kunder.js";
+import {
+  SalgFeil, prisKurv, åpneKasse, avbrytKasse, stripeHendelse, hentOrdre as hentSalgsordre, offentlig, kundensOrdrer,
+  tilhørerKunde, kvitteringsmerke, tilgjengeligKreditt, adminOrdrer, settStatus, kanseller,
+  salgsstatistikk, utløpGamle, harStripe, butikkUrl, RESERVASJON_MIN,
+} from "./salg.js";
+import { bevegelser as kredittBevegelser } from "./kreditt.js";
+import { sendTilbakestilling } from "./epost.js";
 import { kuppliste, vaktelisteSammendrag, settKuppOppsett, kjørKuppjakt, egenliste, settRettet } from "./kupp.js";
 
 const app = express();
 // Render setter X-Forwarded-For. Uten dette ser alle brukere ut som én
 // adresse, og rate limiting ville rammet alle samtidig.
 app.set("trust proxy", 1);
+// Stripe signerer den rå kroppen. Webhooken må derfor få den før
+// JSON-tolkingen under gjør den om til et objekt.
+app.post("/api/stripe/webhook", express.raw({ type: "application/json", limit: "1mb" }), async (req: any, res: any) => {
+  try {
+    await stripeHendelse(req.body, String(req.headers["stripe-signature"] || ""));
+    res.json({ ok: true });
+  } catch (e: any) {
+    const status = e instanceof SalgFeil ? e.status : 500;
+    if (status >= 500) console.error("Stripe-webhook feilet:", e);
+    // 4xx for ugyldig signatur; 5xx får Stripe til å prøve igjen senere.
+    res.status(status).json({ feil: e?.message || "feil" });
+  }
+});
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
@@ -556,6 +582,160 @@ app.get("/api/admin/lagerhistorikk", krevAdmin, fang(async (_req: any, res: any)
 
 app.get("/api/admin/lagerrapport", krevAdmin, fang(async (_req: any, res: any) => {
   res.json(await lagerrapport());
+}));
+
+// ── kundekonto ───────────────────────────────────────────────────────────────
+// Kunden logges inn med en egen cookie, adskilt fra admin. Butikken bor
+// foreløpig i admin, men rutene er offentlige, så siden kan flyttes til
+// korthaien.no uten at noe her endres.
+app.get("/api/konto/meg", kundeValgfri, fang(async (req: any, res: any) => {
+  res.json({
+    kunde: req.kunde || null,
+    google: harGoogle(),
+    kreditt_ore: req.kunde ? await tilgjengeligKreditt(req.kunde.email) : 0,
+  });
+}));
+
+app.post("/api/konto/registrer", grense(REGLER.konto), fang(async (req: any, res: any) => {
+  const k = await registrer({ email: req.body?.email, passord: req.body?.passord, navn: req.body?.navn });
+  settKundeCookie(res, await nySesjon(k.id));
+  res.json({ kunde: k });
+}));
+
+app.post("/api/konto/logg-inn", grense(REGLER.konto), fang(async (req: any, res: any) => {
+  const k = await loggInn(req.body?.email, req.body?.passord);
+  settKundeCookie(res, await nySesjon(k.id));
+  res.json({ kunde: k });
+}));
+
+app.post("/api/konto/logg-ut", fang(async (req: any, res: any) => {
+  await avsluttSesjon(req.cookies?.[KUNDE_COOKIE]);
+  fjernKundeCookie(res);
+  res.json({ ok: true });
+}));
+
+app.put("/api/konto/profil", krevKunde, fang(async (req: any, res: any) => {
+  res.json({ kunde: await oppdaterProfil(req.kunde.id, req.body || {}) });
+}));
+
+app.put("/api/konto/passord", krevKunde, grense(REGLER.konto), fang(async (req: any, res: any) => {
+  await byttPassord(req.kunde.id, req.body?.gammelt, req.body?.nytt);
+  res.json({ ok: true });
+}));
+
+// Svarer det samme enten adressen finnes eller ikke. Ellers kunne hvem som
+// helst slå opp hvem som er kunde.
+app.post("/api/konto/glemt", grense(REGLER.konto), fang(async (req: any, res: any) => {
+  const t = await lagTilbakestilling(req.body?.email);
+  if (t) await sendTilbakestilling(t.email, `${butikkUrl()}/?nyttpassord=${encodeURIComponent(t.token)}`);
+  res.json({ ok: true });
+}));
+
+app.post("/api/konto/nytt-passord", grense(REGLER.konto), fang(async (req: any, res: any) => {
+  const k = await brukTilbakestilling(req.body?.token, req.body?.passord);
+  settKundeCookie(res, await nySesjon(k.id));
+  res.json({ kunde: k });
+}));
+
+const googleTilbake = (req: any) => `${req.protocol}://${req.get("host")}/api/konto/google/tilbake`;
+
+app.get("/api/konto/google", (req: any, res: any) => {
+  if (!harGoogle()) return res.status(404).send("Google-innlogging er ikke satt opp.");
+  // state i en kortlevd cookie: svaret fra Google må høre til en innlogging
+  // som startet her, ellers kan noen logge deg inn på sin egen konto.
+  const state = randomBytes(16).toString("hex");
+  res.cookie("kh_gstate", state, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge: 600_000 });
+  res.redirect(googleUrl(googleTilbake(req), state));
+});
+
+app.get("/api/konto/google/tilbake", async (req: any, res: any) => {
+  const tilbake = (q: string) => res.redirect(`${butikkUrl()}/?${q}`);
+  try {
+    if (!req.query.state || req.query.state !== req.cookies?.kh_gstate) return tilbake("innlogging=feil");
+    res.clearCookie("kh_gstate");
+    if (!req.query.code) return tilbake("innlogging=avbrutt");
+    const k = await googleKunde(String(req.query.code), googleTilbake(req));
+    settKundeCookie(res, await nySesjon(k.id));
+    tilbake("innlogging=ok");
+  } catch (e: any) {
+    console.error("Google-innlogging feilet:", e?.message);
+    tilbake("innlogging=feil");
+  }
+});
+
+app.get("/api/konto/ordrer", krevKunde, fang(async (req: any, res: any) => {
+  res.json({ ordrer: await kundensOrdrer(req.kunde) });
+}));
+
+app.get("/api/konto/ordrer/:nr", krevKunde, fang(async (req: any, res: any) => {
+  const o = await hentSalgsordre(String(req.params.nr));
+  if (!o || !(await tilhørerKunde(o, req.kunde))) throw new HttpFeil(404, "Fant ikke ordren");
+  res.json({ ordre: offentlig(o) });
+}));
+
+app.get("/api/konto/kreditt", krevKunde, fang(async (req: any, res: any) => {
+  res.json({
+    tilgjengelig_ore: await tilgjengeligKreditt(req.kunde.email),
+    bevegelser: await kredittBevegelser(req.kunde.email),
+  });
+}));
+
+// ── butikk: kurv og kasse ────────────────────────────────────────────────────
+app.get("/api/butikk/oppsett", fang(async (_req: any, res: any) => {
+  const { hentFrakt } = await import("./frakt.js");
+  res.json({
+    frakt: await hentFrakt(true),
+    betaling: harStripe(),
+    google: harGoogle(),
+    reservasjon_min: RESERVASJON_MIN,
+  });
+}));
+
+app.post("/api/butikk/kurv", grense(REGLER.pris), fang(async (req: any, res: any) => {
+  await utløpGamle();
+  res.json({ linjer: await prisKurv(req.body?.linjer || []) });
+}));
+
+app.post("/api/butikk/kasse", grense(REGLER.kasse), kundeValgfri, fang(async (req: any, res: any) => {
+  res.json(await åpneKasse(req.body || {}, req.kunde || null));
+}));
+
+app.post("/api/butikk/kasse/:nr/avbryt", fang(async (req: any, res: any) => {
+  await avbrytKasse(String(req.params.nr), String(req.body?.m || ""));
+  res.json({ ok: true });
+}));
+
+// Kvitteringen etter betaling. Åpnes med merket fra lenken, så en gjest kan
+// se ordren sin uten konto — men ingen kan bla seg gjennom andres.
+app.get("/api/butikk/ordre/:nr", fang(async (req: any, res: any) => {
+  const nr = String(req.params.nr);
+  if (String(req.query.m || "") !== kvitteringsmerke(nr)) throw new HttpFeil(404, "Fant ikke ordren");
+  const o = await hentSalgsordre(nr);
+  if (!o) throw new HttpFeil(404, "Fant ikke ordren");
+  res.json({ ordre: offentlig(o) });
+}));
+
+// ── salgsordrer i admin ──────────────────────────────────────────────────────
+app.get("/api/admin/salg/ordrer", krevAdmin, fang(async (req: any, res: any) => {
+  res.json(await adminOrdrer(String(req.query.status || "pakkes")));
+}));
+
+app.get("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: any) => {
+  const o = await hentSalgsordre(String(req.params.nr));
+  if (!o) throw new HttpFeil(404, "Fant ikke ordren");
+  res.json({ ordre: o });
+}));
+
+app.patch("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: any) => {
+  res.json({ ordre: await settStatus(String(req.params.nr), req.body || {}) });
+}));
+
+app.post("/api/admin/salg/ordrer/:nr/kanseller", krevAdmin, fang(async (req: any, res: any) => {
+  res.json({ ordre: await kanseller(String(req.params.nr), String(req.body?.grunn || "")) });
+}));
+
+app.get("/api/admin/salg/statistikk", krevAdmin, fang(async (_req: any, res: any) => {
+  res.json(await salgsstatistikk());
 }));
 
 // ── rapporter ────────────────────────────────────────────────────────────────
@@ -1314,6 +1494,9 @@ app.use((feil: any, _req: any, res: any, _next: any) => {
   if (feil instanceof HttpFeil) {
     return res.status(feil.status).json({ feil: feil.message, ...(feil.data || {}) });
   }
+  if (feil instanceof SalgFeil || feil instanceof KontoFeil) {
+    return res.status(feil.status).json({ feil: feil.message, ...((feil as any).data || {}) });
+  }
   console.error(feil);
   res.status(500).json({ feil: "Uventet serverfeil" });
 });
@@ -1337,6 +1520,10 @@ migrate()
     // en timer som aldri skal rekke å slå til.
     ryddeTimer = setInterval(() => utløpGamleOrdrer().catch(console.error), 3600_000);
     ryddeTimer.unref?.();
+    // Forlatte kasser frigis hvert minutt, så kortene kommer tilbake i
+    // butikken kort tid etter at kvarteret er ute.
+    const kasseTimer = setInterval(() => utløpGamle(true).catch(console.error), 60_000);
+    kasseTimer.unref?.();
   })
   .catch((e) => {
     console.error("Klarte ikke migrere databasen:", e);

@@ -26,6 +26,9 @@ async function send(brev: {
   html: string;
   tekst: string;
   svarTil?: string;
+  // Blindkopi. Ordrebekreftelsene går til deg som kopi av nøyaktig det
+  // kunden fikk, så du ser det samme som hen.
+  bcc?: string;
 }): Promise<Utfall> {
   if (!NØKKEL()) return { sendt: false, grunn: "RESEND_KEY mangler" };
   try {
@@ -35,6 +38,7 @@ async function send(brev: {
       body: JSON.stringify({
         from: FRA(),
         to: [brev.til],
+        ...(brev.bcc ? { bcc: [brev.bcc] } : {}),
         reply_to: brev.svarTil || SVAR_TIL(),
         subject: brev.emne,
         html: brev.html,
@@ -69,12 +73,12 @@ const trygg = (s: unknown) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[t]!
   );
 
-const RAMME = (innhold: string) => `<!doctype html>
+const RAMME = (innhold: string, undertittel = "Innkjøp fra kunder") => `<!doctype html>
 <html lang="nb"><body style="margin:0;background:#f6f5f2;padding:24px 12px;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#22201d">
   <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:10px;padding:28px">
     <div style="font-weight:700;font-size:17px;margin-bottom:2px">Korthaien</div>
-    <div style="color:#7a746c;font-size:13px;margin-bottom:20px">Innkjøp fra kunder</div>
+    <div style="color:#7a746c;font-size:13px;margin-bottom:20px">${undertittel}</div>
     ${innhold}
     <hr style="border:none;border-top:1px solid #eae7e1;margin:26px 0 14px">
     <div style="color:#7a746c;font-size:12px;line-height:1.6">
@@ -364,5 +368,146 @@ export async function sendKontakt(inn: {
     tekst: `${emne}\n\nNavn: ${inn.navn}\nE-post: ${inn.epost}\n\n${inn.melding}`,
     // Svar går til kunden, ikke til butikkens egen adresse.
     svarTil: inn.epost,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SALG
+// ─────────────────────────────────────────────────────────────────────────────
+// Bekreftelsen sendes når betalingen er bekreftet, ikke når kassen åpnes. Du
+// får den samme e-posten som blindkopi. Linjene står i samme rekkefølge som
+// kjøpsordrene — sett, raritet, navn — så du kan plukke etter den.
+
+const FINISH = (f: string) => (f === "foil" ? " (foil)" : "");
+
+function salgslinjer(linjer: any[]): string {
+  const rader = linjer
+    .map(
+      (l, i) => `<tr style="border-bottom:1px solid #f1eee8">
+      <td style="padding:6px 8px;color:#7a746c;font-size:13px">${i + 1}</td>
+      <td style="padding:6px 8px">${trygg(l.card_name)}${FINISH(l.finish)}</td>
+      <td style="padding:6px 8px;color:#7a746c;font-size:13px">${trygg(l.set_name)}${
+        l.collector_number ? ` #${trygg(l.collector_number)}` : ""
+      }${l.rarity ? `<br><span style="font-size:11px">${trygg(l.rarity)}</span>` : ""}</td>
+      <td style="padding:6px 8px">${trygg(l.condition)}</td>
+      <td style="padding:6px 8px;text-align:right">${l.antall}</td>
+      <td style="padding:6px 8px;text-align:right;white-space:nowrap">${kr(Number(l.enhet_ore) * Number(l.antall))}</td>
+    </tr>`
+    )
+    .join("");
+  return `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:14px 0">
+    <thead><tr style="text-align:left;border-bottom:1px solid #eae7e1;color:#7a746c;font-size:12px">
+      <th style="padding:6px 8px">#</th><th style="padding:6px 8px">Kort</th>
+      <th style="padding:6px 8px">Utgave</th><th style="padding:6px 8px">Tilstand</th>
+      <th style="padding:6px 8px;text-align:right">Antall</th>
+      <th style="padding:6px 8px;text-align:right">Sum</th>
+    </tr></thead><tbody>${rader}</tbody></table>`;
+}
+
+function summer(o: any): { html: string; tekst: string } {
+  const rader: [string, string][] = [
+    [`Kort (${o.antall_kort} stk.)`, kr(o.varer_ore)],
+    [`Frakt: ${o.frakt_navn}`, kr(o.frakt_ore)],
+    ["Totalt", kr(Number(o.varer_ore) + Number(o.frakt_ore))],
+  ];
+  if (Number(o.kreditt_ore) > 0) rader.push(["Betalt med kreditt", kr(o.kreditt_ore)]);
+  if (Number(o.stripe_ore) > 0) rader.push(["Betalt med kort/Vipps", kr(o.stripe_ore)]);
+  return {
+    html: `<table style="width:100%;font-size:14px;margin:4px 0 16px">${rader
+      .map(
+        ([a, b], i) => `<tr><td style="padding:3px 8px;${i === 2 ? "font-weight:700" : ""}">${trygg(a)}</td>
+        <td style="padding:3px 8px;text-align:right;${i === 2 ? "font-weight:700" : ""}">${b}</td></tr>`
+      )
+      .join("")}</table>`,
+    tekst: rader.map(([a, b]) => `${a}: ${b}`).join("\n"),
+  };
+}
+
+const leveringsadresse = (o: any) =>
+  [o.kunde_navn, o.adresse, `${o.postnr || ""} ${o.poststed || ""}`.trim(), o.land && o.land !== "NO" ? o.land : ""]
+    .filter(Boolean)
+    .join("\n");
+
+export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
+  const { hentOrdre } = await import("./salg.js");
+  const r = await db().execute({ sql: "SELECT ordrenr FROM salgsordrer WHERE id = ?", args: [ordreId] });
+  const o = await hentOrdre(String(r.rows[0]?.ordrenr || ""));
+  if (!o) return { sendt: false, grunn: "fant ikke ordren" };
+  const s = summer(o);
+  const adr = leveringsadresse(o);
+  const html = RAMME(
+    `<h2 style="font-size:20px;margin:0 0 6px">Takk for bestillingen!</h2>
+     <p style="margin:0 0 14px">Ordrenummer <b>${trygg(o.ordrenr)}</b>. Betalingen er mottatt, og jeg pakker
+     kortene så snart jeg kan. Du får en ny e-post når pakken er sendt.</p>
+     ${salgslinjer(o.linjer)}
+     ${s.html}
+     <div style="font-size:13px;color:#7a746c;margin-bottom:4px">Sendes til</div>
+     <div style="white-space:pre-line;margin-bottom:14px">${trygg(adr)}</div>
+     ${o.kunde_notat ? `<div style="font-size:13px;color:#7a746c;margin-bottom:4px">Din kommentar</div>
+       <div style="white-space:pre-line;margin-bottom:14px">${trygg(o.kunde_notat)}</div>` : ""}
+     <p style="font-size:13px;color:#7a746c;margin:14px 0 0">Kortene selges etter avansemetoden for brukte
+     varer, så merverdiavgift er ikke spesifisert for dem. Frakt inkluderer 25 % mva.
+     Angrerett: 14 dager fra du mottar varene. Korthaien Svein-Harald Bakke, org.nr. 914 503 493.</p>`,
+    "Ordrebekreftelse"
+  );
+  const tekst = [
+    `Takk for bestillingen! Ordrenummer ${o.ordrenr}.`,
+    "",
+    ...o.linjer.map(
+      (l: any, i: number) =>
+        `${i + 1}. ${l.card_name}${FINISH(l.finish)} — ${l.set_name}${l.collector_number ? ` #${l.collector_number}` : ""}${
+          l.rarity ? ` [${l.rarity}]` : ""
+        }, ${l.condition}, ${l.antall} stk., ${kr(Number(l.enhet_ore) * Number(l.antall))}`
+    ),
+    "",
+    s.tekst,
+    "",
+    "Sendes til:",
+    adr,
+  ].join("\n");
+  return send({
+    til: String(o.email),
+    bcc: MIN_ADRESSE(),
+    emne: `Ordrebekreftelse ${o.ordrenr} — Korthaien`,
+    html,
+    tekst,
+  });
+}
+
+export async function varsleSendt(ordreId: number): Promise<Utfall> {
+  const r = await db().execute({ sql: "SELECT * FROM salgsordrer WHERE id = ?", args: [ordreId] });
+  const o: any = r.rows[0];
+  if (!o) return { sendt: false, grunn: "fant ikke ordren" };
+  const spor = o.sporingsnr
+    ? `<p>Sporingsnummer: <b>${trygg(o.sporingsnr)}</b>. Du kan følge pakken på
+       <a href="https://sporing.posten.no/sporing/${encodeURIComponent(o.sporingsnr)}">posten.no</a>.</p>`
+    : "";
+  return send({
+    til: String(o.email),
+    emne: `Ordre ${o.ordrenr} er sendt — Korthaien`,
+    html: RAMME(
+      `<h2 style="font-size:20px;margin:0 0 6px">Pakken er på vei</h2>
+       <p>Ordre <b>${trygg(o.ordrenr)}</b> er levert til posten med ${trygg(String(o.frakt_navn || "").toLowerCase())}.</p>
+       ${spor}`,
+      "Ordren er sendt"
+    ),
+    tekst: `Ordre ${o.ordrenr} er sendt med ${o.frakt_navn}.${o.sporingsnr ? ` Sporingsnummer: ${o.sporingsnr}.` : ""}`,
+  });
+}
+
+export async function sendTilbakestilling(email: string, lenke: string): Promise<Utfall> {
+  return send({
+    til: email,
+    emne: "Nytt passord — Korthaien",
+    html: RAMME(
+      `<h2 style="font-size:20px;margin:0 0 6px">Lag et nytt passord</h2>
+       <p>Trykk på knappen for å velge et nytt passord. Lenken virker i én time, og bare én gang.</p>
+       <p style="margin:20px 0"><a href="${trygg(lenke)}" style="background:#22201d;color:#fff;padding:10px 18px;
+         border-radius:6px;text-decoration:none;font-weight:600">Velg nytt passord</a></p>
+       <p style="font-size:13px;color:#7a746c">Ba du ikke om dette, kan du se bort fra e-posten. Ingenting endres
+       før noen bruker lenken.</p>`,
+      "Kundekonto"
+    ),
+    tekst: `Velg et nytt passord her (virker i én time): ${lenke}\n\nBa du ikke om dette, kan du se bort fra e-posten.`,
   });
 }

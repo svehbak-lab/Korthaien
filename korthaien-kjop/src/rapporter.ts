@@ -42,7 +42,9 @@ export type Salgsrapport = {
 // en femtedel av beløpet. Den regnes av summen, ikke linje for linje, så
 // avrundingen skjer én gang.
 const MVA_SATS = 0.25;
-const mvaAv = (inklØre: number) => Math.round((inklØre * MVA_SATS) / (1 + MVA_SATS));
+// Symmetrisk avrunding, så en kreditering gir nøyaktig minus mvaen på salget.
+const mvaAv = (inklØre: number) =>
+  Math.sign(inklØre) * Math.round((Math.abs(inklØre) * MVA_SATS) / (1 + MVA_SATS));
 
 function beløp(uten: number, med: number) {
   const mva = mvaAv(med);
@@ -73,8 +75,17 @@ export async function salgsrapport(fra: string, til: string): Promise<Salgsrappo
   const r = await db().execute({
     sql: `SELECT ordrenr, kunde_navn, uten_mva_ore, med_mva_ore, betalt_at
             FROM salgsordrer
-           WHERE status = 'betalt' AND betalt_at >= ? AND betalt_at < ?
+           WHERE status IN ('betalt', 'pakket', 'sendt', 'kansellert') AND betalt_at >= ? AND betalt_at < ?
            ORDER BY betalt_at, ordrenr`,
+    args: [før, etter],
+  });
+  // En kansellert ordre er et salg i perioden den ble betalt, og en
+  // tilbakeføring i perioden den ble kansellert. Den forsvinner ikke fra den
+  // første: en rapport som allerede er levert som bilag, skal ikke endre seg.
+  const k = await db().execute({
+    sql: `SELECT ordrenr, kunde_navn, uten_mva_ore, med_mva_ore, kansellert_at
+            FROM salgsordrer
+           WHERE status = 'kansellert' AND kansellert_at >= ? AND kansellert_at < ?`,
     args: [før, etter],
   });
 
@@ -89,6 +100,17 @@ export async function salgsrapport(fra: string, til: string): Promise<Salgsrappo
       ...beløp(Number(x.uten_mva_ore) || 0, Number(x.med_mva_ore) || 0),
     });
   }
+  for (const x of k.rows as any[]) {
+    const dato = osloDato(String(x.kansellert_at));
+    if (dato < fra || dato > til) continue;
+    rader.push({
+      dato,
+      ordrenr: `${x.ordrenr} kreditert`,
+      kunde: String(x.kunde_navn),
+      ...beløp(-(Number(x.uten_mva_ore) || 0), -(Number(x.med_mva_ore) || 0)),
+    });
+  }
+  rader.sort((a, b) => (a.dato === b.dato ? a.ordrenr.localeCompare(b.ordrenr) : a.dato < b.dato ? -1 : 1));
 
   const uten = rader.reduce((n, x) => n + x.uten_mva_ore, 0);
   const med = rader.reduce((n, x) => n + x.med_mva_ore, 0);
@@ -314,7 +336,7 @@ export async function oppsummeringPdf(rapport: Salgsrapport): Promise<Buffer> {
 
   doc.moveDown(1.5);
   doc.font("Helvetica").fontSize(9).fillColor(GRÅ).text(
-    `Grunnlag: ${rapport.rader.length} salg i Korthaiens nettbutikk med betalingsdato i perioden. ` +
+    `Grunnlag: ${rapport.rader.length} salg i Korthaiens nettbutikk med betalingsdato i perioden, fratrukket ordrer kreditert i perioden. ` +
       "«Salg med mva» er frakt og annet med ordinær mva, beløpet inkluderer 25 % mva. " +
       "«Salg uten mva» er varer solgt etter avansemetoden; mva av marginen beregnes separat. " +
       "Salgslisten for samme periode viser hvert enkelt salg.",

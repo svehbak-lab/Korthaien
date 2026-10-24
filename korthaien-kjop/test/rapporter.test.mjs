@@ -34,7 +34,8 @@ const nov1 = await salg("2026-10-31T23:30:00.000Z", 20000, 5500);
 // 30. sept 21:30 UTC er fortsatt 30. sept i Norge.
 const sep30 = await salg("2026-09-30T21:30:00.000Z", 30000, 0);
 const midt = await salg("2026-10-15T12:00:00.000Z", 4000, 15000);
-const kansellert = await salg("2026-10-16T12:00:00.000Z", 99900, 0, "kansellert");
+// En forlatt kasse: aldri betalt, aldri et salg.
+const kansellert = await salg(null, 99900, 0, "utlopt");
 const åpen = await salg(null, 88800, 0, "apen");
 
 test("salg havner på norsk dato, ikke UTC-dato", async () => {
@@ -97,4 +98,21 @@ test("hver linje i listen: uten mva + mva = ordresummen", async () => {
   // Summen av linjenes mva er den samme som står i oppsummeringen.
   assert.equal(r.rader.reduce((n, x) => n + x.mva_ore, 0), r.sum.herav_mva_ore);
   assert.equal(r.sum.eks_mva_ore + r.sum.herav_mva_ore, r.sum.totalt_ore);
+});
+
+test("pakket og sendt teller som salg; kansellert trekkes fra i perioden den ble kansellert", async () => {
+  const pakket = await salg("2026-12-03T12:00:00.000Z", 1000, 0, "pakket");
+  const sendt = await salg("2026-12-04T12:00:00.000Z", 2000, 5500, "sendt");
+  const kans = await salg("2026-12-05T12:00:00.000Z", 4000, 5500, "kansellert");
+  await db().execute({ sql: "UPDATE salgsordrer SET kansellert_at = ? WHERE ordrenr = ?", args: ["2027-01-10T12:00:00.000Z", kans] });
+
+  const des = await salgsrapport("2026-12-01", "2026-12-31");
+  assert.deepEqual(des.rader.map((x) => x.ordrenr), [pakket, sendt, kans]);
+  assert.equal(des.sum.totalt_ore, 1000 + 7500 + 9500);
+
+  const jan = await salgsrapport("2027-01-01", "2027-01-31");
+  assert.deepEqual(jan.rader.map((x) => x.ordrenr), [`${kans} kreditert`]);
+  assert.equal(jan.sum.totalt_ore, -9500);
+  assert.equal(jan.sum.herav_mva_ore, -1100);
+  assert.equal(jan.rader[0].eks_mva_ore + jan.rader[0].mva_ore, jan.rader[0].sum_ore);
 });

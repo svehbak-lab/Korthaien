@@ -480,9 +480,110 @@ CREATE TABLE IF NOT EXISTS salgsordrer (
   email         TEXT,
   uten_mva_ore  INTEGER NOT NULL DEFAULT 0,
   med_mva_ore   INTEGER NOT NULL DEFAULT 0,
-  -- apen, betalt, kansellert
+  -- apen       kassen er åpnet, kortene er holdt av til utloper_at
+  -- betalt     betalingen er bekreftet; ordren venter på pakking
+  -- pakket     plukket og pakket, ikke levert til posten
+  -- sendt      levert til posten
+  -- kansellert avbrutt etter betaling, pengene tilbake som kreditt
+  -- utlopt     kassen ble forlatt; reservasjonen er frigitt
   status        TEXT NOT NULL DEFAULT 'apen',
   betalt_at     TEXT,
-  created_at    TEXT NOT NULL);
+  created_at    TEXT NOT NULL,
+  -- NULL for gjestekjøp.
+  kunde_id      INTEGER,
+  telefon       TEXT,
+  adresse       TEXT,
+  postnr        TEXT,
+  poststed      TEXT,
+  land          TEXT,
+  frakt_id      INTEGER,
+  frakt_navn    TEXT,
+  frakt_ore     INTEGER NOT NULL DEFAULT 0,
+  varer_ore     INTEGER NOT NULL DEFAULT 0,
+  -- Hvordan summen ble betalt. kreditt_ore + stripe_ore = varer + frakt.
+  kreditt_ore   INTEGER NOT NULL DEFAULT 0,
+  stripe_ore    INTEGER NOT NULL DEFAULT 0,
+  stripe_session TEXT,
+  utloper_at    TEXT,
+  antall_kort   INTEGER NOT NULL DEFAULT 0,
+  pakket_at     TEXT,
+  sendt_at      TEXT,
+  kansellert_at TEXT,
+  sporingsnr    TEXT,
+  kunde_notat   TEXT,
+  admin_notat   TEXT);
+
+-- Linjene fryser navn, sett og pris slik de var da kassen ble åpnet. Prisene
+-- i butikken endrer seg med importen; kunden skal betale det hen ble vist.
+CREATE TABLE IF NOT EXISTS salgsordre_linjer (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  ordre_id         INTEGER NOT NULL REFERENCES salgsordrer(id) ON DELETE CASCADE,
+  card_id          TEXT NOT NULL,
+  finish           TEXT NOT NULL,
+  condition        TEXT NOT NULL,
+  antall           INTEGER NOT NULL,
+  enhet_ore        INTEGER NOT NULL,
+  card_name        TEXT NOT NULL,
+  set_code         TEXT NOT NULL,
+  set_name         TEXT NOT NULL,
+  collector_number TEXT,
+  rarity           TEXT);
+
+CREATE INDEX IF NOT EXISTS idx_salgslinjer_ordre ON salgsordre_linjer (ordre_id);
+CREATE INDEX IF NOT EXISTS idx_salgslinjer_kort ON salgsordre_linjer (card_id, finish, condition);
+CREATE INDEX IF NOT EXISTS idx_salgsordrer_kunde ON salgsordrer (kunde_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_salgsordrer_epost ON salgsordrer (email, created_at);
+CREATE INDEX IF NOT EXISTS idx_salgsordrer_stripe ON salgsordrer (stripe_session);
+
+-- Månedstallene for salgsdashbordet, skrevet ned når måneden er over. De
+-- kan regnes ut av ordrene, men et tall som er logget, står selv om en ordre
+-- senere kanselleres eller rettes — det er det du sammenligner med.
+CREATE TABLE IF NOT EXISTS salg_statistikk (
+  maaned        TEXT PRIMARY KEY,
+  omsetning_ore INTEGER NOT NULL,
+  ordrer        INTEGER NOT NULL,
+  kort          INTEGER NOT NULL,
+  logget_at     TEXT NOT NULL);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- KUNDEKONTO
+-- ─────────────────────────────────────────────────────────────────────────
+-- Kontoen er e-postadressen. Det er den kjøpssiden allerede bruker, og den
+-- kredittboka er nøklet på — så en kunde som har solgt til deg før, har
+-- kreditten sin første gang hen logger inn.
+--
+-- Passordet lagres aldri, bare et scrypt-hash av det. En kunde som bare
+-- bruker Google, har ingen passord_hash i det hele tatt.
+CREATE TABLE IF NOT EXISTS kunder (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  email             TEXT NOT NULL UNIQUE,
+  navn              TEXT NOT NULL DEFAULT '',
+  passord_hash      TEXT,
+  google_sub        TEXT UNIQUE,
+  telefon           TEXT,
+  adresse           TEXT,
+  postnr            TEXT,
+  poststed          TEXT,
+  land              TEXT NOT NULL DEFAULT 'NO',
+  created_at        TEXT NOT NULL,
+  sist_inne_at      TEXT);
+
+-- Sesjonen er et tilfeldig token i en cookie; her ligger bare et hash av
+-- det. Lekker tabellen, kan ingen logge inn med det som står her.
+CREATE TABLE IF NOT EXISTS kunde_sesjoner (
+  token_hash  TEXT PRIMARY KEY,
+  kunde_id    INTEGER NOT NULL REFERENCES kunder(id) ON DELETE CASCADE,
+  expires_at  TEXT NOT NULL,
+  created_at  TEXT NOT NULL);
+
+-- Engangslenker for nytt passord. Samme grunn til å lagre hash.
+CREATE TABLE IF NOT EXISTS kunde_tokens (
+  token_hash  TEXT PRIMARY KEY,
+  kunde_id    INTEGER NOT NULL REFERENCES kunder(id) ON DELETE CASCADE,
+  formaal     TEXT NOT NULL,
+  expires_at  TEXT NOT NULL,
+  brukt_at    TEXT);
+
+CREATE INDEX IF NOT EXISTS idx_kunde_sesjoner_kunde ON kunde_sesjoner (kunde_id);
 
 CREATE INDEX IF NOT EXISTS idx_salgsordrer_betalt ON salgsordrer (status, betalt_at);
