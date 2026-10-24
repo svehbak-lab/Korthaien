@@ -33,6 +33,9 @@ export type Kunde = {
   land: string;
   har_passord: boolean;
   har_google: boolean;
+  // Har kunden vist at hen eier e-postadressen? Kreditten og gjesteordrene
+  // på adressen følger først kontoen når den er det.
+  bekreftet: boolean;
   created_at: string;
 };
 
@@ -51,6 +54,7 @@ export function tilKunde(x: any): Kunde {
     land: String(x.land || "NO"),
     har_passord: !!x.passord_hash,
     har_google: !!x.google_sub,
+    bekreftet: !!x.epost_bekreftet_at,
     created_at: String(x.created_at),
   };
 }
@@ -129,12 +133,9 @@ export async function loggInn(emailInn: string, passord: string): Promise<Kunde>
   // Samme svar for ukjent adresse og feil passord, og samme tidsbruk: ellers
   // kan hvem som helst finne ut hvem som er kunde.
   const ok = await riktigPassord(passord, rad?.passord_hash ?? "scrypt$AAAAAAAAAAAAAAAAAAAAAA==$" + "A".repeat(86));
-  if (!rad || !ok) {
-    if (rad && !rad.passord_hash && rad.google_sub) {
-      throw new KontoFeil(401, "Denne kontoen bruker Google-innlogging. Trykk «Fortsett med Google», eller lag et passord med «Glemt passord».");
-    }
-    throw new KontoFeil(401, "Feil e-postadresse eller passord.");
-  }
+  // Samme melding også for kontoer som bare bruker Google: en egen melding
+  // for dem ville fortalt hvem som har konto.
+  if (!rad || !ok) throw new KontoFeil(401, "Feil e-postadresse eller passord.");
   return tilKunde(rad);
 }
 
@@ -194,7 +195,13 @@ export function settKundeCookie(res: Response, token: string): void {
 }
 
 export function fjernKundeCookie(res: Response): void {
-  res.clearCookie(COOKIE);
+  // Samme flagg som da den ble satt, ellers kan nettleseren overse slettingen.
+  const påTvers = process.env.COOKIE_CROSS_SITE === "1";
+  res.clearCookie(COOKIE, {
+    httpOnly: true,
+    secure: påTvers || process.env.NODE_ENV === "production",
+    sameSite: påTvers ? "none" : "lax",
+  });
 }
 
 // Legger kunden på forespørselen hvis hen er innlogget. Stopper ingenting:
@@ -243,19 +250,63 @@ export async function oppdaterProfil(
   return (await hentKunde(id))!;
 }
 
-export async function byttPassord(id: number, gammelt: string, nytt: string): Promise<void> {
+export async function byttPassord(id: number, gammelt: string, nytt: string, nåværendeToken?: string): Promise<void> {
   sjekkPassordkrav(nytt);
   const r = await db().execute({ sql: "SELECT passord_hash FROM kunder WHERE id = ?", args: [id] });
   const lagret = (r.rows[0] as any)?.passord_hash ?? null;
   // Har kontoen ikke passord (bare Google), finnes det ikke noe gammelt å
   // bekrefte. Da er innloggingen beviset.
   if (lagret && !(await riktigPassord(gammelt, lagret))) throw new KontoFeil(400, "Det nåværende passordet stemmer ikke.");
-  await db().execute({ sql: "UPDATE kunder SET passord_hash = ? WHERE id = ?", args: [await hashPassord(nytt), id] });
+  await db().batch(
+    [
+      { sql: "UPDATE kunder SET passord_hash = ? WHERE id = ?", args: [await hashPassord(nytt), id] },
+      // Nytt passord logger ut alle andre steder enn her.
+      {
+        sql: "DELETE FROM kunde_sesjoner WHERE kunde_id = ? AND token_hash <> ?",
+        args: [id, nåværendeToken ? hash(nåværendeToken) : ""],
+      },
+    ],
+    "write"
+  );
 }
 
 // ── glemt passord ───────────────────────────────────────────────────────────
 // Lenken varer i en time og kan brukes én gang. Den gjelder også for
 // Google-kontoer som vil ha et passord i tillegg, og for kunder fra
+// kjøpssiden som aldri har hatt konto: å eie adressen er beviset.
+// Engangslenker: én for nytt passord (en time), én for å bekrefte
+// e-postadressen (et døgn). Begge brukes én gang, atomisk: to klikk på samme
+// lenke i samme øyeblikk kan ikke begge gå gjennom.
+async function lagEngangslenke(kundeId: number, formaal: "reset" | "bekreft", varighetMs: number): Promise<string> {
+  const token = nyttToken();
+  await db().execute({
+    sql: `INSERT INTO kunde_tokens (token_hash, kunde_id, formaal, expires_at) VALUES (?, ?, ?, ?)`,
+    args: [hash(token), kundeId, formaal, new Date(Date.now() + varighetMs).toISOString()],
+  });
+  return token;
+}
+
+async function brukEngangslenke(token: string, formaal: "reset" | "bekreft"): Promise<number> {
+  const nå = new Date().toISOString();
+  const h = hash(String(token || ""));
+  const r = await db().execute({
+    sql: `UPDATE kunde_tokens SET brukt_at = ?
+           WHERE token_hash = ? AND formaal = ? AND brukt_at IS NULL AND expires_at > ?
+       RETURNING kunde_id`,
+    args: [nå, h, formaal, nå],
+  });
+  const id = Number((r.rows[0] as any)?.kunde_id || 0);
+  if (!id) throw new KontoFeil(400, "Lenken er utløpt eller allerede brukt. Be om en ny.");
+  // Andre lenker av samme slag for kontoen er utdatert nå.
+  await db().execute({
+    sql: "DELETE FROM kunde_tokens WHERE kunde_id = ? AND formaal = ? AND token_hash <> ?",
+    args: [id, formaal, h],
+  });
+  return id;
+}
+
+// «Glemt passord». Lenken varer i en time og kan brukes én gang. Den gjelder
+// også for Google-kontoer som vil ha et passord i tillegg, og for kunder fra
 // kjøpssiden som aldri har hatt konto: å eie adressen er beviset.
 export async function lagTilbakestilling(emailInn: string): Promise<{ email: string; token: string } | null> {
   const email = normaliserEpost(emailInn);
@@ -275,34 +326,41 @@ export async function lagTilbakestilling(emailInn: string): Promise<{ email: str
     });
     rad = ny.rows[0];
   }
-  const token = nyttToken();
-  await db().execute({
-    sql: `INSERT INTO kunde_tokens (token_hash, kunde_id, formaal, expires_at) VALUES (?, ?, 'reset', ?)`,
-    args: [hash(token), Number(rad.id), new Date(Date.now() + 60 * 60 * 1000).toISOString()],
-  });
-  return { email, token };
+  return { email, token: await lagEngangslenke(Number(rad.id), "reset", 60 * 60 * 1000) };
 }
 
 export async function brukTilbakestilling(token: string, nytt: string): Promise<Kunde> {
   sjekkPassordkrav(nytt);
+  const id = await brukEngangslenke(token, "reset");
   const nå = new Date().toISOString();
-  const r = await db().execute({
-    sql: `SELECT * FROM kunde_tokens WHERE token_hash = ? AND formaal = 'reset' AND brukt_at IS NULL AND expires_at > ?`,
-    args: [hash(String(token || "")), nå],
-  });
-  const t: any = r.rows[0];
-  if (!t) throw new KontoFeil(400, "Lenken er utløpt eller allerede brukt. Be om en ny.");
   await db().batch(
     [
-      { sql: "UPDATE kunde_tokens SET brukt_at = ? WHERE token_hash = ?", args: [nå, t.token_hash] },
-      { sql: "UPDATE kunder SET passord_hash = ? WHERE id = ?", args: [await hashPassord(nytt), t.kunde_id] },
+      // Lenken kom til adressen, så adressen er bekreftet.
+      {
+        sql: "UPDATE kunder SET passord_hash = ?, epost_bekreftet_at = COALESCE(epost_bekreftet_at, ?) WHERE id = ?",
+        args: [await hashPassord(nytt), nå, id],
+      },
       // Nytt passord logger ut alle andre steder. Var det noen andre som
       // hadde kommet seg inn, er de ute nå.
-      { sql: "DELETE FROM kunde_sesjoner WHERE kunde_id = ?", args: [t.kunde_id] },
+      { sql: "DELETE FROM kunde_sesjoner WHERE kunde_id = ?", args: [id] },
     ],
     "write"
   );
-  return (await hentKunde(Number(t.kunde_id)))!;
+  return (await hentKunde(id))!;
+}
+
+// Bekreftelse av e-postadressen etter registrering.
+export async function lagBekreftelse(kundeId: number): Promise<string> {
+  return lagEngangslenke(kundeId, "bekreft", 24 * 60 * 60 * 1000);
+}
+
+export async function bekreftEpost(token: string): Promise<Kunde> {
+  const id = await brukEngangslenke(token, "bekreft");
+  await db().execute({
+    sql: "UPDATE kunder SET epost_bekreftet_at = COALESCE(epost_bekreftet_at, ?) WHERE id = ?",
+    args: [new Date().toISOString(), id],
+  });
+  return (await hentKunde(id))!;
 }
 
 // ── Google ──────────────────────────────────────────────────────────────────
@@ -352,19 +410,34 @@ export async function googleKunde(kode: string, redirectUri: string): Promise<Ku
   // Først på Google-ID (adressen kan være endret hos Google), så på e-post.
   // Finnes en passordkonto med samme bekreftede adresse, kobles Google til
   // den — Google har bekreftet at det er samme person som eier adressen.
+  const nå = new Date().toISOString();
   const påSub = await db().execute({ sql: "SELECT * FROM kunder WHERE google_sub = ?", args: [sub] });
   if (påSub.rows[0]) return tilKunde(påSub.rows[0]);
   const påEpost = await finnPåEpost(email);
   if (påEpost) {
-    await db().execute({ sql: "UPDATE kunder SET google_sub = ? WHERE id = ?", args: [sub, påEpost.id] });
-    if (!påEpost.navn && krav.name) {
-      await db().execute({ sql: "UPDATE kunder SET navn = ? WHERE id = ?", args: [String(krav.name).slice(0, 120), påEpost.id] });
+    const navn = !påEpost.navn && krav.name ? String(krav.name).slice(0, 120) : påEpost.navn;
+    if (påEpost.epost_bekreftet_at) {
+      await db().execute({ sql: "UPDATE kunder SET google_sub = ?, navn = ? WHERE id = ?", args: [sub, navn, påEpost.id] });
+    } else {
+      // En ubekreftet konto på adressen kan være laget av noen andre enn
+      // eieren. Google har nå bevist hvem som eier adressen: passordet som
+      // ble satt av den ukjente, og alle innloggingene, fjernes.
+      await db().batch(
+        [
+          {
+            sql: "UPDATE kunder SET google_sub = ?, navn = ?, passord_hash = NULL, epost_bekreftet_at = ? WHERE id = ?",
+            args: [sub, navn, nå, påEpost.id],
+          },
+          { sql: "DELETE FROM kunde_sesjoner WHERE kunde_id = ?", args: [påEpost.id] },
+        ],
+        "write"
+      );
     }
     return (await hentKunde(Number(påEpost.id)))!;
   }
   const ny = await db().execute({
-    sql: "INSERT INTO kunder (email, navn, google_sub, created_at) VALUES (?, ?, ?, ?) RETURNING *",
-    args: [email, String(krav.name || "").slice(0, 120), sub, new Date().toISOString()],
+    sql: "INSERT INTO kunder (email, navn, google_sub, epost_bekreftet_at, created_at) VALUES (?, ?, ?, ?, ?) RETURNING *",
+    args: [email, String(krav.name || "").slice(0, 120), sub, nå, nå],
   });
   return tilKunde(ny.rows[0]);
 }

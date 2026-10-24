@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import Stripe from "stripe";
 import { db, CONDITIONS, type Condition } from "./db.js";
 import { hentSalgsOppsett, salgsprisØre, hentManuellSalg } from "./salgspris.js";
@@ -77,10 +77,20 @@ function hemmelighet(): string {
 }
 export const kvitteringsmerke = (ordrenr: string) =>
   createHmac("sha256", hemmelighet()).update(`kvittering:${ordrenr}`).digest("hex").slice(0, 32);
+export function riktigMerke(ordrenr: string, merke: string): boolean {
+  const a = Buffer.from(kvitteringsmerke(ordrenr));
+  const b = Buffer.from(String(merke || ""));
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 // ── tilgjengelighet ─────────────────────────────────────────────────────────
 // Lageret minus det som er holdt av i åpne kasser. Kassen som spør, kan
 // utelates — den skal ikke konkurrere med seg selv.
+//
+// En åpen ordre holder kortene til den faktisk er lukket, ikke bare til
+// kvarteret er ute: Stripe-siden kan fortsatt betales til vi har lukket den
+// (se utløpGamle). Teller vi den som ledig før det, kan siste eksemplar
+// selges to ganger.
 async function tilgjengeligFor(linjer: { card_id: string }[], utenOrdre?: number) {
   const ider = [...new Set(linjer.map((l) => l.card_id))];
   const kart = new Map<string, number>();
@@ -95,10 +105,10 @@ async function tilgjengeligFor(linjer: { card_id: string }[], utenOrdre?: number
   const holdt = await db().execute({
     sql: `SELECT l.card_id, l.finish, l.condition, SUM(l.antall) AS n
             FROM salgsordre_linjer l JOIN salgsordrer o ON o.id = l.ordre_id
-           WHERE o.status = 'apen' AND o.utloper_at > ? AND l.card_id IN (${ph})
+           WHERE o.status = 'apen' AND l.card_id IN (${ph})
              ${utenOrdre ? "AND o.id <> ?" : ""}
            GROUP BY l.card_id, l.finish, l.condition`,
-    args: [nå(), ...ider, ...(utenOrdre ? [utenOrdre] : [])],
+    args: [...ider, ...(utenOrdre ? [utenOrdre] : [])],
   });
   for (const x of holdt.rows as any[]) {
     const k = `${x.card_id}:${x.finish}:${x.condition}`;
@@ -197,13 +207,11 @@ async function nyttOrdrenummer(): Promise<string> {
   throw new SalgFeil(500, "Klarte ikke lage ordrenummer.");
 }
 
-// Kreditt som allerede er holdt av i andre åpne kasser for samme adresse.
+// Kreditt som allerede er holdt av i åpne kasser for samme adresse — av
+// samme grunn som kortene: til kassen faktisk er lukket.
+const HOLDT_KREDITT = `SELECT COALESCE(SUM(kreditt_ore), 0) AS n FROM salgsordrer WHERE email = ? AND status = 'apen'`;
 async function holdtKreditt(email: string): Promise<number> {
-  const r = await db().execute({
-    sql: `SELECT COALESCE(SUM(kreditt_ore), 0) AS n FROM salgsordrer
-           WHERE email = ? AND status = 'apen' AND utloper_at > ?`,
-    args: [email, nå()],
-  });
+  const r = await db().execute({ sql: HOLDT_KREDITT, args: [email] });
   return Number(r.rows[0]?.n || 0);
 }
 
@@ -214,7 +222,7 @@ export async function tilgjengeligKreditt(email: string): Promise<number> {
 
 export async function åpneKasse(
   inn: KasseInn,
-  kunde: { id: number; email: string } | null
+  kunde: { id: number; email: string; bekreftet?: boolean } | null
 ): Promise<{ ordrenr: string; url: string | null; betalt: boolean; merke: string }> {
   await utløpGamle();
 
@@ -242,7 +250,10 @@ export async function åpneKasse(
   const varer = linjer.reduce((n, l) => n + l.enhet_ore * l.antall, 0);
   const totalt = varer + frakt.pris_ore;
   let kreditt = 0;
-  if (kunde && inn.bruk_kreditt) kreditt = Math.min(await tilgjengeligKreditt(email), totalt);
+  // Kreditten følger e-postadressen. Før adressen er bekreftet, kan den ikke
+  // brukes — ellers kunne hvem som helst registrere en annens adresse og
+  // handle for kreditten deres.
+  if (kunde?.bekreftet && inn.bruk_kreditt) kreditt = Math.min(await tilgjengeligKreditt(email), totalt);
   let rest = totalt - kreditt;
   if (rest > 0 && rest < STRIPE_MIN_ORE && kreditt > 0) {
     // Et restbeløp Stripe ikke kan ta: bruk litt mindre kreditt, så resten
@@ -250,6 +261,9 @@ export async function åpneKasse(
     const juster = Math.min(kreditt, STRIPE_MIN_ORE - rest);
     kreditt -= juster;
     rest += juster;
+  }
+  if (rest > 0 && rest < STRIPE_MIN_ORE) {
+    throw new SalgFeil(400, "Beløpet som betales med kort eller Vipps må være minst 3 kr.");
   }
 
   const ordrenr = await nyttOrdrenummer();
@@ -263,20 +277,44 @@ export async function åpneKasse(
   const tx = await db().transaction("write");
   let ordreId: number;
   try {
+    // To spørringer for hele kurven, ikke to per linje: skrivelåsen holdes
+    // mens dette pågår, og mot Turso er hver spørring en rundtur.
+    const ider = [...new Set(linjer.map((l) => l.card_id))];
+    const ph = ider.map(() => "?").join(",");
+    const ledig = new Map<string, number>();
+    const lager = await tx.execute({
+      sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM lager_bevegelser
+             WHERE card_id IN (${ph}) GROUP BY card_id, finish, condition`,
+      args: ider,
+    });
+    for (const x of lager.rows as any[]) ledig.set(`${x.card_id}:${x.finish}:${x.condition}`, Number(x.n));
+    const holdt = await tx.execute({
+      sql: `SELECT l.card_id, l.finish, l.condition, SUM(l.antall) AS n
+              FROM salgsordre_linjer l JOIN salgsordrer o ON o.id = l.ordre_id
+             WHERE o.status = 'apen' AND l.card_id IN (${ph}) GROUP BY l.card_id, l.finish, l.condition`,
+      args: ider,
+    });
+    for (const x of holdt.rows as any[]) {
+      const k = `${x.card_id}:${x.finish}:${x.condition}`;
+      ledig.set(k, (ledig.get(k) || 0) - Number(x.n));
+    }
     for (const l of linjer) {
-      const lager = await tx.execute({
-        sql: `SELECT COALESCE(SUM(antall), 0) AS n FROM lager_bevegelser WHERE card_id = ? AND finish = ? AND condition = ?`,
-        args: [l.card_id, l.finish, l.condition],
-      });
-      const holdt = await tx.execute({
-        sql: `SELECT COALESCE(SUM(l.antall), 0) AS n FROM salgsordre_linjer l JOIN salgsordrer o ON o.id = l.ordre_id
-               WHERE o.status = 'apen' AND o.utloper_at > ? AND l.card_id = ? AND l.finish = ? AND l.condition = ?`,
-        args: [opprettet, l.card_id, l.finish, l.condition],
-      });
-      if (Number(lager.rows[0]?.n || 0) - Number(holdt.rows[0]?.n || 0) < l.antall) {
+      if ((ledig.get(`${l.card_id}:${l.finish}:${l.condition}`) || 0) < l.antall) {
         // Den oppdaterte kurven hentes etter rollback, ikke her inne: en
         // lesing på en annen forbindelse mens skrivelåsen holdes, kan henge.
         throw new SalgFeil(409, `${l.card_name} ble akkurat tatt av en annen kunde.`, { oppdater: true });
+      }
+    }
+    // Kreditten sjekkes på nytt her inne. Utenfor transaksjonen kunne to
+    // kasser åpnet i samme øyeblikk begge sett den samme saldoen.
+    if (kreditt > 0) {
+      const saldo = await tx.execute({
+        sql: "SELECT COALESCE(SUM(ore), 0) AS n FROM kreditt_bevegelser WHERE email = ?",
+        args: [email],
+      });
+      const iBruk = await tx.execute({ sql: HOLDT_KREDITT, args: [email] });
+      if (Number(saldo.rows[0]?.n || 0) - Number(iBruk.rows[0]?.n || 0) < kreditt) {
+        throw new SalgFeil(409, "Kreditten din er i bruk i en annen kasse. Vent litt og prøv igjen.");
       }
     }
     const o = await tx.execute({
@@ -328,7 +366,9 @@ export async function åpneKasse(
         client_reference_id: ordrenr,
         metadata: { ordrenr },
         payment_intent_data: { metadata: { ordrenr }, description: `Korthaien ${ordrenr}` },
-        ...(vipps() ? { payment_method_types: ["card", "vipps" as any] } : {}),
+        // Låst til betalingsmåter som bekreftes med en gang. En metode som
+        // bekreftes dager senere, ville holdt kortene av i dager.
+        allowed_payment_method_types: (vipps() ? ["card", "vipps"] : ["card"]) as any,
         line_items: [
           {
             quantity: 1,
@@ -368,7 +408,7 @@ export async function åpneKasse(
 // Kalles fra Stripes webhook, og direkte når kreditten dekker alt. Den kan
 // komme flere ganger for samme ordre — Stripe sender på nytt hvis svaret
 // uteblir — så alt skjer bare hvis ordren ennå ikke er betalt.
-export async function fullfør(ordreId: number, kilde: string): Promise<boolean> {
+export async function fullfør(ordreId: number, kilde: string, betalingsId?: string | null): Promise<boolean> {
   const tid = nå();
   const r = await db().execute({ sql: "SELECT * FROM salgsordrer WHERE id = ?", args: [ordreId] });
   const o: any = r.rows[0];
@@ -382,11 +422,12 @@ export async function fullfør(ordreId: number, kilde: string): Promise<boolean>
     // bare én av dem som endrer raden.
     const opp = await tx.execute({
       sql: `UPDATE salgsordrer SET status = 'betalt', betalt_at = ?, uten_mva_ore = varer_ore, med_mva_ore = frakt_ore,
-              admin_notat = CASE WHEN status = 'utlopt'
+              stripe_betaling = COALESCE(?, stripe_betaling),
+              admin_notat = CASE WHEN status = 'utlopt' OR utloper_at < ?
                 THEN trim(COALESCE(admin_notat, '') || ' Betalt etter at reservasjonen var utløpt — sjekk at kortene finnes.')
                 ELSE admin_notat END
              WHERE id = ? AND status IN ('apen', 'utlopt')`,
-      args: [tid, ordreId],
+      args: [tid, betalingsId ?? null, tid, ordreId],
     });
     if (!opp.rowsAffected) {
       await tx.rollback();
@@ -400,6 +441,19 @@ export async function fullfør(ordreId: number, kilde: string): Promise<boolean>
       });
     }
     if (Number(o.kreditt_ore) > 0) {
+      // Kreditten ble holdt av da kassen ble åpnet, så den skal finnes. Gjør
+      // den ikke det, er kortene likevel betalt for med resten — ordren
+      // bokføres, men merkes så du ser det.
+      const saldo = await tx.execute({
+        sql: "SELECT COALESCE(SUM(ore), 0) AS n FROM kreditt_bevegelser WHERE email = ?",
+        args: [o.email],
+      });
+      if (Number(saldo.rows[0]?.n || 0) < Number(o.kreditt_ore)) {
+        await tx.execute({
+          sql: `UPDATE salgsordrer SET admin_notat = trim(COALESCE(admin_notat, '') || ' Kreditten strakk ikke til — kundens saldo er negativ.') WHERE id = ?`,
+          args: [ordreId],
+        });
+      }
       await tx.execute({
         sql: `INSERT INTO kreditt_bevegelser (email, ore, grunn, notat, order_no, created_at) VALUES (?, ?, 'kjop', ?, ?, ?)`,
         args: [o.email, -Number(o.kreditt_ore), `Brukt på ordre ${o.ordrenr}`, o.ordrenr, tid],
@@ -442,9 +496,12 @@ export async function utløpGamle(tvungen = false): Promise<number> {
       try {
         const s = await stripe().checkout.sessions.retrieve(String(o.stripe_session));
         if (s.status === "complete" && s.payment_status === "paid") {
-          await fullfør(Number(o.id), "stripe (oppdaget ved utløp)");
+          await fullfør(Number(o.id), "stripe (oppdaget ved utløp)", betalingsId(s));
           continue;
         }
+        // Fullført, men ikke betalt ennå: en betaling som bekreftes senere.
+        // Kortene holdes til Stripe sier ja eller nei.
+        if (s.status === "complete") continue;
         if (s.status === "open") await stripe().checkout.sessions.expire(String(o.stripe_session));
       } catch (e: any) {
         // Lukker ikke Stripe sesjonen, lar vi ordren stå til neste runde.
@@ -464,7 +521,7 @@ export async function utløpGamle(tvungen = false): Promise<number> {
 // Kunden trykket «tilbake» på Stripe-siden. Kortene frigis med en gang i
 // stedet for å vente ut kvarteret.
 export async function avbrytKasse(ordrenr: string, merke: string): Promise<void> {
-  if (merke !== kvitteringsmerke(ordrenr)) throw new SalgFeil(403, "Ugyldig lenke.");
+  if (!riktigMerke(ordrenr, merke)) throw new SalgFeil(403, "Ugyldig lenke.");
   const r = await db().execute({
     sql: "SELECT id, stripe_session FROM salgsordrer WHERE ordrenr = ? AND status = 'apen'",
     args: [ordrenr],
@@ -499,8 +556,21 @@ export async function stripeHendelse(råKropp: Buffer, signatur: string): Promis
   ) {
     const s = h.data.object as Stripe.Checkout.Session;
     if (s.payment_status !== "paid") return; // venter på en betaling som tar tid
-    const o = await db().execute({ sql: "SELECT id FROM salgsordrer WHERE stripe_session = ?", args: [s.id] });
-    if (o.rows[0]) await fullfør(Number(o.rows[0].id), "stripe");
+    const o = await db().execute({ sql: "SELECT id, ordrenr, stripe_ore FROM salgsordrer WHERE stripe_session = ?", args: [s.id] });
+    const rad: any = o.rows[0];
+    if (!rad) return;
+    // Beløpet settes av oss og er signert av Stripe, så dette skal aldri slå
+    // til. Gjør det likevel, er det en feil hos oss — og da skal ordren ikke
+    // gå gjennom på et beløp ingen har sett.
+    if (s.amount_total !== Number(rad.stripe_ore) || String(s.currency).toLowerCase() !== "nok") {
+      console.error(`Beløpet for ${rad.ordrenr} stemmer ikke: Stripe ${s.amount_total} ${s.currency}, ordre ${rad.stripe_ore}.`);
+      await db().execute({
+        sql: `UPDATE salgsordrer SET admin_notat = trim(COALESCE(admin_notat, '') || ' Betalt beløp stemmer ikke med ordren — sjekk i Stripe.') WHERE id = ?`,
+        args: [rad.id],
+      });
+      return;
+    }
+    await fullfør(Number(rad.id), "stripe", betalingsId(s));
   } else if (h.type === "checkout.session.expired" || h.type === "checkout.session.async_payment_failed") {
     const s = h.data.object as Stripe.Checkout.Session;
     await db().execute({
@@ -509,6 +579,10 @@ export async function stripeHendelse(råKropp: Buffer, signatur: string): Promis
     });
   }
 }
+
+// Betalings-ID-en trengs for å refundere til kortet senere.
+const betalingsId = (s: Stripe.Checkout.Session) =>
+  typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id ?? null;
 
 // ── oppslag ─────────────────────────────────────────────────────────────────
 export const STATUSER = ["apen", "betalt", "pakket", "sendt", "kansellert", "utlopt"] as const;
@@ -533,21 +607,25 @@ export function offentlig(o: any) {
   return resten;
 }
 
-export async function kundensOrdrer(kunde: { id: number; email: string }) {
-  // Også ordrer lagt inn som gjest med samme adresse, før kontoen fantes.
+export async function kundensOrdrer(kunde: { id: number; email: string; bekreftet?: boolean }) {
+  // Også ordrer lagt inn som gjest med samme adresse, før kontoen fantes —
+  // men bare når adressen er bekreftet. Ellers kunne hvem som helst
+  // registrere en annens adresse og lese navn, adresse og ordrene deres.
+  const medEpost = !!kunde.bekreftet;
   const r = await db().execute({
     sql: `SELECT ordrenr, status, created_at, betalt_at, sendt_at, varer_ore, frakt_ore, kreditt_ore, stripe_ore,
                  antall_kort, frakt_navn, sporingsnr
             FROM salgsordrer
-           WHERE (kunde_id = ? OR email = ?) AND status NOT IN ('apen', 'utlopt')
+           WHERE (kunde_id = ? ${medEpost ? "OR email = ?" : ""}) AND status NOT IN ('apen', 'utlopt')
            ORDER BY created_at DESC LIMIT 200`,
-    args: [kunde.id, normaliserEpost(kunde.email)],
+    args: medEpost ? [kunde.id, normaliserEpost(kunde.email)] : [kunde.id],
   });
   return r.rows;
 }
 
-export async function tilhørerKunde(o: any, kunde: { id: number; email: string }): Promise<boolean> {
-  return Number(o.kunde_id) === kunde.id || String(o.email) === normaliserEpost(kunde.email);
+export async function tilhørerKunde(o: any, kunde: { id: number; email: string; bekreftet?: boolean }): Promise<boolean> {
+  if (Number(o.kunde_id) === kunde.id) return true;
+  return !!kunde.bekreftet && String(o.email) === normaliserEpost(kunde.email);
 }
 
 // ── admin ───────────────────────────────────────────────────────────────────
@@ -624,24 +702,54 @@ export async function settStatus(
   return hentOrdre(ordrenr);
 }
 
-// Kansellering etter betaling: hele beløpet tilbake som kreditt, og kortene
-// tilbake på lager. Pengene går til kreditt og ikke til kortet — slik er
-// vilkårene, og det blir en ny linje i kredittboka med ordren som kilde.
-export async function kanseller(ordrenr: string, grunn: string): Promise<any> {
+// Kansellering etter betaling. Kortene går tilbake på lager, og pengene
+// tilbake til kunden — på én av to måter:
+//
+//   kort     Det som ble betalt med kort eller Vipps, refunderes dit hos
+//            Stripe. Det som ble betalt med kreditt, går tilbake som kreditt.
+//            Dette er hovedregelen i angrerettloven: tilbake samme vei.
+//   kreditt  Hele beløpet som kreditt. Bare når kunden har sagt ja til det.
+//
+// Refusjonen hos Stripe gjøres før noe endres her, med en fast
+// idempotensnøkkel: feiler den, er ingenting endret; feiler det som kommer
+// etter, gir et nytt forsøk den samme refusjonen og ikke en til.
+export async function kanseller(ordrenr: string, grunn: string, måte: "kort" | "kreditt" = "kort"): Promise<any> {
   const o = await hentOrdre(ordrenr);
   if (!o) throw new SalgFeil(404, "Fant ikke ordren.");
   if (!["betalt", "pakket"].includes(String(o.status))) {
     throw new SalgFeil(400, o.status === "sendt" ? "Ordren er sendt. Bruk retur i stedet." : "Ordren kan ikke kanselleres.");
   }
   const tid = nå();
-  const beløp = Number(o.varer_ore) + Number(o.frakt_ore);
+  const kortdel = Number(o.stripe_ore);
+  const tilKort = måte === "kort" && kortdel > 0;
+  let refusjonsId: string | null = null;
+  if (tilKort) {
+    if (!o.stripe_betaling) {
+      throw new SalgFeil(400, "Fant ikke betalingen hos Stripe for denne ordren. Refunder i Stripe, eller velg kreditt.");
+    }
+    try {
+      const r = await stripe().refunds.create(
+        { payment_intent: String(o.stripe_betaling), amount: kortdel, metadata: { ordrenr } },
+        { idempotencyKey: `refusjon-${ordrenr}` }
+      );
+      refusjonsId = r.id;
+    } catch (e: any) {
+      throw new SalgFeil(502, `Stripe avviste refusjonen: ${e?.message || "ukjent feil"}. Ingenting er endret.`);
+    }
+  }
+  const tilKreditt = tilKort ? Number(o.kreditt_ore) : Number(o.varer_ore) + Number(o.frakt_ore);
+  const notat =
+    `Kansellert: ${String(grunn || "").trim() || "uten oppgitt grunn"}.` +
+    (tilKort ? ` ${(kortdel / 100).toFixed(2)} kr refundert til kort (${refusjonsId}).` : "") +
+    (tilKreditt > 0 ? ` ${(tilKreditt / 100).toFixed(2)} kr som kreditt.` : "");
+
   const tx = await db().transaction("write");
   try {
     const u = await tx.execute({
       sql: `UPDATE salgsordrer SET status = 'kansellert', kansellert_at = ?,
               admin_notat = trim(COALESCE(admin_notat, '') || ' ' || ?)
              WHERE id = ? AND status IN ('betalt', 'pakket')`,
-      args: [tid, `Kansellert: ${String(grunn || "").trim() || "uten oppgitt grunn"}.`, o.id],
+      args: [tid, notat, o.id],
     });
     if (!u.rowsAffected) throw new SalgFeil(409, "Ordren ble endret i mellomtiden. Last inn på nytt.");
     for (const l of o.linjer as any[]) {
@@ -651,10 +759,10 @@ export async function kanseller(ordrenr: string, grunn: string): Promise<any> {
         args: [l.card_id, l.finish, l.condition, Math.abs(Number(l.antall)), `Kansellert ${o.ordrenr}`, tid],
       });
     }
-    if (beløp > 0) {
+    if (tilKreditt > 0) {
       await tx.execute({
         sql: `INSERT INTO kreditt_bevegelser (email, ore, grunn, notat, order_no, created_at) VALUES (?, ?, 'refusjon', ?, ?, ?)`,
-        args: [o.email, beløp, `Kansellert ordre ${o.ordrenr}`, o.ordrenr, tid],
+        args: [o.email, tilKreditt, `Kansellert ordre ${o.ordrenr}`, o.ordrenr, tid],
       });
     }
     await tx.commit();
@@ -706,10 +814,13 @@ export async function salgsstatistikk() {
   const logget = await db().execute({ sql: "SELECT 1 FROM salg_statistikk WHERE maaned = ?", args: [forrige] });
   if (!logget.rows.length) {
     const t = await tallForMåned(forrige);
-    const før = await db().execute("SELECT COUNT(*) AS n FROM salgsordrer WHERE status IN ('betalt','pakket','sendt','kansellert')");
+    const første = await db().execute(
+      "SELECT MIN(betalt_at) AS t FROM salgsordrer WHERE status IN ('betalt','pakket','sendt','kansellert')"
+    );
     // En måned før det første salget noensinne er ikke en måned med null
     // salg, det er en måned før butikken fantes. Den logges ikke.
-    if (t.ordrer > 0 || Number(før.rows[0]?.n || 0) > 0) {
+    const førsteMnd = første.rows[0]?.t ? osloMåned(String(første.rows[0].t)) : null;
+    if (førsteMnd && forrige >= førsteMnd) {
       await db().execute({
         sql: `INSERT OR IGNORE INTO salg_statistikk (maaned, omsetning_ore, ordrer, kort, logget_at) VALUES (?, ?, ?, ?, ?)`,
         args: [t.maaned, t.omsetning_ore, t.ordrer, t.kort, nå()],

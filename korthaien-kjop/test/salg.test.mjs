@@ -177,8 +177,12 @@ test("et kort som er holdt av i en åpen kasse, kan ikke kjøpes av en annen", a
     /ikke tilgjengelige/
   );
 
-  // Når kvarteret er ute, frigis kortet.
+  // Når kvarteret er ute, holdes kortet fortsatt til kassen faktisk er
+  // lukket — betalingssiden kan ennå betales. Først etter opprydningen er
+  // det ledig.
   await db().execute({ sql: "UPDATE salgsordrer SET utloper_at = ? WHERE id = ?", args: ["2000-01-01T00:00:00Z", o.rows[0].id] });
+  const førRydding = await salg.prisKurv([{ card_id: id, finish: "nonfoil", condition: "NM", antall: 1 }]);
+  assert.equal(førRydding[0].feil, "Utsolgt.");
   assert.equal(await salg.utløpGamle(true), 1);
   const etter = await salg.prisKurv([{ card_id: id, finish: "nonfoil", condition: "NM", antall: 1 }]);
   assert.equal(etter[0].feil, undefined);
@@ -232,4 +236,90 @@ test("kundens ordrehistorikk har bare egne ordrer, og ikke forlatte kasser", asy
   assert.ok(ordrer.every((o) => !["apen", "utlopt"].includes(o.status)));
   const per = { id: 999, email: "per@eksempel.no" };
   assert.equal((await salg.kundensOrdrer(per)).length, 0);
+});
+
+test("måneder før det første salget logges ikke i statistikken", async () => {
+  await db().execute("DELETE FROM salg_statistikk");
+  const s = await salg.salgsstatistikk();
+  // Alle salgene i testen er denne måneden, så forrige måned fantes ikke
+  // butikken ennå.
+  assert.equal(s.historikk.length, 0);
+});
+
+test("ubekreftet konto: kreditten og gjesteordrene på adressen følger ikke med", async () => {
+  // Noen registrerer adressen til en kunde som har kreditt og ordrer.
+  const tyv = await konto.registrer({ email: "selger@eksempel.no".replace("selger", "offer"), passord: "tyvepassord1" });
+  await kreditt.leggTil({ email: "offer@eksempel.no", ore: 50000, grunn: "kjopsordre" });
+  await db().execute({
+    sql: `INSERT INTO salgsordrer (ordrenr, kunde_navn, email, status, betalt_at, created_at, adresse)
+          VALUES ('KS-GJEST-1', 'Offer', 'offer@eksempel.no', 'betalt', ?, ?, 'Hemmelig vei 1')`,
+    args: [new Date().toISOString(), new Date().toISOString()],
+  });
+  assert.equal(tyv.bekreftet, false);
+  assert.equal((await salg.kundensOrdrer(tyv)).length, 0, "gjesteordren skal ikke vises");
+  const gjesteordre = await salg.hentOrdre("KS-GJEST-1");
+  assert.equal(await salg.tilhørerKunde(gjesteordre, tyv), false);
+  // Kassen bruker ikke kreditten, selv om kunden ber om det.
+  await assert.rejects(
+    salg.åpneKasse({ ...adresse, email: "", bruk_kreditt: true, linjer: [{ card_id: vanlig, finish: "nonfoil", condition: "NM", antall: 1 }] }, tyv),
+    /Betaling er ikke satt opp/
+  );
+  assert.equal(await kreditt.saldo("offer@eksempel.no"), 50000);
+
+  // Eieren bekrefter adressen med lenken i e-posten: da følger det med.
+  const token = await konto.lagBekreftelse(tyv.id);
+  const bekreftet = await konto.bekreftEpost(token);
+  assert.equal(bekreftet.bekreftet, true);
+  assert.equal((await salg.kundensOrdrer(bekreftet)).length, 1);
+  await assert.rejects(konto.bekreftEpost(token), /utløpt eller allerede brukt/);
+});
+
+test("kreditt holdt av i en åpen kasse kan ikke brukes i en annen, heller ikke etter kvarteret", async () => {
+  const k = await konto.loggInn("selger@eksempel.no", "passord123");
+  const saldo = await kreditt.saldo(k.email);
+  await db().execute({
+    sql: `INSERT INTO salgsordrer (ordrenr, kunde_navn, email, status, kreditt_ore, utloper_at, created_at)
+          VALUES ('KS-HOLDT-1', 'Kari', ?, 'apen', ?, '2000-01-01T00:00:00Z', ?)`,
+    args: [k.email, saldo, new Date().toISOString()],
+  });
+  assert.equal(await salg.tilgjengeligKreditt(k.email), 0);
+  await db().execute("UPDATE salgsordrer SET status = 'utlopt' WHERE ordrenr = 'KS-HOLDT-1'");
+  assert.equal(await salg.tilgjengeligKreditt(k.email), saldo);
+});
+
+test("et restbeløp under 3 kr kan ikke sendes til Stripe", async () => {
+  const gratis = await db().execute({
+    sql: "INSERT INTO frakt_alternativer (navn,pris_ore,forsikret_ore,sortering,aktiv,created_at) VALUES ('Hent selv',0,NULL,9,1,?) RETURNING id",
+    args: [new Date().toISOString()],
+  });
+  const billig = await kort("aaa", "Ørlite Kort", "common", 100, 5);
+  await assert.rejects(
+    salg.åpneKasse({ ...adresse, frakt_id: Number(gratis.rows[0].id), email: "a@b.no", linjer: [{ card_id: billig, finish: "nonfoil", condition: "NM", antall: 1 }] }, null),
+    /minst 3 kr/
+  );
+});
+
+test("bytte av passord logger ut de andre innloggingene, men ikke denne", async () => {
+  const k = await konto.loggInn("selger@eksempel.no", "passord123");
+  const her = await konto.nySesjon(k.id);
+  const der = await konto.nySesjon(k.id);
+  await konto.byttPassord(k.id, "passord123", "nyttpassord9", her);
+  assert.ok(await konto.sesjonsKunde(her));
+  assert.equal(await konto.sesjonsKunde(der), null);
+  await konto.byttPassord(k.id, "nyttpassord9", "passord123", her);
+});
+
+test("en ny tilbakestillingslenke gjør den forrige ubrukelig når én brukes", async () => {
+  const a = await konto.lagTilbakestilling("selger@eksempel.no");
+  const b = await konto.lagTilbakestilling("selger@eksempel.no");
+  await konto.brukTilbakestilling(b.token, "passord123");
+  await assert.rejects(konto.brukTilbakestilling(a.token, "annetpassord"), /utløpt eller allerede brukt/);
+});
+
+test("feil passord og en konto som bare bruker Google gir samme melding", async () => {
+  await db().execute({
+    sql: "INSERT INTO kunder (email, google_sub, epost_bekreftet_at, created_at) VALUES ('g@eksempel.no', 'sub-1', ?, ?)",
+    args: [new Date().toISOString(), new Date().toISOString()],
+  });
+  await assert.rejects(konto.loggInn("g@eksempel.no", "hvaSomHelst1"), /^Error: Feil e-postadresse eller passord\.$|Feil e-postadresse eller passord/);
 });

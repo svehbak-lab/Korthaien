@@ -504,6 +504,8 @@ CREATE TABLE IF NOT EXISTS salgsordrer (
   kreditt_ore   INTEGER NOT NULL DEFAULT 0,
   stripe_ore    INTEGER NOT NULL DEFAULT 0,
   stripe_session TEXT,
+  -- Betalingen hos Stripe (payment_intent). Trengs for å refundere til kortet.
+  stripe_betaling TEXT,
   utloper_at    TEXT,
   antall_kort   INTEGER NOT NULL DEFAULT 0,
   pakket_at     TEXT,
@@ -560,6 +562,10 @@ CREATE TABLE IF NOT EXISTS kunder (
   navn              TEXT NOT NULL DEFAULT '',
   passord_hash      TEXT,
   google_sub        TEXT UNIQUE,
+  -- Satt når kunden har vist at hen eier adressen: lenken i e-posten,
+  -- «glemt passord» eller Google. Før det følger verken kreditten eller
+  -- gjesteordrene på adressen med kontoen.
+  epost_bekreftet_at TEXT,
   telefon           TEXT,
   adresse           TEXT,
   postnr            TEXT,

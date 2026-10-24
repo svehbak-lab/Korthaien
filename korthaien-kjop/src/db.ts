@@ -340,13 +340,18 @@ async function leggTilNyeKolonner(): Promise<void> {
       ["poststed", "TEXT"], ["land", "TEXT"], ["frakt_id", "INTEGER"], ["frakt_navn", "TEXT"],
       ["frakt_ore", "INTEGER NOT NULL DEFAULT 0"], ["varer_ore", "INTEGER NOT NULL DEFAULT 0"],
       ["kreditt_ore", "INTEGER NOT NULL DEFAULT 0"], ["stripe_ore", "INTEGER NOT NULL DEFAULT 0"],
-      ["stripe_session", "TEXT"], ["utloper_at", "TEXT"], ["antall_kort", "INTEGER NOT NULL DEFAULT 0"],
+      ["stripe_session", "TEXT"], ["stripe_betaling", "TEXT"], ["utloper_at", "TEXT"], ["antall_kort", "INTEGER NOT NULL DEFAULT 0"],
       ["pakket_at", "TEXT"], ["sendt_at", "TEXT"], ["kansellert_at", "TEXT"], ["sporingsnr", "TEXT"],
       ["kunde_notat", "TEXT"], ["admin_notat", "TEXT"],
     ];
     for (const [navn, type] of nye) {
       if (!so.has(navn)) await db().execute(`ALTER TABLE salgsordrer ADD COLUMN ${navn} ${type}`);
     }
+  }
+
+  const ku = await kolonner("kunder");
+  if (ku.size && !ku.has("epost_bekreftet_at")) {
+    await db().execute("ALTER TABLE kunder ADD COLUMN epost_bekreftet_at TEXT");
   }
 
   const um = await kolonner("mystore_unmatched");

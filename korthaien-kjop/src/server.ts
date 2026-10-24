@@ -40,15 +40,15 @@ import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./ra
 import {
   COOKIE as KUNDE_COOKIE, KontoFeil, registrer, loggInn, nySesjon, avsluttSesjon, settKundeCookie,
   fjernKundeCookie, kundeValgfri, krevKunde, oppdaterProfil, byttPassord, lagTilbakestilling,
-  brukTilbakestilling, harGoogle, googleUrl, googleKunde,
+  brukTilbakestilling, harGoogle, googleUrl, googleKunde, lagBekreftelse, bekreftEpost,
 } from "./kunder.js";
 import {
   SalgFeil, prisKurv, åpneKasse, avbrytKasse, stripeHendelse, hentOrdre as hentSalgsordre, offentlig, kundensOrdrer,
-  tilhørerKunde, kvitteringsmerke, tilgjengeligKreditt, adminOrdrer, settStatus, kanseller,
+  tilhørerKunde, riktigMerke, tilgjengeligKreditt, adminOrdrer, settStatus, kanseller,
   salgsstatistikk, utløpGamle, harStripe, butikkUrl, RESERVASJON_MIN,
 } from "./salg.js";
 import { bevegelser as kredittBevegelser } from "./kreditt.js";
-import { sendTilbakestilling } from "./epost.js";
+import { sendTilbakestilling, sendBekreftEpost } from "./epost.js";
 import { kuppliste, vaktelisteSammendrag, settKuppOppsett, kjørKuppjakt, egenliste, settRettet } from "./kupp.js";
 
 const app = express();
@@ -592,14 +592,33 @@ app.get("/api/konto/meg", kundeValgfri, fang(async (req: any, res: any) => {
   res.json({
     kunde: req.kunde || null,
     google: harGoogle(),
-    kreditt_ore: req.kunde ? await tilgjengeligKreditt(req.kunde.email) : 0,
+    // Kreditten vises først når adressen er bekreftet. Ellers kunne hvem som
+    // helst registrere en annens adresse og se saldoen.
+    kreditt_ore: req.kunde?.bekreftet ? await tilgjengeligKreditt(req.kunde.email) : 0,
   });
 }));
 
 app.post("/api/konto/registrer", grense(REGLER.konto), fang(async (req: any, res: any) => {
   const k = await registrer({ email: req.body?.email, passord: req.body?.passord, navn: req.body?.navn });
+  const token = await lagBekreftelse(k.id);
+  await sendBekreftEpost(k.email, `${butikkUrl()}/?bekreft=${encodeURIComponent(token)}`);
   settKundeCookie(res, await nySesjon(k.id));
   res.json({ kunde: k });
+}));
+
+app.post("/api/konto/send-bekreftelse", krevKunde, grense(REGLER.konto), fang(async (req: any, res: any) => {
+  if (!req.kunde.bekreftet) {
+    const token = await lagBekreftelse(req.kunde.id);
+    await sendBekreftEpost(req.kunde.email, `${butikkUrl()}/?bekreft=${encodeURIComponent(token)}`);
+  }
+  res.json({ ok: true });
+}));
+
+// Lenken bekrefter adressen, men logger ikke inn: den som trykker, er den
+// som eier innboksen, ikke nødvendigvis den som har nettleseren åpen.
+app.post("/api/konto/bekreft", grense(REGLER.konto), fang(async (req: any, res: any) => {
+  const k = await bekreftEpost(req.body?.token);
+  res.json({ ok: true, email: k.email });
 }));
 
 app.post("/api/konto/logg-inn", grense(REGLER.konto), fang(async (req: any, res: any) => {
@@ -619,7 +638,7 @@ app.put("/api/konto/profil", krevKunde, fang(async (req: any, res: any) => {
 }));
 
 app.put("/api/konto/passord", krevKunde, grense(REGLER.konto), fang(async (req: any, res: any) => {
-  await byttPassord(req.kunde.id, req.body?.gammelt, req.body?.nytt);
+  await byttPassord(req.kunde.id, req.body?.gammelt, req.body?.nytt, req.cookies?.[KUNDE_COOKIE]);
   res.json({ ok: true });
 }));
 
@@ -674,7 +693,9 @@ app.get("/api/konto/ordrer/:nr", krevKunde, fang(async (req: any, res: any) => {
 }));
 
 app.get("/api/konto/kreditt", krevKunde, fang(async (req: any, res: any) => {
+  if (!req.kunde.bekreftet) return res.json({ bekreftet: false, tilgjengelig_ore: 0, bevegelser: [] });
   res.json({
+    bekreftet: true,
     tilgjengelig_ore: await tilgjengeligKreditt(req.kunde.email),
     bevegelser: await kredittBevegelser(req.kunde.email),
   });
@@ -709,7 +730,7 @@ app.post("/api/butikk/kasse/:nr/avbryt", fang(async (req: any, res: any) => {
 // se ordren sin uten konto — men ingen kan bla seg gjennom andres.
 app.get("/api/butikk/ordre/:nr", fang(async (req: any, res: any) => {
   const nr = String(req.params.nr);
-  if (String(req.query.m || "") !== kvitteringsmerke(nr)) throw new HttpFeil(404, "Fant ikke ordren");
+  if (!riktigMerke(nr, String(req.query.m || ""))) throw new HttpFeil(404, "Fant ikke ordren");
   const o = await hentSalgsordre(nr);
   if (!o) throw new HttpFeil(404, "Fant ikke ordren");
   res.json({ ordre: offentlig(o) });
@@ -731,7 +752,8 @@ app.patch("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: an
 }));
 
 app.post("/api/admin/salg/ordrer/:nr/kanseller", krevAdmin, fang(async (req: any, res: any) => {
-  res.json({ ordre: await kanseller(String(req.params.nr), String(req.body?.grunn || "")) });
+  const måte = req.body?.maate === "kreditt" ? "kreditt" : "kort";
+  res.json({ ordre: await kanseller(String(req.params.nr), String(req.body?.grunn || ""), måte) });
 }));
 
 app.get("/api/admin/salg/statistikk", krevAdmin, fang(async (_req: any, res: any) => {

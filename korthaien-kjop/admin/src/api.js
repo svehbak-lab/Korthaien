@@ -153,6 +153,14 @@ export const api = {
 
   kreditt: (q) => kall(`/api/admin/kreditt?q=${encodeURIComponent(q || "")}`),
   salgsrapport: (fra, til) => kall(`/api/admin/rapporter/salg?fra=${fra}&til=${til}`),
+
+  // Salgsordrer i admin.
+  salgsordrer: (status) => kall(`/api/admin/salg/ordrer?status=${status}`),
+  salgsordre: (nr) => kall(`/api/admin/salg/ordrer/${encodeURIComponent(nr)}`),
+  endreSalgsordre: (nr, felt) => kall(`/api/admin/salg/ordrer/${encodeURIComponent(nr)}`, { method: "PATCH", body: felt }),
+  kansellerSalgsordre: (nr, grunn, maate) =>
+    kall(`/api/admin/salg/ordrer/${encodeURIComponent(nr)}/kanseller`, { method: "POST", body: { grunn, maate } }),
+  salgsstatistikk: () => kall("/api/admin/salg/statistikk"),
   kredittKonto: (epost) => kall(`/api/admin/kreditt/${encodeURIComponent(epost)}`),
   bokførKreditt: (felt) => kall("/api/admin/kreditt", { method: "POST", body: felt }),
 
@@ -205,3 +213,50 @@ export function dagerTil(iso) {
   if (!iso) return null;
   return Math.ceil((new Date(iso) - new Date()) / 86400000);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KUNDEN
+// ─────────────────────────────────────────────────────────────────────────────
+// Rutene butikken bruker på vegne av kunden. De er offentlige og bruker
+// kundens egen cookie, ikke admins — så de kan flyttes med butikken.
+// En 401 her betyr at kunden ikke er logget inn, ikke at admin er utlogget.
+async function kundekall(sti, opts = {}) {
+  const r = await fetch(BASE + sti, {
+    credentials: "include",
+    headers: opts.body ? { "Content-Type": "application/json" } : undefined,
+    ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const tekst = await r.text();
+  const data = tekst ? JSON.parse(tekst) : null;
+  if (!r.ok) {
+    const feil = new Error(data?.feil || `Serveren svarte ${r.status}`);
+    feil.data = data;
+    feil.status = r.status;
+    throw feil;
+  }
+  return data;
+}
+
+export const kunde = {
+  meg: () => kundekall("/api/konto/meg"),
+  registrer: (felt) => kundekall("/api/konto/registrer", { method: "POST", body: felt }),
+  loggInn: (email, passord) => kundekall("/api/konto/logg-inn", { method: "POST", body: { email, passord } }),
+  loggUt: () => kundekall("/api/konto/logg-ut", { method: "POST" }),
+  profil: (felt) => kundekall("/api/konto/profil", { method: "PUT", body: felt }),
+  passord: (gammelt, nytt) => kundekall("/api/konto/passord", { method: "PUT", body: { gammelt, nytt } }),
+  glemt: (email) => kundekall("/api/konto/glemt", { method: "POST", body: { email } }),
+  nyttPassord: (token, passord) => kundekall("/api/konto/nytt-passord", { method: "POST", body: { token, passord } }),
+  bekreft: (token) => kundekall("/api/konto/bekreft", { method: "POST", body: { token } }),
+  sendBekreftelse: () => kundekall("/api/konto/send-bekreftelse", { method: "POST" }),
+  googleUrl: () => `${BASE}/api/konto/google`,
+  ordrer: () => kundekall("/api/konto/ordrer"),
+  ordre: (nr) => kundekall(`/api/konto/ordrer/${encodeURIComponent(nr)}`),
+  kreditt: () => kundekall("/api/konto/kreditt"),
+
+  oppsett: () => kundekall("/api/butikk/oppsett"),
+  kurv: (linjer) => kundekall("/api/butikk/kurv", { method: "POST", body: { linjer } }),
+  kasse: (felt) => kundekall("/api/butikk/kasse", { method: "POST", body: felt }),
+  avbryt: (nr, m) => kundekall(`/api/butikk/kasse/${encodeURIComponent(nr)}/avbryt`, { method: "POST", body: { m } }),
+  kvittering: (nr, m) => kundekall(`/api/butikk/ordre/${encodeURIComponent(nr)}?m=${encodeURIComponent(m)}`),
+};

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api, UtloggetFeil } from "./api.js";
 import Ordrer from "./views/Ordrer.jsx";
+import Salgsordrer from "./views/Salgsordrer.jsx";
 import Sett from "./views/Sett.jsx";
 import Kort from "./views/Kort.jsx";
 import Hurtig from "./views/Hurtig.jsx";
@@ -12,7 +13,8 @@ import Kupp from "./views/Kupp.jsx";
 import Innstillinger from "./views/Innstillinger.jsx";
 
 const SIDER = [
-  { id: "ordrer", navn: "Ordrer" },
+  { id: "salgsordrer", navn: "Salgsordrer" },
+  { id: "ordrer", navn: "Kjøpsordrer" },
   { id: "sett", navn: "Kjøpsliste" },
   // Enkeltkort byttet plass med Hurtigredigering. Enkeltkort-siden handler om
   // innkjøp — hva du tar imot, hvor mange du vil ha, hva du betaler — og den
@@ -37,7 +39,12 @@ const SIDER = [
 
 export default function App() {
   const [innlogget, setInnlogget] = useState(null);
-  const [side, setSide] = useState("ordrer");
+  // Lenker tilbake fra Stripe, Google og «glemt passord» skal lande i
+  // butikken, der kunden var — ikke på ordrelista i admin.
+  const [side, setSide] = useState(() =>
+    /[?&](kasse|nyttpassord|innlogging|bekreft)=/.test(window.location.search) ? "butikk" : "salgsordrer"
+  );
+  const [antallSalg, setAntallSalg] = useState(null);
   const [valgtSett, setValgtSett] = useState(null);
   const [feil, setFeil] = useState("");
   const [melding, setMelding] = useState("");
@@ -81,6 +88,7 @@ export default function App() {
               onClick={() => setSide(s.id)}
             >
               {s.navn}
+              {s.id === "salgsordrer" && antallSalg > 0 && <span className="antall">{antallSalg}</span>}
               {s.id === "ordrer" && antallOrdrer > 0 && <span className="antall">{antallOrdrer}</span>}
               {s.id === "kobling" && antallUkoblede > 0 && <span className="antall">{antallUkoblede}</span>}
             </button>
@@ -112,6 +120,7 @@ export default function App() {
         {feil && <div className="varsel feil">{feil}</div>}
         {melding && <div className="varsel ok">{melding}</div>}
 
+        {side === "salgsordrer" && <Salgsordrer onFeil={håndterFeil} onMelding={visMelding} onAntall={setAntallSalg} />}
         {side === "ordrer" && <Ordrer onFeil={håndterFeil} onAntall={setAntallOrdrer} />}
         {side === "sett" && (
           <Sett
@@ -174,6 +183,8 @@ const ADMINFANER = [
 ];
 
 const FORKLARING = {
+  salgsordrer:
+    "Ordrer fra butikken. Kortene står i samme rekkefølge som i kjøpsordrene — sett, raritet, navn — så du kan plukke i én runde.",
   lagerrapport:
     "Hva du har på lager, og hva det er verdt til utsalgspris. Trykk på et sett for å se rariteter.",
   ordrer:

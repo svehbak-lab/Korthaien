@@ -129,6 +129,16 @@ textarea { width: 100%; font-family: inherit; }
 .tom b { display: block; color: var(--blekk); margin-bottom: 4px; }
 
 .varsel { padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; border: 1px solid; }
+
+/* Skjema med feltene under hverandre: kassen, innloggingen og «Min side». */
+.skjema { display: grid; gap: 11px; }
+.skjema label { display: grid; gap: 4px; font-size: 13px; }
+.skjema label.rad-flex { display: flex; }
+.skjema input:not([type="checkbox"]):not([type="radio"]), .skjema textarea {
+  width: 100%; border: 1px solid var(--strek-sterk); border-radius: 6px; padding: 7px 9px;
+  background: var(--flate); color: var(--blekk); font: inherit; font-size: 14px;
+}
+.skjema input:disabled { opacity: 0.7; }
 .varsel.feil { color: var(--feil); background: #fdf3f3; border-color: #f0c9c9; }
 .varsel.ok { color: var(--ok); background: #f1f9f4; border-color: #c6e4d0; }
 

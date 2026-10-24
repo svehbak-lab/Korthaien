@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { api, kroner, CONDITIONS } from "../api.js";
 import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside, OmOss, Retur } from "./Bunn.jsx";
+import { HandelProvider, useHandel, LeggIKurven, KurvSide, Kasse, Kvittering, LoggInn, NyttPassord, MinSide, Bekreft } from "./Handel.jsx";
+import { kunde as kapi } from "../api.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BUTIKKVISNING
@@ -47,7 +49,38 @@ const TOMT = {
   baresalg: true, prisFra: "", prisTil: "",
 };
 
-export default function Butikk({ onFeil }) {
+// Kurven og kundekontoen deles av alle skjermene i butikken, så de ligger i
+// en kontekst rundt hele siden.
+export default function Butikk(props) {
+  return (
+    <HandelProvider>
+      <ButikkSider {...props} />
+    </HandelProvider>
+  );
+}
+
+// Lenkene tilbake fra Stripe, Google og «glemt passord»-e-posten lander på
+// butikkens adresse med et spørsmål i URL-en. Det leses én gang og fjernes,
+// så en oppdatering av siden ikke gjør det samme på nytt.
+function lesLenke() {
+  const p = new URLSearchParams(window.location.search);
+  const ut = {
+    kasse: p.get("kasse"),
+    ordre: p.get("ordre"),
+    m: p.get("m"),
+    nyttpassord: p.get("nyttpassord"),
+    innlogging: p.get("innlogging"),
+    bekreft: p.get("bekreft"),
+  };
+  if (ut.kasse || ut.nyttpassord || ut.innlogging || ut.bekreft) {
+    window.history.replaceState(null, "", window.location.pathname);
+  }
+  return ut;
+}
+
+function ButikkSider({ onFeil }) {
+  const h = useHandel();
+  const [lenke] = useState(lesLenke);
   const [sett, setSett] = useState(null);
   const [alle, setAlle] = useState([]);
   const [data, setData] = useState(null);
@@ -66,7 +99,29 @@ export default function Butikk({ onFeil }) {
   const [åpentKort, setÅpentKort] = useState(null);
   // Forsiden først. Lista er fortsatt det arbeidsredskapet den alltid har
   // vært — den er ett klikk unna, og søket herfra lander rett i den.
-  const [skjerm, setSkjerm] = useState("forside");
+  const [skjerm, setSkjerm] = useState(() =>
+    lenke.kasse === "ok" ? "kvittering"
+      : lenke.kasse === "avbrutt" ? "kurv"
+      : lenke.nyttpassord ? "nyttpassord"
+      : lenke.bekreft ? "bekreft"
+      : lenke.innlogging ? "konto"
+      : "forside"
+  );
+  const [kvittering, setKvittering] = useState(
+    lenke.kasse === "ok" ? { nr: lenke.ordre, m: lenke.m } : null
+  );
+  const [kurvmelding, setKurvmelding] = useState("");
+  // Etter innlogging fra kassen skal kunden tilbake til kassen, ikke til
+  // «Min side».
+  const [etterInnlogging, setEtterInnlogging] = useState(null);
+
+  // Trykket kunden «tilbake» på Stripe-siden, frigis kortene med en gang.
+  useEffect(() => {
+    if (lenke.kasse === "avbrutt" && lenke.ordre) {
+      kapi.avbryt(lenke.ordre, lenke.m).catch(() => {});
+      setKurvmelding("Betalingen ble avbrutt. Kortene ligger fortsatt i kurven.");
+    }
+  }, []);
   // Temaet kommer fra innstillingene, ikke fra nettleseren: det er butikkens
   // utseende og ikke den enkeltes. Null som startverdi, ikke "dagens" — da
   // rekker ikke siden aa blinke i feil tema foer svaret er inne.
@@ -167,6 +222,8 @@ export default function Butikk({ onFeil }) {
   const skall = (innhold) => (
     <div className="butikk" data-tema={tema || "dagens"}>
       <Topp
+        onKonto={() => { setÅpentKort(null); setSkjerm("konto"); }}
+        onKurv={() => { setÅpentKort(null); setKurvmelding(""); setSkjerm("kurv"); }}
         produkter={produktantall}
         onProdukt={(t) => { setÅpentKort(null); setSkjerm(t); }}
         onHjem={() => { setÅpentKort(null); setSkjerm("forside"); }}
@@ -208,6 +265,54 @@ export default function Butikk({ onFeil }) {
         onFeil={onFeil}
       />
     );
+  }
+
+  if (skjerm === "kurv") {
+    return skall(
+      <KurvSide
+        melding={kurvmelding}
+        onKasse={() => setSkjerm("kasse")}
+        onHandleVidere={() => setSkjerm(data ? "liste" : "forside")}
+      />
+    );
+  }
+  if (skjerm === "kasse") {
+    return skall(
+      <Kasse
+        onTilbake={() => setSkjerm("kurv")}
+        onLoggInn={() => { setEtterInnlogging("kasse"); setSkjerm("konto"); }}
+        onKvittering={(nr, m) => { setKvittering({ nr, m }); setSkjerm("kvittering"); }}
+      />
+    );
+  }
+  if (skjerm === "kvittering" && kvittering) {
+    return skall(<Kvittering nr={kvittering.nr} merke={kvittering.m} onFerdig={() => setSkjerm("forside")} />);
+  }
+  if (skjerm === "bekreft") {
+    return skall(<Bekreft token={lenke.bekreft} onFerdig={() => setSkjerm("konto")} />);
+  }
+  if (skjerm === "nyttpassord") {
+    return skall(<NyttPassord token={lenke.nyttpassord} onFerdig={() => setSkjerm("konto")} />);
+  }
+  if (skjerm === "konto") {
+    if (!h.lastet) return skall(<p className="dempet">Henter…</p>);
+    if (!h.kunde) {
+      return skall(
+        <>
+          {lenke.innlogging === "feil" && (
+            <div className="varsel feil">Innloggingen med Google gikk ikke. Prøv igjen.</div>
+          )}
+          <LoggInn
+            onInne={() => {
+              const til = etterInnlogging;
+              setEtterInnlogging(null);
+              setSkjerm(til || "konto");
+            }}
+          />
+        </>
+      );
+    }
+    return skall(<MinSide onUt={() => setSkjerm("forside")} />);
   }
 
   if (skjerm === "kontakt") return skall(<Kontakt onFeil={onFeil} />);
@@ -529,8 +634,9 @@ const PRODUKTTYPER = [
   { id: "komplettsett", navn: "Komplette sett", ingress: "Hele sett, ferdig samlet." },
 ];
 
-function Topp({ onHjem, onSøk, onAlleSett, produkter, onProdukt }) {
+function Topp({ onHjem, onSøk, onAlleSett, produkter, onProdukt, onKonto, onKurv }) {
   const [q, setQ] = useState("");
+  const h = useHandel();
 
   return (
     <div className="b-skall-topp">
@@ -570,8 +676,8 @@ function Topp({ onHjem, onSøk, onAlleSett, produkter, onProdukt }) {
           </form>
 
           <div className="b-hoyre">
-            <button className="b-toppknapp" disabled title="Innlogging kommer">
-              Logg inn
+            <button className="b-toppknapp" onClick={onKonto}>
+              {h.kunde ? "Min side" : "Logg inn"}
             </button>
 
             {/* To kurver, ikke én. Å kjøpe og å selge er to bunker som lever
@@ -579,7 +685,7 @@ function Topp({ onHjem, onSøk, onAlleSett, produkter, onProdukt }) {
                 kurv for begge ville blandet dem.
                 Samme symbol på begge — det er ordet under som skiller dem,
                 og to ulike symboler ville latt som om de var to ulike ting. */}
-            <Kurv navn="Kjøp" antall={0} tittel="Kortene du kjøper — kommer når kassen bygges" />
+            <Kurv navn="Kjøp" antall={h.antall} tittel="Handlekurven" onClick={onKurv} />
             <Kurv navn="Selg" antall={0} tittel="Kortene du selger til meg — kommer" />
           </div>
         </div>
@@ -610,9 +716,9 @@ function Topp({ onHjem, onSøk, onAlleSett, produkter, onProdukt }) {
 
 // Kurven i toppen. Tallet ligger oppå symbolet, ordet under — slik blir
 // symbolet det samme for begge, og ordet det eneste som skiller dem.
-function Kurv({ navn, antall, tittel }) {
+function Kurv({ navn, antall, tittel, onClick }) {
   return (
-    <button className="b-kurv" disabled title={tittel}>
+    <button className="b-kurv" disabled={!onClick} title={tittel} onClick={onClick}>
       <span className="b-kurvikon">
         <svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
           <path d="M2 3h2.2l2 9.5h9l2-7H6" strokeLinecap="round" strokeLinejoin="round" />
@@ -920,18 +1026,7 @@ function Tekstrad({ kort, onÅpne, onSett }) {
                   {t.lager > 0 ? `${t.lager} stk.` : ""}
                 </td>
                 <td className="h" style={{ padding: "3px 6px" }}>
-                  {t.lager > 0 ? (
-                    <button
-                      className="knapp liten"
-                      disabled
-                      title="Kurven kommer når kassen bygges"
-                      style={{ padding: "2px 10px" }}
-                    >
-                      Legg i kurven
-                    </button>
-                  ) : (
-                    <span className="dempet" style={{ fontSize: 13 }}>Utsolgt</span>
-                  )}
+                  <LeggIKurven kort={kort} finish={kort.valgt.finish} tilstand={t} liten stil={{ padding: "2px 10px" }} />
                 </td>
               </tr>
             ))}
@@ -1016,16 +1111,7 @@ function Detaljrad({ kort, onÅpne, onSett }) {
             {t.lager > 0 ? `${t.lager} tilgjengelig` : "Utsolgt"}
           </div>
 
-          {/* Kurven finnes ikke ennå. Knappen står her fordi plasseringen er
-              det som skal vurderes — den kobles opp når kassen bygges. */}
-          <button
-            className="knapp primar"
-            style={{ width: "100%" }}
-            disabled
-            title="Kurven kommer når kassen bygges"
-          >
-            Legg i kurven
-          </button>
+          <LeggIKurven kort={kort} finish={kort.valgt.finish} tilstand={t} stil={{ width: "100%" }} />
         </div>
       </div>
     </div>
@@ -1091,14 +1177,7 @@ function Galleriflis({ kort, onÅpne, onSett }) {
           {t.lager > 0 ? `${t.lager} tilgjengelig` : "Utsolgt"}
         </div>
 
-        <button
-          className="knapp primar"
-          style={{ width: "100%", marginTop: 8 }}
-          disabled
-          title="Kurven kommer når kassen bygges"
-        >
-          Legg i kurven
-        </button>
+        <LeggIKurven kort={kort} finish={kort.valgt.finish} tilstand={t} stil={{ width: "100%", marginTop: 8 }} />
       </div>
     </div>
   );
@@ -1208,9 +1287,7 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil }) {
                 <div className="dempet" style={{ fontSize: 13, margin: "7px 0 8px" }}>
                   {t.lager > 0 ? `${t.lager} tilgjengelig` : "Utsolgt"}
                 </div>
-                <button className="knapp primar" style={{ width: "100%" }} disabled title="Kurven kommer når kassen bygges">
-                  Legg i kurven
-                </button>
+                <LeggIKurven kort={k} finish={variant.finish} tilstand={t} stil={{ width: "100%" }} />
                 {harBegge && (
                   <button
                     className="knapp"

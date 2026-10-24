@@ -43,6 +43,25 @@ services:
         value: korthaien@gmail.com
       - key: ADMIN_URL
         value: https://admin.kortsalg.korthaien.no
+      # Butikken. Stripe-lenkene og «glemt passord» sender kunden hit.
+      # Butikken bor i admin til den flyttes til korthaien.no; da endres
+      # bare denne.
+      - key: SHOP_URL
+        value: https://admin.kortsalg.korthaien.no
+      # Stripe: hemmelig nøkkel (sk_test_… i testmodus) og signeringsnøkkelen
+      # til webhooken https://api.kortsalg.korthaien.no/api/stripe/webhook.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # Settes til 1 når Stripe har gitt kontoen tilgang til Vipps.
+      - key: STRIPE_VIPPS
+        sync: false
+      # Google-innlogging. Knappen vises først når begge er satt.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
 
   # Kundesiden. Statiske filer — Vite bygger dem, Render serverer dem.
   # VITE_API_URL bakes inn ved bygging, ikke ved kjøring, så en endring her

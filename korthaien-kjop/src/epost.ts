@@ -511,3 +511,21 @@ export async function sendTilbakestilling(email: string, lenke: string): Promise
     tekst: `Velg et nytt passord her (virker i én time): ${lenke}\n\nBa du ikke om dette, kan du se bort fra e-posten.`,
   });
 }
+
+export async function sendBekreftEpost(email: string, lenke: string): Promise<Utfall> {
+  return send({
+    til: email,
+    emne: "Bekreft e-postadressen — Korthaien",
+    html: RAMME(
+      `<h2 style="font-size:20px;margin:0 0 6px">Bekreft e-postadressen din</h2>
+       <p>Trykk på knappen for å bekrefte at adressen er din. Da følger kreditten og tidligere ordrer på
+       adressen med kontoen. Lenken virker i et døgn.</p>
+       <p style="margin:20px 0"><a href="${trygg(lenke)}" style="background:#22201d;color:#fff;padding:10px 18px;
+         border-radius:6px;text-decoration:none;font-weight:600">Bekreft adressen</a></p>
+       <p style="font-size:13px;color:#7a746c">Lagde du ikke en konto hos Korthaien, kan du se bort fra e-posten.
+       Uten bekreftelse får ingen tilgang til kreditten eller ordrene dine.</p>`,
+      "Kundekonto"
+    ),
+    tekst: `Bekreft e-postadressen din her (virker i et døgn): ${lenke}\n\nLagde du ikke en konto, kan du se bort fra e-posten.`,
+  });
+}
