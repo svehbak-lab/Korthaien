@@ -18,13 +18,24 @@ export type Salgsrad = {
   kunde: string;
   uten_mva_ore: number;
   med_mva_ore: number;
+  // Slik salgslisten viser ordren: beløp uten mva, mvaen, og ordresummen.
+  // Beløp uten mva er kortene pluss frakten fratrukket mva.
+  eks_mva_ore: number;
+  mva_ore: number;
+  sum_ore: number;
 };
 
 export type Salgsrapport = {
   fra: string;
   til: string;
   rader: Salgsrad[];
-  sum: { uten_mva_ore: number; med_mva_ore: number; herav_mva_ore: number; totalt_ore: number };
+  sum: {
+    uten_mva_ore: number;
+    med_mva_ore: number;
+    herav_mva_ore: number;
+    eks_mva_ore: number;
+    totalt_ore: number;
+  };
 };
 
 // Frakt og annet med ordinær moms er ført inkludert 25 % mva. Momsen er da
@@ -32,6 +43,12 @@ export type Salgsrapport = {
 // avrundingen skjer én gang.
 const MVA_SATS = 0.25;
 const mvaAv = (inklØre: number) => Math.round((inklØre * MVA_SATS) / (1 + MVA_SATS));
+
+function beløp(uten: number, med: number) {
+  const mva = mvaAv(med);
+  const sum = uten + med;
+  return { uten_mva_ore: uten, med_mva_ore: med, eks_mva_ore: sum - mva, mva_ore: mva, sum_ore: sum };
+}
 
 export function osloDato(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
@@ -69,18 +86,20 @@ export async function salgsrapport(fra: string, til: string): Promise<Salgsrappo
       dato,
       ordrenr: String(x.ordrenr),
       kunde: String(x.kunde_navn),
-      uten_mva_ore: Number(x.uten_mva_ore) || 0,
-      med_mva_ore: Number(x.med_mva_ore) || 0,
+      ...beløp(Number(x.uten_mva_ore) || 0, Number(x.med_mva_ore) || 0),
     });
   }
 
   const uten = rader.reduce((n, x) => n + x.uten_mva_ore, 0);
   const med = rader.reduce((n, x) => n + x.med_mva_ore, 0);
+  // Momsen summeres linje for linje, slik den står i listen. Da er summen
+  // nederst i listen og tallet i oppsummeringen alltid det samme, øre for øre.
+  const mva = rader.reduce((n, x) => n + x.mva_ore, 0);
   return {
     fra,
     til,
     rader,
-    sum: { uten_mva_ore: uten, med_mva_ore: med, herav_mva_ore: mvaAv(med), totalt_ore: uten + med },
+    sum: { uten_mva_ore: uten, med_mva_ore: med, herav_mva_ore: mva, eks_mva_ore: uten + med - mva, totalt_ore: uten + med },
   };
 }
 
@@ -201,7 +220,7 @@ export async function salgslistePdf(rapport: Salgsrapport): Promise<Buffer> {
     { navn: "Ordrenr", b: 70, h: false },
     { navn: "Kunde", b: bredde - 62 - 70 - 3 * 72, h: false },
     { navn: "Uten mva", b: 72, h: true },
-    { navn: "Med mva", b: 72, h: true },
+    { navn: "Mva", b: 72, h: true },
     { navn: "Sum", b: 72, h: true },
   ];
   const RAD = 16;
@@ -241,7 +260,7 @@ export async function salgslistePdf(rapport: Salgsrapport): Promise<Buffer> {
 
   hode(doc, "Salgsliste", firma, org, periode);
   doc.font("Helvetica").fontSize(9).fillColor(GRÅ)
-    .text("Beløp i kroner. «Uten mva» er varer solgt etter avansemetoden. «Med mva» er frakt og annet med ordinær mva, inkludert 25 % mva.", MARG, doc.y, { width: bredde });
+    .text("Beløp i kroner. «Sum» er ordresummen. «Mva» er 25 % mva på frakt og annet med ordinær mva; kortene selges etter avansemetoden og har ingen mva her. «Uten mva» er sum minus mva.", MARG, doc.y, { width: bredde });
   doc.moveDown(1);
 
   tabellhode();
@@ -250,15 +269,14 @@ export async function salgslistePdf(rapport: Salgsrapport): Promise<Buffer> {
     doc.moveDown(1);
   }
   for (const x of rapport.rader) {
-    rad([norskDato(x.dato), x.ordrenr, x.kunde, kr(x.uten_mva_ore), kr(x.med_mva_ore), kr(x.uten_mva_ore + x.med_mva_ore)]);
+    rad([norskDato(x.dato), x.ordrenr, x.kunde, kr(x.eks_mva_ore), kr(x.mva_ore), kr(x.sum_ore)]);
   }
 
   doc.y += 2;
   doc.moveTo(MARG, doc.y).lineTo(MARG + bredde, doc.y).lineWidth(0.8).strokeColor(BLEKK).stroke();
   doc.y += 5;
   const n = rapport.rader.length;
-  rad(["Sum", `${n} salg`, "", kr(rapport.sum.uten_mva_ore), kr(rapport.sum.med_mva_ore), kr(rapport.sum.totalt_ore)], true);
-  rad(["", "", "herav mva 25 %", "", kr(rapport.sum.herav_mva_ore), ""]);
+  rad(["Sum", `${n} salg`, "", kr(rapport.sum.eks_mva_ore), kr(rapport.sum.herav_mva_ore), kr(rapport.sum.totalt_ore)], true);
 
   fot(doc);
   return tilBuffer(doc);

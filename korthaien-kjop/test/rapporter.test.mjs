@@ -84,3 +84,17 @@ test("PDF-ene lages, også for en tom periode", async () => {
     }
   }
 });
+
+test("hver linje i listen: uten mva + mva = ordresummen", async () => {
+  const r = await salgsrapport("2026-01-01", "2026-12-31");
+  for (const x of r.rader) {
+    assert.equal(x.eks_mva_ore + x.mva_ore, x.sum_ore);
+    assert.equal(x.sum_ore, x.uten_mva_ore + x.med_mva_ore);
+  }
+  const o = r.rader.find((x) => x.ordrenr === midt);
+  // 40 kr kort + 150 kr frakt: mva 30 kr, uten mva 160 kr, sum 190 kr.
+  assert.deepEqual([o.eks_mva_ore, o.mva_ore, o.sum_ore], [16000, 3000, 19000]);
+  // Summen av linjenes mva er den samme som står i oppsummeringen.
+  assert.equal(r.rader.reduce((n, x) => n + x.mva_ore, 0), r.sum.herav_mva_ore);
+  assert.equal(r.sum.eks_mva_ore + r.sum.herav_mva_ore, r.sum.totalt_ore);
+});

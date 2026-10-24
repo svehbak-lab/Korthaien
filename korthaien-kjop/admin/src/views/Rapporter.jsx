@@ -155,7 +155,7 @@ export default function Rapporter({ onFeil }) {
                       <th>Ordrenr</th>
                       <th>Kunde</th>
                       <th className="h">Uten mva</th>
-                      <th className="h">Med mva</th>
+                      <th className="h">Mva</th>
                       <th className="h">Sum</th>
                     </tr>
                   </thead>
@@ -165,9 +165,9 @@ export default function Rapporter({ onFeil }) {
                         <td className="tall">{norsk(r.dato)}</td>
                         <td className="kode">{r.ordrenr}</td>
                         <td>{r.kunde}</td>
-                        <td className="h tall">{kroner(r.uten_mva_ore)}</td>
-                        <td className="h tall">{kroner(r.med_mva_ore)}</td>
-                        <td className="h tall">{kroner(r.uten_mva_ore + r.med_mva_ore)}</td>
+                        <td className="h tall">{kroner(r.eks_mva_ore)}</td>
+                        <td className="h tall">{kroner(r.mva_ore)}</td>
+                        <td className="h tall">{kroner(r.sum_ore)}</td>
                       </tr>
                     ))}
                   </tbody>
