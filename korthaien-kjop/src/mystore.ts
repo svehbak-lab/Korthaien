@@ -1,7 +1,7 @@
 import { db, normaliser } from "./db.js";
 import { byggIndeks, finnSett } from "./settnavn.js";
 import { gjettSett } from "./gjett.js";
-import { variantFraNavn, skillUtNummer, skillUtBokstav, nummerFraParentes, oppgirBehandling } from "./varianter.js";
+import { variantFraNavn, skillUtNummer, skillUtBokstav, nummerFraParentes, oppgirBehandling, erIkkeSpillekort } from "./varianter.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MYSTORE
@@ -287,6 +287,7 @@ export async function synkMystore(
   let koblet = 0;
   const uløste: { p: Produkt; kat: string; setCode: string }[] = [];
   const stockRader: { sql: string; args: any[] }[] = [];
+  let ikkeSpillekort = 0;
   // Manuelle koblinger. Hele tabellen leses én gang — den er liten, og et
   // oppslag per produkt ville vært titusener av spørringer mot Frankfurt.
   //
@@ -340,6 +341,14 @@ export async function synkMystore(
       // havne i uløst-lista. Ellers kommer det tilbake ved hver synk, og
       // lista blir aldri kortere uansett hvor mye du rydder.
       if (lenke?.ignored) continue;
+      // Displaykort og overstore kort er ikke kort i katalogen (se
+      // erIkkeSpillekort). En kobling de har fått tidligere, fjernes. En
+      // manuell kobling vinner likevel — da har du bestemt det selv.
+      if (!lenke?.card_id && erIkkeSpillekort(p.navn)) {
+        stockRader.push({ sql: "DELETE FROM mystore_stock WHERE product_id = ?", args: [p.id] });
+        ikkeSpillekort++;
+        continue;
+      }
       // «non-foil» inneholder «foil», og bindestreken er en ordgrense — så
       // \bfoil\b traff dem også, og kortene ble koblet som foil-utgaver.
       // Beholdningen havnet på feil rad, og kvoten for vanlige ble null.
@@ -614,6 +623,7 @@ export async function synkMystore(
   if (foreldet.rowsAffected) {
     logg(`  ${foreldet.rowsAffected} foreldede koblinger fjernet.`);
   }
+  if (ikkeSpillekort) logg(`  ${ikkeSpillekort} displaykort og overstore kort hoppet over — de er ikke kort i katalogen.`);
 
   // Lista bygges på nytt hver synk, så koblede produkter forsvinner av seg selv.
   await db().execute("DELETE FROM mystore_unmatched");

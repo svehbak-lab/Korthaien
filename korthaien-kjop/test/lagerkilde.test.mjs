@@ -56,3 +56,22 @@ test("med LAGERKILDE=bok leser butikken lagerboken", async () => {
   assert.equal(b.get("k2:nonfoil:NM"), 3);
   delete process.env.LAGERKILDE;
 });
+
+test("displaykort kobles ikke til et annet kort, og en gammel feilkobling fjernes", async () => {
+  const { erIkkeSpillekort } = await import("../src/varianter.ts");
+  assert.equal(erIkkeSpillekort("The Wise Mothman (Display Commander) (Not Tournament Legal)"), true);
+  assert.equal(erIkkeSpillekort("The Wise Mothman - Display Commander"), true);
+  assert.equal(erIkkeSpillekort("Atraxa (Oversized)"), true);
+  assert.equal(erIkkeSpillekort("The Wise Mothman (Showcase)"), false);
+  assert.equal(erIkkeSpillekort("Thick-Skinned Goblin"), false);
+
+  // Koblingen som allerede ligger der, ryddes ved oppstart.
+  await db().execute({
+    sql: `INSERT INTO mystore_stock (card_id,finish,qty,product_id,product_name,synced_at)
+          VALUES ('k2','foil',1,'p-mothman','The Wise Mothman (Display Commander) (Not Tournament Legal)',?)`,
+    args: [new Date().toISOString()],
+  });
+  await migrate();
+  const r = await db().execute("SELECT COUNT(*) AS n FROM mystore_stock WHERE product_id = 'p-mothman'");
+  assert.equal(Number(r.rows[0].n), 0);
+});

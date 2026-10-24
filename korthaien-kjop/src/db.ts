@@ -358,6 +358,18 @@ async function leggTilNyeKolonner(): Promise<void> {
     }
   }
 
+  // Displaykort som ble koblet til et annet kort før erIkkeSpillekort fantes
+  // (The Wise Mothman til showcasen #343). Synken fjerner dem når den ser
+  // produktet igjen, men ikke alle sett synkes hver natt — derfor her også.
+  // Kjøres ved hver oppstart, men finner ingenting etter første gang.
+  if (lager.size) {
+    await db().execute(`DELETE FROM mystore_stock
+      WHERE product_id NOT IN (SELECT product_id FROM mystore_links WHERE card_id IS NOT NULL AND product_id IS NOT NULL)
+        AND (lower(product_name) LIKE '%display commander%'
+          OR lower(product_name) LIKE '%not tournament legal%'
+          OR lower(product_name) LIKE '%oversized%')`);
+  }
+
   const ku = await kolonner("kunder");
   if (ku.size && !ku.has("epost_bekreftet_at")) {
     await db().execute("ALTER TABLE kunder ADD COLUMN epost_bekreftet_at TEXT");

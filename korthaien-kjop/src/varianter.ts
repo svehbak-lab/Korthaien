@@ -169,3 +169,19 @@ export function oppgirBehandling(navn: string): boolean {
   }
   return false;
 }
+
+// ── ikke spillekort ──────────────────────────────────────────────────────────
+// Displaykort og overstore kort finnes ikke som egne kort hos Scryfall. Står
+// det «Not Tournament Legal» i navnet, slo regelen over til — «oppgir en
+// behandling, så er grunnutgaven feil» — og valgte en hvilken som helst annen
+// utgave i settet. «The Wise Mothman (Display Commander) (Not Tournament
+// Legal)» havnet på Pip-Boy-showcasen #343: et annet kort, med en annen pris,
+// som da sto på lager i butikken og i kupplista uten at du hadde det.
+//
+// Slike produkter kobles derfor ikke automatisk. Vil du selge dem i den nye
+// butikken, hører de hjemme under Produkter.
+const IKKE_SPILLEKORT = /\b(display\s*commanders?|not\s*tournament\s*legal|oversized)\b/i;
+
+export function erIkkeSpillekort(navn: string): boolean {
+  return IKKE_SPILLEKORT.test(navn);
+}
