@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import Frakt from "./Frakt.jsx";
 import Kreditt from "./Kreditt.jsx";
 import Utseende from "./Utseende.jsx";
+import Rapporter from "./Rapporter.jsx";
 import QRCode from "qrcode";
 import { api, CONDITIONS, CONDITION_NAVN, kroner } from "../api.js";
 
@@ -18,6 +19,7 @@ export default function Innstillinger({ fane, onFeil, onMelding }) {
   if (fane === "frakt") return <Frakt onFeil={onFeil} onMelding={onMelding} />;
   if (fane === "kreditt") return <Kreditt onFeil={onFeil} />;
   if (fane === "utseende") return <Utseende onFeil={onFeil} onMelding={onMelding} />;
+  if (fane === "rapporter") return <Rapporter onFeil={onFeil} />;
 
   if (!s) return <p className="dempet">Henter innstillinger…</p>;
 

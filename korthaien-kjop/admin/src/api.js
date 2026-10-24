@@ -24,6 +24,27 @@ async function kall(sti, opts = {}) {
   return data;
 }
 
+// PDF-ene hentes med fetch og ikke en vanlig lenke: admin og API ligger på
+// ulike domener, og sesjonscookien følger bare med når vi ber om det.
+export async function lastNedPdf(sti, filnavn) {
+  const r = await fetch(BASE + sti, { credentials: "include" });
+  if (r.status === 401) throw new UtloggetFeil();
+  if (!r.ok) {
+    const t = await r.text();
+    let feil = `Serveren svarte ${r.status}`;
+    try { feil = JSON.parse(t).feil || feil; } catch {}
+    throw new Error(feil);
+  }
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filnavn;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 export class UtloggetFeil extends Error {
   constructor() {
     super("Sesjonen er utløpt");
@@ -131,6 +152,7 @@ export const api = {
   slåAvFrakt: (id) => kall(`/api/admin/frakt/${id}`, { method: "DELETE" }),
 
   kreditt: (q) => kall(`/api/admin/kreditt?q=${encodeURIComponent(q || "")}`),
+  salgsrapport: (fra, til) => kall(`/api/admin/rapporter/salg?fra=${fra}&til=${til}`),
   kredittKonto: (epost) => kall(`/api/admin/kreditt/${encodeURIComponent(epost)}`),
   bokførKreditt: (felt) => kall("/api/admin/kreditt", { method: "POST", body: felt }),
 

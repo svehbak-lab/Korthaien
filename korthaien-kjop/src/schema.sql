@@ -456,3 +456,33 @@ CREATE TABLE IF NOT EXISTS produkter (
   updated_at  TEXT NOT NULL);
 
 CREATE INDEX IF NOT EXISTS idx_produkter_type ON produkter (type, aktiv, sortering);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- SALGSORDRER
+-- ─────────────────────────────────────────────────────────────────────────
+-- Salg i Korthaiens egen butikk. Tabellen finnes før kassen, fordi
+-- rapportene bygges først: kassen fyller den, rapportene leser den.
+--
+-- Beløpene er delt etter moms og ikke etter hva de er betaling for. Det er
+-- det regnskapet spør om:
+--   uten_mva_ore  varer solgt etter avansemetoden (kortene). Momsen
+--                 beregnes senere av marginen, ikke av salgsprisen.
+--   med_mva_ore   alt med ordinær moms, inkludert momsen (i dag frakten).
+-- Kassen kan gjerne føre frakt og varer i egne kolonner i tillegg; disse to
+-- er det rapportene summerer.
+--
+-- Et salg teller den dagen det er betalt (betalt_at, UTC), regnet om til
+-- norsk dato. En ordre som aldri blir betalt, er aldri et salg.
+CREATE TABLE IF NOT EXISTS salgsordrer (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  ordrenr       TEXT NOT NULL UNIQUE,
+  kunde_navn    TEXT NOT NULL,
+  email         TEXT,
+  uten_mva_ore  INTEGER NOT NULL DEFAULT 0,
+  med_mva_ore   INTEGER NOT NULL DEFAULT 0,
+  -- apen, betalt, kansellert
+  status        TEXT NOT NULL DEFAULT 'apen',
+  betalt_at     TEXT,
+  created_at    TEXT NOT NULL);
+
+CREATE INDEX IF NOT EXISTS idx_salgsordrer_betalt ON salgsordrer (status, betalt_at);

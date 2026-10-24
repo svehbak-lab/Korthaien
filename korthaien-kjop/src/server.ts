@@ -35,6 +35,7 @@ import {
 import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER } from "./ratelimit.js";
 import { ordreStatistikk, lagerrapport, lagerhistorikk, lagreLagermåling } from "./statistikk.js";
+import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./rapporter.js";
 import { kuppliste, vaktelisteSammendrag, settKuppOppsett, kjørKuppjakt, egenliste, settRettet } from "./kupp.js";
 
 const app = express();
@@ -555,6 +556,36 @@ app.get("/api/admin/lagerhistorikk", krevAdmin, fang(async (_req: any, res: any)
 
 app.get("/api/admin/lagerrapport", krevAdmin, fang(async (_req: any, res: any) => {
   res.json(await lagerrapport());
+}));
+
+// ── rapporter ────────────────────────────────────────────────────────────────
+// Samme kjøring for skjermen og begge PDF-ene: periode inn, salgsrader ut.
+function periode(req: any): { fra: string; til: string } {
+  const fra = String(req.query.fra || "");
+  const til = String(req.query.til || "");
+  try {
+    sjekkPeriode(fra, til);
+  } catch (e: any) {
+    throw new HttpFeil(400, e.message);
+  }
+  return { fra, til };
+}
+
+app.get("/api/admin/rapporter/salg", krevAdmin, fang(async (req: any, res: any) => {
+  const { fra, til } = periode(req);
+  res.json(await salgsrapport(fra, til));
+}));
+
+app.get("/api/admin/rapporter/salg.pdf", krevAdmin, fang(async (req: any, res: any) => {
+  const { fra, til } = periode(req);
+  const type = req.query.type === "oppsummering" ? "oppsummering" : "liste";
+  const rapport = await salgsrapport(fra, til);
+  const pdf = type === "oppsummering" ? await oppsummeringPdf(rapport) : await salgslistePdf(rapport);
+  const navn = `${type === "oppsummering" ? "salgsoppsummering" : "salgsliste"}_${fra}_${til}.pdf`;
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${navn}"`);
+  res.setHeader("Cache-Control", "no-store");
+  res.send(pdf);
 }));
 
 app.get("/api/admin/lager", krevAdmin, fang(async (req: any, res: any) => {
