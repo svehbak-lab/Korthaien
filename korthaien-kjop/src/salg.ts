@@ -1,3 +1,4 @@
+import { utgaveNavn } from "./varianter.js";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import Stripe from "stripe";
 import { db, CONDITIONS, type Condition } from "./db.js";
@@ -593,10 +594,14 @@ export async function hentOrdre(ordrenr: string): Promise<any | null> {
   // Samme rekkefølge som kjøpsordrene: sett, raritet, navn. Lista følger
   // hyllene, så kortene kan plukkes i én runde.
   const l = await db().execute({
-    sql: `SELECT * FROM salgsordre_linjer WHERE ordre_id = ? ORDER BY ${SORTERING}, collector_number, finish, condition`,
+    sql: `SELECT salgsordre_linjer.*,
+                 (SELECT variant FROM cards WHERE cards.id = salgsordre_linjer.card_id) AS variant,
+                 (SELECT er_scroll FROM cards WHERE cards.id = salgsordre_linjer.card_id) AS er_scroll,
+                 (SELECT er_display FROM cards WHERE cards.id = salgsordre_linjer.card_id) AS er_display
+            FROM salgsordre_linjer WHERE ordre_id = ? ORDER BY ${SORTERING}, collector_number, finish, condition`,
     args: [o.id],
   });
-  return { ...o, linjer: l.rows };
+  return { ...o, linjer: l.rows.map((x: any) => ({ ...x, utgave: utgaveNavn(x) })) };
 }
 
 // Det kunden får se. Ingen interne notater.

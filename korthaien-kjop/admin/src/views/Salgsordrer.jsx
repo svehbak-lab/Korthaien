@@ -251,11 +251,12 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                     <td>
                       <b>{l.card_name}</b>
                       {l.finish === "foil" && <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>foil</span>}
+                      {l.utgave && <div style={{ fontSize: 12, fontWeight: 600, color: "var(--aksent, #1d4ed8)" }}>{l.utgave}</div>}
                     </td>
                     <td className="tall">{l.collector_number}</td>
                     <td>{l.condition}</td>
                     <td className="h tall" style={{ fontWeight: Number(l.antall) > 1 ? 700 : 400 }}>{l.antall}</td>
-                    <td className="h tall">{kroner(l.enhet_ore * l.antall)}</td>
+                    <td className="h tall" style={{ whiteSpace: "nowrap" }}>{kroner(l.enhet_ore * l.antall)}</td>
                   </tr>
                 );
               })}

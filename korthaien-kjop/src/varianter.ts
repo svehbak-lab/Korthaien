@@ -191,3 +191,16 @@ export function erDisplayProdukt(navn: string): boolean {
 export function erScrollProdukt(navn: string): boolean {
   return /\bscroll\b/i.test(navn);
 }
+
+// Utgaven i klartekst, til plukkliste og ordrebekreftelse. Tom for vanlige
+// kort. Uten den sto Gandalf the Grey bare som «#322», og showcase,
+// scroll-showcase og vanlig så like ut når kortene skulle plukkes.
+const UTGAVE: Record<string, string> = {
+  extended: "Extended Art", borderless: "Borderless", showcase: "Showcase",
+  retro: "Retro Frame", etched: "Etched", fullart: "Full Art",
+};
+export function utgaveNavn(k: { variant?: unknown; er_scroll?: unknown; er_display?: unknown }): string {
+  if (Number(k.er_display)) return "Display Commander";
+  const v = UTGAVE[String(k.variant || "")] || "";
+  return Number(k.er_scroll) ? (v === "Showcase" ? "Scroll Showcase" : `${v} Scroll`.trim()) : v;
+}

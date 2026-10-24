@@ -562,7 +562,7 @@ function OrdreLinjer({ o }) {
               <td>
                 {l.card_name}
                 <span className="dempet" style={{ fontSize: 12.5 }}>
-                  {" — "}{l.set_name}{l.collector_number ? ` #${l.collector_number}` : ""}{finishTekst(l.finish)}
+                  {" — "}{l.set_name}{l.collector_number ? ` #${l.collector_number}` : ""}{l.utgave ? ` · ${l.utgave}` : ""}{finishTekst(l.finish)}
                 </span>
               </td>
               <td>{l.condition}</td>

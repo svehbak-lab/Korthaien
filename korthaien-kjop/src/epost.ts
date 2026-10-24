@@ -385,7 +385,9 @@ function salgslinjer(linjer: any[]): string {
     .map(
       (l, i) => `<tr style="border-bottom:1px solid #f1eee8">
       <td style="padding:6px 8px;color:#7a746c;font-size:13px">${i + 1}</td>
-      <td style="padding:6px 8px">${trygg(l.card_name)}${FINISH(l.finish)}</td>
+      <td style="padding:6px 8px">${trygg(l.card_name)}${FINISH(l.finish)}${
+        l.utgave ? `<br><span style="font-size:12px;color:#7a746c">${trygg(l.utgave)}</span>` : ""
+      }</td>
       <td style="padding:6px 8px;color:#7a746c;font-size:13px">${trygg(l.set_name)}${
         l.collector_number ? ` #${trygg(l.collector_number)}` : ""
       }${l.rarity ? `<br><span style="font-size:11px">${trygg(l.rarity)}</span>` : ""}</td>
@@ -455,7 +457,7 @@ export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
     "",
     ...o.linjer.map(
       (l: any, i: number) =>
-        `${i + 1}. ${l.card_name}${FINISH(l.finish)} — ${l.set_name}${l.collector_number ? ` #${l.collector_number}` : ""}${
+        `${i + 1}. ${l.card_name}${FINISH(l.finish)}${l.utgave ? ` (${l.utgave})` : ""} — ${l.set_name}${l.collector_number ? ` #${l.collector_number}` : ""}${
           l.rarity ? ` [${l.rarity}]` : ""
         }, ${l.condition}, ${l.antall} stk., ${kr(Number(l.enhet_ore) * Number(l.antall))}`
     ),
