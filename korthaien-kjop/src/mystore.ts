@@ -1,7 +1,7 @@
 import { db, normaliser } from "./db.js";
 import { byggIndeks, finnSett } from "./settnavn.js";
 import { gjettSett } from "./gjett.js";
-import { variantFraNavn, skillUtNummer, skillUtBokstav, nummerFraParentes, oppgirBehandling, erDisplayProdukt } from "./varianter.js";
+import { variantFraNavn, skillUtNummer, skillUtBokstav, nummerFraParentes, oppgirBehandling, erDisplayProdukt, erScrollProdukt } from "./varianter.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MYSTORE
@@ -403,7 +403,11 @@ export async function synkMystore(
       // alle andre produkter skal aldri havne på den. Filteret står på samme
       // sted som serieutgavene, så det gjelder i hvert oppslag under.
       const display = erDisplayProdukt(p.navn) || erDisplayProdukt(kat.navn);
-      const ikkeSerie = ` AND c.er_serialized = 0 AND c.er_display = ${display ? 1 : 0}`;
+      // Scroll-showcase likedan: den deler variant med vanlig showcase, så
+      // uten filteret kunne «Gandalf the Grey (Showcase)» lande på #658.
+      const scroll = erScrollProdukt(p.navn) || erScrollProdukt(kat.navn);
+      const ikkeSerie = ` AND c.er_serialized = 0 AND c.er_display = ${display ? 1 : 0}`
+        + ` AND c.er_scroll = ${scroll ? 1 : 0}`;
       if (erToken) rent = rent.replace(/\b(token|emblem)\b/gi, "").replace(/\s{2,}/g, " ").trim();
 
       const n = normaliser(rent);

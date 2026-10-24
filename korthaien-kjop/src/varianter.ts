@@ -184,3 +184,10 @@ export function oppgirBehandling(navn: string): boolean {
 export function erDisplayProdukt(navn: string): boolean {
   return /\bdisplay\s*commanders?\b/i.test(navn);
 }
+
+// Scroll-showcase er en egen utgave (promo-typen «scroll» hos Scryfall), men
+// har samme variant som vanlig showcase. Produktet må si «scroll» for å
+// kobles dit; ellers skal det aldri havne der.
+export function erScrollProdukt(navn: string): boolean {
+  return /\bscroll\b/i.test(navn);
+}

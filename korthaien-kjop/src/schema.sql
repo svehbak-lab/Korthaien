@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS cards (
   er_serialized     INTEGER NOT NULL DEFAULT 0,
   -- Tykk displayutgave av en commander (Scryfalls promo-type «thick»).
   er_display        INTEGER NOT NULL DEFAULT 0,
+  er_scroll         INTEGER NOT NULL DEFAULT 0,
   released_at       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_cards_name    ON cards(name_norm);

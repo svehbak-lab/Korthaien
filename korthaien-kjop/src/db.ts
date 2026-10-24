@@ -96,6 +96,7 @@ async function leggTilNyeKolonner(): Promise<void> {
     ["er_token", "INTEGER NOT NULL DEFAULT 0"],
     ["er_serialized", "INTEGER NOT NULL DEFAULT 0"],
     ["er_display", "INTEGER NOT NULL DEFAULT 0"],
+    ["er_scroll", "INTEGER NOT NULL DEFAULT 0"],
   ] as const) {
     if (kortKol.size && !kortKol.has(navn)) {
       await db().execute(`ALTER TABLE cards ADD COLUMN ${navn} ${type}`);
@@ -367,6 +368,13 @@ async function leggTilNyeKolonner(): Promise<void> {
     await db().execute(`DELETE FROM mystore_stock
       WHERE lower(product_name) LIKE '%display commander%'
         AND card_id NOT IN (SELECT id FROM cards WHERE er_display = 1)
+        AND product_id NOT IN (SELECT product_id FROM mystore_links WHERE card_id IS NOT NULL AND product_id IS NOT NULL)`);
+    // Samme for scroll-showcase: Gandalf the Grey (showcase #322) landet på
+    // scroll-showcasen #658. Uten «scroll» i produktnavnet hører ikke
+    // produktet hjemme der.
+    await db().execute(`DELETE FROM mystore_stock
+      WHERE lower(COALESCE(product_name, '')) NOT LIKE '%scroll%'
+        AND card_id IN (SELECT id FROM cards WHERE er_scroll = 1)
         AND product_id NOT IN (SELECT product_id FROM mystore_links WHERE card_id IS NOT NULL AND product_id IS NOT NULL)`);
   }
 

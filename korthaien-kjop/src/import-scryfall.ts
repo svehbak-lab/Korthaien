@@ -109,6 +109,10 @@ const erSerialized = (k: Rå) => (k.promo_types || []).includes("serialized");
 // (The Wise Mothman er Fallout #1067), og et produkt som heter «Display
 // Commander» skal kobles dit — og ingen andre produkter skal havne der.
 const erDisplay = (k: Rå) => (k.promo_types || []).includes("thick");
+// Scroll-showcase (Lord of the Rings #658 m.fl.) har samme frame-effekter som
+// den vanlige showcasen (#322), så varianten blir «showcase» for begge. Bare
+// promo-typen «scroll» skiller dem.
+const erScroll = (k: Rå) => (k.promo_types || []).includes("scroll");
 
 const TOKEN_LAYOUT = new Set(["token", "double_faced_token", "emblem", "art_series"]);
 const erToken = (k: Rå) =>
@@ -233,9 +237,9 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
                collector_number, rarity, usd, usd_foil, has_nonfoil, has_foil, image_uri, released_at,
                type_line, oracle_text, mana_cost, cmc, colors, color_identity,
                power, toughness, loyalty, keywords, artist, legalities, reserved,
-               er_token, er_serialized, er_display)
+               er_token, er_serialized, er_display, er_scroll)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               usd = excluded.usd, usd_foil = excluded.usd_foil,
               image_uri = excluded.image_uri, rarity = excluded.rarity,
@@ -248,7 +252,8 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
               loyalty = excluded.loyalty, keywords = excluded.keywords,
               artist = excluded.artist, legalities = excluded.legalities,
               reserved = excluded.reserved, er_token = excluded.er_token,
-              er_serialized = excluded.er_serialized, er_display = excluded.er_display`,
+              er_serialized = excluded.er_serialized, er_display = excluded.er_display,
+              er_scroll = excluded.er_scroll`,
       args: [
         k.id,
         k.oracle_id || k.id,
@@ -288,6 +293,7 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
         erToken(k) ? 1 : 0,
         erSerialized(k) ? 1 : 0,
         erDisplay(k) ? 1 : 0,
+        erScroll(k) ? 1 : 0,
       ],
     };
   });
