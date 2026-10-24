@@ -437,9 +437,15 @@ export type Settings = {
   // automatisk» — og det er det den skal gjøre, så ingen trenger å huske å
   // bytte den.
   forside_sett: string[];
-  // Toppbildet på forsiden: et bilde av neste sett og datoen det kommer.
-  // Teksten over bildet følger datoen (se toppbanner.ts).
-  toppbanner: { bilde_id: number | null; dato: string | null; aktiv: boolean } | null;
+  // Toppbildet på forsiden: bildet, en tekst du skriver selv, hvor teksten
+  // står, og eventuelt settet et trykk fører til (se toppbanner.ts).
+  toppbanner: {
+    bilde_id: number | null;
+    tekst?: string | null;
+    plassering?: "hjorne" | "knapp";
+    sett?: string | null;
+    aktiv: boolean;
+  } | null;
   // Foretaket. Staar paa returssiden og i kassen, og skal kunne rettes uten
   // en utrulling — et organisasjonsnummer i koden er et som ingen finner.
   firmanavn: string;

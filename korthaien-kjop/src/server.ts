@@ -1492,9 +1492,14 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
   // Toppbildet tas imot i en fast form, så det som lagres alltid kan leses.
   if (req.body && "toppbanner" in req.body) {
     const b = req.body.toppbanner;
-    const dato = typeof b?.dato === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.dato) ? b.dato : null;
     req.body.toppbanner = b
-      ? { bilde_id: Number(b.bilde_id) > 0 ? Number(b.bilde_id) : null, dato, aktiv: !!b.aktiv }
+      ? {
+          bilde_id: Number(b.bilde_id) > 0 ? Number(b.bilde_id) : null,
+          tekst: String(b.tekst ?? "").trim().slice(0, 80) || null,
+          plassering: b.plassering === "knapp" ? "knapp" : "hjorne",
+          sett: /^[a-z0-9]{2,8}$/i.test(String(b.sett || "")) ? String(b.sett).toLowerCase() : null,
+          aktiv: !!b.aktiv,
+        }
       : null;
   }
   for (const [k, v] of Object.entries(req.body || {})) {

@@ -312,8 +312,29 @@ textarea { width: 100%; font-family: inherit; }
   font: 700 clamp(22px, 3.4vw, 38px)/1.1 var(--skrift-navn, var(--skrift));
   letter-spacing: -0.01em; text-shadow: 0 1px 12px rgb(0 0 0 / 45%);
 }
+/* Hele bildet er klikkbart når banneret peker på et sett. */
+.butikk .b-banner-flate {
+  position: absolute; inset: 0; z-index: 2; border: 0; padding: 0;
+  background: none; cursor: pointer;
+}
+.butikk .b-banner-flate:focus-visible { outline: 3px solid var(--oransje); outline-offset: -3px; }
+/* Knappen midt på bildet, i temaets aksentfarge — den samme som «Selg dine
+   kort», så den følger temaet. Den ligger under den klikkbare flaten og tar
+   ikke imot trykk selv; hover på flaten lyser den opp. */
+.butikk .b-banner-knapp {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1;
+  background: var(--oransje); color: var(--oransje-tekst);
+  font: 700 clamp(15px, 1.8vw, 19px)/1.2 var(--skrift);
+  padding: 14px 30px; border-radius: var(--pille, 999px);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 35%); white-space: nowrap; pointer-events: none;
+}
+.butikk .b-banner:has(.b-banner-flate:hover) .b-banner-knapp { filter: brightness(1.08); }
+/* Toningen nederst trengs bare for teksten i hjørnet. */
+.butikk .b-banner:has(.b-banner-knapp)::after,
+.butikk .b-banner:not(:has(.b-banner-tekst))::after { display: none; }
 @media (max-width: 560px) {
   .butikk .b-banner-tekst { left: 16px; bottom: 14px; }
+  .butikk .b-banner-knapp { padding: 10px 20px; }
 }
 .butikk .b-hero h1 { font-size: 27px; letter-spacing: -0.02em; margin: 0 0 6px; }
 .butikk .b-hero p { color: var(--dempet); max-width: 58ch; margin: 0 0 16px; }

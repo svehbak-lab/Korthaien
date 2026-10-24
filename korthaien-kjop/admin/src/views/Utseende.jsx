@@ -52,7 +52,7 @@ export default function Utseende({ onFeil, onMelding }) {
   useEffect(() => {
     api.innstillinger().then((s) => {
       setValgt(s.tema || "dagens");
-      setBanner(s.toppbanner || { bilde_id: null, dato: null, aktiv: false });
+      setBanner(s.toppbanner || { bilde_id: null, aktiv: false });
     }).catch(onFeil);
   }, []);
 
@@ -75,7 +75,7 @@ export default function Utseende({ onFeil, onMelding }) {
 
   return (
     <>
-    {banner && <Toppbilde start={banner} onFeil={onFeil} onMelding={onMelding} />}
+    {banner && <Toppbilde start={banner} tema={valgt} onFeil={onFeil} onMelding={onMelding} />}
     <div className="panel">
       <header><h3>Butikkens utseende</h3></header>
       <div className="krop">
@@ -113,20 +113,24 @@ export default function Utseende({ onFeil, onMelding }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // TOPPBILDET
 // ─────────────────────────────────────────────────────────────────────────────
-// Et stort bilde av neste sett øverst på forsiden. Teksten over bildet går
-// av seg selv: «Kommer 13. november» fram til datoen, «Ute nå» i 30 dager
-// etter, og så skjules bildet. Det kan aldri bli stående med en gammel dato.
-const MND = ["januar", "februar", "mars", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "desember"];
-const iDag = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(new Date());
-const pluss = (d, n) => { const x = new Date(`${d}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
-const norsk = (d) => { const [, m, dag] = d.split("-").map(Number); return `${dag}. ${MND[m - 1]}`; };
-
-function Toppbilde({ start, onFeil, onMelding }) {
-  const [b, setB] = useState(start);
-  const [lagret, setLagret] = useState(start);
+// Et stort bilde øverst på forsiden, med en tekst du skriver selv. Teksten
+// står i hjørnet, eller som en knapp midt på bildet i temaets aksentfarge.
+// Peker du på et sett, fører et trykk på bildet dit.
+function Toppbilde({ start, tema, onFeil, onMelding }) {
+  const tom = { bilde_id: null, tekst: "", plassering: "hjorne", sett: null, aktiv: false };
+  const [b, setB] = useState({ ...tom, ...start, tekst: start.tekst || "" });
+  const [lagret, setLagret] = useState(b);
   const [størrelse, setStørrelse] = useState(null);
+  const [sett, setSett] = useState([]);
   const [jobber, setJobber] = useState(false);
   const endret = JSON.stringify(b) !== JSON.stringify(lagret);
+
+  useEffect(() => {
+    api.sett().then((r) => {
+      const liste = [...(r.sett || [])].sort((x, y) => String(y.released_at || "").localeCompare(String(x.released_at || "")));
+      setSett(liste);
+    }).catch(() => {});
+  }, []);
 
   async function last(fil) {
     if (!fil) return;
@@ -141,12 +145,13 @@ function Toppbilde({ start, onFeil, onMelding }) {
     setJobber(false);
   }
 
-  async function lagre(ny = b) {
+  async function lagre() {
     setJobber(true);
     try {
-      const s = await api.lagreInnstillinger({ toppbanner: ny });
-      setB(s.toppbanner);
-      setLagret(s.toppbanner);
+      const s = await api.lagreInnstillinger({ toppbanner: b });
+      const ny = { ...tom, ...s.toppbanner, tekst: s.toppbanner?.tekst || "" };
+      setB(ny);
+      setLagret(ny);
       onMelding(ny.aktiv && ny.bilde_id ? "Toppbildet er lagret." : "Toppbildet er skjult.");
     } catch (e) {
       onFeil(e);
@@ -154,58 +159,89 @@ function Toppbilde({ start, onFeil, onMelding }) {
     setJobber(false);
   }
 
-  const d = iDag();
-  const status = !b.bilde_id
-    ? "Ingen bilde lastet opp. Forsiden viser den vanlige teksten."
-    : !b.dato
-      ? "Velg utgivelsesdatoen, så vet bildet hva det skal si."
-      : !b.aktiv
-        ? "Skjult. Forsiden viser den vanlige teksten."
-        : d < b.dato
-          ? `Viser «Kommer ${norsk(b.dato)}» til ${norsk(pluss(b.dato, -1))}, «Ute nå» fram til ${norsk(pluss(b.dato, 29))}, så skjules bildet av seg selv.`
-          : d < pluss(b.dato, 30)
-            ? `Viser «Ute nå» fram til ${norsk(pluss(b.dato, 29))}, så skjules bildet av seg selv.`
-            : "Datoen er passert med mer enn 30 dager. Bildet vises ikke lenger.";
-
   return (
     <div className="panel">
       <header><h3>Toppbilde på forsiden</h3></header>
       <div className="krop skjema">
         <p className="dempet" style={{ margin: 0 }}>
-          Et stort bilde av neste sett øverst på forsiden. Bruk et bilde som er minst 1600 piksler bredt,
-          gjerne fra butikkpakken til settet. Mindre bilder blir uskarpe på store skjermer.
+          Et stort bilde øverst på forsiden. Bruk et bilde som er minst 1600 piksler bredt; mindre bilder blir
+          uskarpe på store skjermer.
         </p>
+
         {b.bilde_id ? (
-          <div style={{ maxWidth: 640, overflow: "hidden", borderRadius: 8, background: "#111" }}>
-            <img
-              src={bildeUrl(b.bilde_id)}
-              alt="Toppbildet slik det vises på forsiden"
-              style={{ width: "100%", height: "auto", display: "block" }}
-              onLoad={(e) => setStørrelse((s) => s || { bredde: e.target.naturalWidth, hoyde: e.target.naturalHeight })}
-            />
+          // Butikkens egne klasser i temaet som er valgt, så forhåndsvisningen
+          // er det kundene ser — også fargen på knappen.
+          <div className="butikk" data-tema={tema} style={{ margin: 0, padding: 0, minHeight: 0, background: "transparent", maxWidth: 640 }}>
+            <div
+              className="b-banner"
+              style={{ marginBottom: 0, ...(størrelse ? { aspectRatio: `${størrelse.bredde} / ${størrelse.hoyde}` } : {}) }}
+            >
+              <img
+                src={bildeUrl(b.bilde_id)}
+                alt="Toppbildet slik det vises på forsiden"
+                onLoad={(e) => setStørrelse((s) => s || { bredde: e.target.naturalWidth, hoyde: e.target.naturalHeight })}
+              />
+              {b.tekst && b.plassering === "knapp" && <span className="b-banner-knapp">{b.tekst}</span>}
+              {b.tekst && b.plassering !== "knapp" && <div className="b-banner-tekst">{b.tekst}</div>}
+            </div>
           </div>
         ) : null}
         {størrelse && størrelse.bredde < 1600 && (
           <p style={{ margin: 0, fontSize: 13, color: "var(--advarsel)" }}>
             Bildet er {størrelse.bredde} × {størrelse.hoyde} piksler. Under 1600 piksler bredt blir det uskarpt
-            over hele bredden. Finn en større utgave hvis du kan.
+            over hele bredden.
           </p>
         )}
+
         <label>
           {b.bilde_id ? "Bytt bilde" : "Last opp bilde"} (JPEG, PNG eller WebP)
           <input type="file" accept="image/jpeg,image/png,image/webp" disabled={jobber} onChange={(e) => last(e.target.files?.[0])} />
         </label>
-        <label style={{ maxWidth: 220 }}>
-          Utgivelsesdato
-          <input type="date" value={b.dato || ""} onChange={(e) => setB({ ...b, dato: e.target.value || null })} />
+
+        <label style={{ maxWidth: 420 }}>
+          Tekst
+          <input
+            value={b.tekst}
+            maxLength={80}
+            placeholder="Kommer 13. november"
+            onChange={(e) => setB({ ...b, tekst: e.target.value })}
+          />
+          <span className="dempet" style={{ fontSize: 12 }}>Tomt felt: bare bildet.</span>
         </label>
+
+        <div>
+          <div style={{ fontSize: 13, marginBottom: 4 }}>Plassering</div>
+          <label className="rad-flex" style={{ gap: 8 }}>
+            <input type="radio" name="plassering" checked={b.plassering !== "knapp"} onChange={() => setB({ ...b, plassering: "hjorne" })} />
+            Nede i hjørnet
+          </label>
+          <label className="rad-flex" style={{ gap: 8 }}>
+            <input type="radio" name="plassering" checked={b.plassering === "knapp"} onChange={() => setB({ ...b, plassering: "knapp" })} />
+            Knapp midt på bildet, i temaets aksentfarge
+          </label>
+        </div>
+
+        <label style={{ maxWidth: 420 }}>
+          Trykk på bildet fører til
+          <select value={b.sett || ""} onChange={(e) => setB({ ...b, sett: e.target.value || null })}>
+            <option value="">Ingen steder</option>
+            {sett.map((s) => (
+              <option key={s.code} value={s.code}>{s.visningsnavn || s.name}</option>
+            ))}
+          </select>
+          {b.plassering === "knapp" && !b.sett && (
+            <span style={{ fontSize: 12, color: "var(--advarsel)" }}>
+              En knapp bør føre et sted. Velg et sett, eller bruk tekst i hjørnet.
+            </span>
+          )}
+        </label>
+
         <label className="rad-flex" style={{ gap: 8 }}>
           <input type="checkbox" checked={!!b.aktiv} onChange={(e) => setB({ ...b, aktiv: e.target.checked })} />
           Vis toppbildet på forsiden
         </label>
-        <p className="dempet" style={{ margin: 0, fontSize: 13 }}>{status}</p>
         <div className="rad-flex">
-          <button className="knapp primar" disabled={jobber || !endret} onClick={() => lagre()}>Lagre</button>
+          <button className="knapp primar" disabled={jobber || !endret} onClick={lagre}>Lagre</button>
         </div>
       </div>
     </div>

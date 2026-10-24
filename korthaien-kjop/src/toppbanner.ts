@@ -3,45 +3,25 @@ import { db, hentSettings } from "./db.js";
 // ─────────────────────────────────────────────────────────────────────────────
 // TOPPBILDET PÅ FORSIDEN
 // ─────────────────────────────────────────────────────────────────────────────
-// Et stort bilde av neste sett, med én linje tekst over. Teksten følger
-// datoen, så banneret aldri kan stå med en dato som er passert:
-//
-//   før utgivelsen     «Kommer 13. november»
-//   de neste 30 dagene «Ute nå»
-//   deretter           skjules, og forsiden viser den vanlige teksten igjen
+// Et stort bilde, med en tekst du skriver selv. Teksten står enten nede i
+// hjørnet, eller som en knapp midt på bildet i temaets aksentfarge. Peker
+// banneret på et sett, fører et trykk dit.
 
-export const UTE_NÅ_DAGER = 30;
+export type Plassering = "hjorne" | "knapp";
 
-const MÅNEDER = ["januar", "februar", "mars", "april", "mai", "juni", "juli",
-  "august", "september", "oktober", "november", "desember"];
-
-export const osloIdag = (d = new Date()) =>
-  new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(d);
-
-function plussDager(dato: string, n: number): string {
-  const d = new Date(`${dato}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
-export function bannertekst(dato: string | null, idag = osloIdag()): string | null {
-  if (!dato) return null;
-  if (idag < dato) {
-    const [, m, d] = dato.split("-").map(Number);
-    return `Kommer ${d}. ${MÅNEDER[m - 1]}`;
-  }
-  if (idag < plussDager(dato, UTE_NÅ_DAGER)) return "Ute nå";
-  return null;
-}
-
-export async function aktivtBanner(idag = osloIdag()) {
+export async function aktivtBanner() {
   const { toppbanner: b } = await hentSettings();
   if (!b || !b.aktiv || !b.bilde_id) return null;
-  const tekst = bannertekst(b.dato, idag);
-  if (!tekst) return null;
   const r = await db().execute({ sql: "SELECT bredde, hoyde FROM bilder WHERE id = ?", args: [b.bilde_id] });
   if (!r.rows[0]) return null;
-  return { bilde_id: Number(b.bilde_id), tekst, bredde: r.rows[0].bredde, hoyde: r.rows[0].hoyde };
+  return {
+    bilde_id: Number(b.bilde_id),
+    tekst: String(b.tekst || "").trim() || null,
+    plassering: (b.plassering === "knapp" ? "knapp" : "hjorne") as Plassering,
+    sett: b.sett || null,
+    bredde: r.rows[0].bredde,
+    hoyde: r.rows[0].hoyde,
+  };
 }
 
 // ── bildefiler ──────────────────────────────────────────────────────────────

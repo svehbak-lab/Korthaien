@@ -1396,7 +1396,25 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
           style={banner.bredde && banner.hoyde ? { aspectRatio: `${banner.bredde} / ${banner.hoyde}` } : undefined}
         >
           <img src={bildeUrl(banner.bilde_id)} alt="" />
-          <div className="b-banner-tekst">{banner.tekst}</div>
+          {/* Peker banneret på et sett, fører hele bildet dit — knappen er
+              bare det tydeligste stedet å trykke. */}
+          {banner.sett && (
+            <button
+              className="b-banner-flate"
+              aria-label={banner.tekst || "Se settet"}
+              onClick={() => onSett(banner.sett)}
+            />
+          )}
+          {banner.tekst && banner.plassering === "knapp" ? (
+            <span
+              className="b-banner-knapp"
+              role={banner.sett ? undefined : "note"}
+            >
+              {banner.tekst}
+            </span>
+          ) : banner.tekst ? (
+            <div className="b-banner-tekst">{banner.tekst}</div>
+          ) : null}
         </div>
       ) : banner === null && (
       <div className="b-hero">
