@@ -16,8 +16,11 @@ export default function Ordrer({ onFeil, onAntall }) {
   const [åpen, setÅpen] = useState(null);
   const [laster, setLaster] = useState(true);
 
-  async function last() {
-    setLaster(true);
+  // Etter en endring på en linje hentes ordrene på nytt i bakgrunnen, uten
+  // «Henter»-teksten. Den byttet ut hele lista et øyeblikk, siden krympet,
+  // og nettleseren hoppet til toppen — midt i kontrollen av en ordre.
+  async function last(stille = false) {
+    if (!stille) setLaster(true);
     try {
       const d = await api.ordrer(arkiv);
       setOrdrer(d);
@@ -46,7 +49,7 @@ export default function Ordrer({ onFeil, onAntall }) {
         <button className={`knapp ${arkiv ? "primar" : ""}`} onClick={() => setArkiv(true)}>
           Ferdige
         </button>
-        <button className="knapp" onClick={last}>Oppdater</button>
+        <button className="knapp" onClick={() => last(true)}>Oppdater</button>
       </div>
 
       {!ordrer.length && (
@@ -64,7 +67,7 @@ export default function Ordrer({ onFeil, onAntall }) {
           ordre={o}
           åpen={åpen === o.id}
           onVeksle={() => setÅpen(åpen === o.id ? null : o.id)}
-          onEndret={last}
+          onEndret={() => last(true)}
           onFeil={onFeil}
         />
       ))}
@@ -340,6 +343,14 @@ function Linje({ linje, onEndret, onFeil }) {
   const [mottatt, setMottatt] = useState(linje.qty_received ?? linje.qty);
   const [cond, setCond] = useState(linje.condition);
   const [lagrer, setLagrer] = useState(false);
+
+  // Lista oppdateres i bakgrunnen etter en endring, så linjen bygges ikke på
+  // nytt. Endrer serveren antall eller tilstand (et utgavebytte, en retting
+  // et annet sted), følger feltene med.
+  useEffect(() => {
+    setMottatt(linje.qty_received ?? linje.qty);
+    setCond(linje.condition);
+  }, [linje.qty_received, linje.qty, linje.condition]);
 
   const endret = mottatt !== (linje.qty_received ?? linje.qty) || cond !== linje.condition;
   const avvik = mottatt !== linje.qty;
