@@ -806,13 +806,16 @@ function AlleSett({ sett, onVelg }) {
 // De andre — surge foil, galaxy foil, textured — ligger i Scryfalls
 // promo_types, som ikke lagres hos oss. Skal de merkes, må kolonnen inn
 // først; importen leser feltet allerede.
-function FoilMerke({ variant }) {
+// I galleriet står merket på samme linje som samlernummeret, ikke på egen
+// linje: en ekstra linje ville skjøvet tilstandene og prisen på foilkortene
+// ned, så de ikke lenger står på linje med kortene ved siden av.
+function FoilMerke({ variant, påLinja }) {
   const etched = variant === "etched";
   return (
     <span
       style={{
         display: "inline-block",
-        marginTop: 5,
+        ...(påLinja ? { marginLeft: 6, verticalAlign: "1px", lineHeight: 1.45 } : { marginTop: 5 }),
         background: etched ? "#d9c08a" : "#f5d020",
         color: "#3b2f05",
         fontSize: 11,
@@ -1151,8 +1154,8 @@ function Galleriflis({ kort, onÅpne, onSett }) {
         </div>
         <div className="dempet b-gnr">
           Collector #: {kort.collector_number}
+          {kort.valgt.finish === "foil" && <FoilMerke variant={kort.variant} påLinja />}
         </div>
-        {kort.valgt.finish === "foil" && <FoilMerke variant={kort.variant} />}
 
         <div className="cond-valg" style={{ marginTop: 8 }}>
           {CONDITIONS.map((c) => {
