@@ -267,8 +267,13 @@ textarea { width: 100%; font-family: inherit; }
 }
 /* Utsolgte tilstander er dempet, men fortsatt klikkbare — prisen er verdt å
    se selv når beholdningen er null. */
-.butikk .cond-valg button.tom { color: var(--dempet); }
-.butikk .cond-valg button.tom[aria-pressed="true"] { color: var(--sjo); }
+/* Tilstander uten beholdning er svake, som hos Card Kingdom: det du har på
+   lager, skal synes med en gang. Knappen virker fortsatt — prisen er verdt å
+   se selv når beholdningen er null. Svak tekst på en knapp som ikke kan
+   kjøpes, er unntatt kontrastkravet; resten av siden holder det. */
+.butikk .cond-valg button.tom { color: var(--dempet); opacity: 0.38; }
+.butikk .cond-valg button.tom:hover { opacity: 0.7; }
+.butikk .cond-valg button.tom[aria-pressed="true"] { color: var(--sjo); opacity: 0.7; }
 
 /* Lenker inne i butikkvisningen. Kortnavn og settnavn er klikkbare, og må se
    det ut — en museklikk-flate som ser ut som tekst finner ingen. */
