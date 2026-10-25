@@ -3,7 +3,7 @@ import Bulksok from "./Bulksok.jsx";
 import { useState, useEffect, useMemo } from "react";
 import { api, kroner, CONDITIONS } from "../api.js";
 import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside, OmOss, Retur, Tix } from "./Bunn.jsx";
-import { HandelProvider, useHandel, LeggIKurven, KurvSide, Kasse, Kvittering, LoggInn, NyttPassord, MinSide, Bekreft } from "./Handel.jsx";
+import { LeggProduktIKurven, HandelProvider, useHandel, LeggIKurven, KurvSide, Kasse, Kvittering, LoggInn, NyttPassord, MinSide, Bekreft } from "./Handel.jsx";
 import { kunde as kapi, bildeUrl } from "../api.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1763,6 +1763,7 @@ function Produktflis({ produkt: p }) {
           ingenting. */}
       <span className="pris tall">{kroner(p.pris_ore)}</span>
       <span className="linje">{p.antall} på lager</span>
+      <div style={{ marginTop: 6 }}><LeggProduktIKurven produkt={p} /></div>
     </div>
   );
 }

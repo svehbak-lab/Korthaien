@@ -1,3 +1,4 @@
+import SettStabel from "./SettStabel.jsx";
 import { Overgangstekst } from "./Kunder.jsx";
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { kunde as kapi, kroner } from "../api.js";
@@ -120,6 +121,29 @@ export function LeggIKurven({ kort, finish, tilstand, liten, stil }) {
   );
 }
 
+// Sealed og komplette sett: én pris, ingen tilstand. card_id er «p:<id>».
+export function LeggProduktIKurven({ produkt: p }) {
+  const h = useHandel();
+  const [lagt, setLagt] = useState(false);
+  const vare = {
+    card_id: `p:${p.id}`, finish: "nonfoil", condition: "NM", navn: p.navn,
+    set_name: p.type === "komplettsett" ? "Komplette sett" : "Sealed",
+    image_uri: p.bilde_url, enhet_ore: p.pris_ore, maks: p.antall,
+  };
+  const har = h.iKurven(vare);
+  if (!p.antall) return <button className="knapp liten" disabled>Utsolgt</button>;
+  const fullt = har >= p.antall;
+  return (
+    <button
+      className="knapp liten primar"
+      disabled={fullt}
+      onClick={() => { h.legg(vare, 1); setLagt(true); setTimeout(() => setLagt(false), 1400); }}
+    >
+      {lagt ? "Lagt i kurven ✓" : fullt ? `${har} i kurven` : har ? `Legg i kurven (${har})` : "Legg i kurven"}
+    </button>
+  );
+}
+
 const finishTekst = (f) => (f === "foil" ? " · foil" : "");
 
 // ── kurven ──────────────────────────────────────────────────────────────────
@@ -204,18 +228,22 @@ export function KurvSide({ onKasse, onHandleVidere, melding }) {
               return (
                 <tr key={k}>
                   <td>
-                    {l.image_uri ? <img src={l.image_uri} alt="" style={{ width: 44, borderRadius: 3, display: "block" }} /> : null}
+                    {l.image_uri ? (
+                      <img src={l.image_uri} alt="" style={{ width: 44, borderRadius: 3, display: "block" }} />
+                    ) : l.produkt_type === "komplettsett" && l.set_code ? (
+                      <div style={{ width: 44 }}><SettStabel setCode={l.set_code} foil={l.foil} liten /></div>
+                    ) : null}
                   </td>
                   <td>
                     <div style={{ fontWeight: 600 }} className="lenke">{l.card_name}</div>
                     <div className="dempet" style={{ fontSize: 12.5 }}>
                       {l.set_name}
                       {l.collector_number ? ` #${l.collector_number}` : ""}
-                      {finishTekst(l.finish)}
+                      {l.produkt ? (l.foil ? " · foil" : "") : finishTekst(l.finish)}
                     </div>
                     {l.feil && <div style={{ color: "var(--feil)", fontSize: 12.5 }}>{l.feil}</div>}
                   </td>
-                  <td>{l.condition}</td>
+                  <td>{l.produkt ? <span className="dempet">—</span> : l.condition}</td>
                   <td className="h tall pris">{kroner(l.enhet_ore)}</td>
                   <td className="h">
                     <select value={l.antall} onChange={(e) => h.settAntall(k, Number(e.target.value))}>
@@ -239,7 +267,7 @@ export function KurvSide({ onKasse, onHandleVidere, melding }) {
         </table>
       </div>
       <div className="rad-flex" style={{ justifyContent: "flex-end", gap: 18, marginTop: 6 }}>
-        <span className="dempet">{antall} kort · frakt velges i kassen</span>
+        <span className="dempet">{antall} {priset.some((l) => l.produkt) ? (antall === 1 ? "vare" : "varer") : "kort"} · frakt velges i kassen</span>
         <span className="tall pris-stor">{kroner(sum)}</span>
       </div>
       <div className="rad-flex" style={{ justifyContent: "flex-end", marginTop: 12 }}>
@@ -642,7 +670,7 @@ function OrdreLinjer({ o }) {
                   {" — "}{l.set_name}{l.collector_number ? ` #${l.collector_number}` : ""}{l.utgave ? ` · ${l.utgave}` : ""}{finishTekst(l.finish)}
                 </span>
               </td>
-              <td>{l.condition}</td>
+              <td>{l.produkt ? "—" : l.condition}</td>
               <td className="h">{l.antall}</td>
               <td className="h tall">{kroner(l.enhet_ore * l.antall)}</td>
             </tr>

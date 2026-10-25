@@ -517,6 +517,8 @@ CREATE TABLE IF NOT EXISTS salgsordrer (
   rabattkode    TEXT,
   rabatt_ore    INTEGER NOT NULL DEFAULT 0,
   gavekort_ore  INTEGER NOT NULL DEFAULT 0,
+  -- Den delen av varene som har ordinær mva (sealed), etter rabatt.
+  mva_varer_ore INTEGER NOT NULL DEFAULT 0,
   stripe_session TEXT,
   -- Betalingen hos Stripe (payment_intent). Trengs for å refundere til kortet.
   stripe_betaling TEXT,
@@ -543,7 +545,11 @@ CREATE TABLE IF NOT EXISTS salgsordre_linjer (
   set_code         TEXT NOT NULL,
   set_name         TEXT NOT NULL,
   collector_number TEXT,
-  rarity           TEXT);
+  rarity           TEXT,
+  -- Sealed og komplette sett: card_id er «p:<id>», og produkt_id peker på
+  -- produktet. mva = 1 for varer med ordinær mva (sealed).
+  produkt_id       INTEGER,
+  mva              INTEGER NOT NULL DEFAULT 0);
 
 CREATE INDEX IF NOT EXISTS idx_salgslinjer_ordre ON salgsordre_linjer (ordre_id);
 CREATE INDEX IF NOT EXISTS idx_salgslinjer_kort ON salgsordre_linjer (card_id, finish, condition);

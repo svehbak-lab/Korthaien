@@ -96,13 +96,21 @@ export function riktigMerke(ordrenr: string, merke: string): boolean {
 // kvarteret er ute: Stripe-siden kan fortsatt betales til vi har lukket den
 // (se utløpGamle). Teller vi den som ledig før det, kan siste eksemplar
 // selges to ganger.
+// Lageret kassen selger fra: kortene, og sealed/komplette sett som linjer med
+// card_id «p:<produkt-id>». Produktenes antall trekkes ned når ordren betales,
+// så kolonnen er beholdningen etter salg — som kortenes bok.
+export const erProdukt = (id: unknown) => /^p:\d+$/.test(String(id || ""));
+const SALGSLAGER = () => `${butikklagerSql()}
+  UNION ALL
+  SELECT 'p:' || id, 'nonfoil', 'NM', antall, created_at FROM produkter WHERE aktiv = 1`;
+
 export async function tilgjengeligFor(linjer: { card_id: string }[], utenOrdre?: number) {
   const ider = [...new Set(linjer.map((l) => l.card_id))];
   const kart = new Map<string, number>();
   if (!ider.length) return kart;
   const ph = ider.map(() => "?").join(",");
   const lager = await db().execute({
-    sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM (${butikklagerSql()})
+    sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM (${SALGSLAGER()})
            WHERE card_id IN (${ph}) GROUP BY card_id, finish, condition`,
     args: ider,
   });
@@ -133,7 +141,7 @@ export async function lagerForPlukk(ider: string[]): Promise<Map<string, { hylle
   const ledig = await tilgjengeligFor(unike.map((card_id) => ({ card_id })));
   const ph = unike.map(() => "?").join(",");
   const lager = await db().execute({
-    sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM (${butikklagerSql()})
+    sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM (${SALGSLAGER()})
            WHERE card_id IN (${ph}) GROUP BY card_id, finish, condition`,
     args: unike,
   });
@@ -161,8 +169,9 @@ function rensKurv(inn: any): KurvLinje[] {
   const samlet = new Map<string, KurvLinje>();
   for (const x of inn.slice(0, 500)) {
     const card_id = String(x?.card_id || "");
-    const finish = x?.finish === "foil" ? "foil" : "nonfoil";
-    const condition = String(x?.condition || "NM").toUpperCase() as Condition;
+    const produkt = erProdukt(card_id);
+    const finish = !produkt && x?.finish === "foil" ? "foil" : "nonfoil";
+    const condition = (produkt ? "NM" : String(x?.condition || "NM").toUpperCase()) as Condition;
     const antall = Math.trunc(Number(x?.antall));
     if (!card_id || !CONDITIONS.includes(condition) || !(antall > 0)) continue;
     const k = `${card_id}:${finish}:${condition}`;
@@ -185,6 +194,24 @@ export async function prisKurv(inn: any, utenOrdre?: number): Promise<PrisetLinj
     args: ider,
   });
   const kort = new Map((r.rows as any[]).map((k) => [String(k.id), k]));
+  // Sealed og komplette sett: én pris, ingen tilstand.
+  const pider = ider.filter(erProdukt).map((x) => Number(x.slice(2)));
+  if (pider.length) {
+    const pr = await db().execute({
+      sql: `SELECT p.id, p.navn, p.type, p.pris_ore, p.set_code, p.bilde_url, p.foil, p.aktiv
+              FROM produkter p WHERE p.id IN (${pider.map(() => "?").join(",")})`,
+      args: pider,
+    });
+    for (const p of pr.rows as any[]) {
+      if (!Number(p.aktiv)) continue;
+      kort.set(`p:${p.id}`, {
+        id: `p:${p.id}`, name: String(p.navn), set_code: String(p.set_code || ""),
+        set_name: p.type === "komplettsett" ? "Komplette sett" : "Sealed",
+        collector_number: null, rarity: null, image_uri: p.bilde_url ?? null,
+        produkt: true, produkt_type: String(p.type), pris_ore: Number(p.pris_ore), foil: !!Number(p.foil),
+      });
+    }
+  }
   const opp = await hentSalgsOppsett();
   const manuellSalg = await hentManuellSalg(ider);
   const manuellKjøp = await hentManuellePriser(ider);
@@ -194,6 +221,8 @@ export async function prisKurv(inn: any, utenOrdre?: number): Promise<PrisetLinj
   // Samme rekkefølge som salgsordrene: sett, raritet, navn.
   const sortert = [...linjer].sort((a, b) => {
     const ka: any = kort.get(a.card_id), kb: any = kort.get(b.card_id);
+    // Produktene til slutt, etter kortene.
+    if (!!ka?.produkt !== !!kb?.produkt) return ka?.produkt ? 1 : -1;
     const sa = String(ka?.set_name || ka?.set_code || ""), sb = String(kb?.set_name || kb?.set_code || "");
     if (sa !== sb) return sa.localeCompare(sb, "nb");
     const ra = RARITET[String(ka?.rarity || "").toLowerCase()] ?? 4, rb = RARITET[String(kb?.rarity || "").toLowerCase()] ?? 4;
@@ -207,7 +236,7 @@ export async function prisKurv(inn: any, utenOrdre?: number): Promise<PrisetLinj
       return { ...l, enhet_ore: 0, tilgjengelig: 0, card_name: "Ukjent kort", set_code: "", set_name: "",
                collector_number: null, rarity: null, image_uri: null, feil: "Kortet finnes ikke lenger." };
     }
-    const enhet = salgsprisØre(
+    const enhet = k.produkt ? Number(k.pris_ore) : salgsprisØre(
       k, l.finish, l.condition, opp,
       manuellSalg.get(`${l.card_id}:${l.finish}`) ?? null,
       manuellKjøp.get(`${l.card_id}:${l.finish}`) ?? null
@@ -222,6 +251,7 @@ export async function prisKurv(inn: any, utenOrdre?: number): Promise<PrisetLinj
       collector_number: k.collector_number ?? null,
       rarity: k.rarity ?? null,
       image_uri: k.image_uri ?? null,
+      ...(k.produkt ? { produkt: true, produkt_type: k.produkt_type, foil: k.foil } : {}),
     };
     if (!enhet) linje.feil = "Kortet er ikke til salgs i denne tilstanden.";
     else if (tilgjengelig <= 0) linje.feil = "Utsolgt.";
@@ -307,6 +337,12 @@ export async function åpneKasse(
     }
   }
   const rabatt = kode?.type === "prosent" ? Math.round((varer * kode.prosent) / 100) : 0;
+  // Sealed er nye varer med ordinær mva (25 %). Kort og komplette sett følger
+  // avansemetoden. Rabatten fordeles likt på alt.
+  const sealed = linjer
+    .filter((l: any) => l.produkt && l.produkt_type === "sealed")
+    .reduce((n, l) => n + l.enhet_ore * l.antall, 0);
+  const mvaVarer = varer ? Math.round(sealed * (1 - rabatt / varer)) : 0;
   const totalt = varer - rabatt + frakt.pris_ore;
   let gavekort = kode?.type === "saldo" ? Math.min(kode.tilgjengelig_ore, totalt) : 0;
   let kreditt = 0;
@@ -347,7 +383,7 @@ export async function åpneKasse(
     const ph = ider.map(() => "?").join(",");
     const ledig = new Map<string, number>();
     const lager = await tx.execute({
-      sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM (${butikklagerSql()})
+      sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM (${SALGSLAGER()})
              WHERE card_id IN (${ph}) GROUP BY card_id, finish, condition`,
       args: ider,
     });
@@ -400,23 +436,26 @@ export async function åpneKasse(
               (ordrenr, kunde_navn, email, kunde_id, telefon, adresse, postnr, poststed, land,
                frakt_id, frakt_navn, frakt_ore, varer_ore, kreditt_ore, stripe_ore,
                antall_kort, kunde_notat, status, utloper_at, created_at,
-               rabattkode, rabatt_ore, gavekort_ore)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'apen',?,?,?,?,?) RETURNING id`,
+               rabattkode, rabatt_ore, gavekort_ore, mva_varer_ore)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'apen',?,?,?,?,?,?) RETURNING id`,
       args: [
         ordrenr, navn, email, kunde?.id ?? null, t(inn.telefon, 30) || null, adresse, postnr, poststed,
         (t(inn.land, 2) || "NO").toUpperCase(), frakt.id, frakt.navn, frakt.pris_ore, varer, kreditt, rest,
         antallKort, t(inn.notat, 1000) || null, utløper, opprettet,
-        kode?.kode ?? null, rabatt, gavekort,
+        kode?.kode ?? null, rabatt, gavekort, mvaVarer,
       ],
     });
     ordreId = Number(o.rows[0].id);
     for (const l of linjer) {
       await tx.execute({
         sql: `INSERT INTO salgsordre_linjer
-                (ordre_id, card_id, finish, condition, antall, enhet_ore, card_name, set_code, set_name, collector_number, rarity)
-              VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+                (ordre_id, card_id, finish, condition, antall, enhet_ore, card_name, set_code, set_name, collector_number, rarity,
+                 produkt_id, mva)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         args: [ordreId, l.card_id, l.finish, l.condition, l.antall, l.enhet_ore, l.card_name, l.set_code,
-               l.set_name, l.collector_number, l.rarity],
+               l.set_name, l.collector_number, l.rarity,
+               erProdukt(l.card_id) ? Number(l.card_id.slice(2)) : null,
+               (l as any).produkt_type === "sealed" ? 1 : 0],
       });
     }
     await tx.commit();
@@ -514,7 +553,7 @@ export async function fullfør(ordreId: number, kilde: string, betalingsId?: str
     // penger. Frakten (med mva) regnes betalt med penger først; resten av
     // pengebeløpet er kort (avansemetoden).
     const opp = await tx.execute({
-      sql: `UPDATE salgsordrer SET status = 'betalt', betalt_at = ?, uten_mva_ore = stripe_ore - MIN(frakt_ore, stripe_ore), med_mva_ore = MIN(frakt_ore, stripe_ore),
+      sql: `UPDATE salgsordrer SET status = 'betalt', betalt_at = ?, uten_mva_ore = stripe_ore - MIN(frakt_ore + mva_varer_ore, stripe_ore), med_mva_ore = MIN(frakt_ore + mva_varer_ore, stripe_ore),
               stripe_betaling = COALESCE(?, stripe_betaling),
               admin_notat = CASE WHEN status = 'utlopt' OR utloper_at < ?
                 THEN trim(COALESCE(admin_notat, '') || ' Betalt etter at reservasjonen var utløpt — sjekk at kortene finnes.')
@@ -527,6 +566,13 @@ export async function fullfør(ordreId: number, kilde: string, betalingsId?: str
       return false;
     }
     for (const l of linjer.rows as any[]) {
+      if (erProdukt(l.card_id)) {
+        await tx.execute({
+          sql: "UPDATE produkter SET antall = antall - ?, updated_at = ? WHERE id = ?",
+          args: [Math.abs(Number(l.antall)), tid, Number(String(l.card_id).slice(2))],
+        });
+        continue;
+      }
       await tx.execute({
         sql: `INSERT INTO lager_bevegelser (card_id, finish, condition, antall, grunn, order_id, notat, created_at)
               VALUES (?, ?, ?, ?, 'salg', NULL, ?, ?)`,
@@ -698,10 +744,13 @@ export async function hentOrdre(ordrenr: string): Promise<any | null> {
                  (SELECT variant FROM cards WHERE cards.id = salgsordre_linjer.card_id) AS variant,
                  (SELECT er_scroll FROM cards WHERE cards.id = salgsordre_linjer.card_id) AS er_scroll,
                  (SELECT er_display FROM cards WHERE cards.id = salgsordre_linjer.card_id) AS er_display
-            FROM salgsordre_linjer WHERE ordre_id = ? ORDER BY ${SORTERING}, collector_number, finish, condition`,
+            FROM salgsordre_linjer WHERE ordre_id = ? ORDER BY (produkt_id IS NOT NULL), ${SORTERING}, collector_number, finish, condition`,
     args: [o.id],
   });
-  return { ...o, linjer: l.rows.map((x: any) => ({ ...x, utgave: utgaveNavn(x) })) };
+  return {
+    ...o,
+    linjer: l.rows.map((x: any) => (x.produkt_id != null ? { ...x, produkt: true, utgave: "" } : { ...x, utgave: utgaveNavn(x) })),
+  };
 }
 
 // Det kunden får se. Ingen interne notater.
@@ -861,6 +910,13 @@ export async function kanseller(ordrenr: string, grunn: string, måte: "kort" | 
     });
     if (!u.rowsAffected) throw new SalgFeil(409, "Ordren ble endret i mellomtiden. Last inn på nytt.");
     for (const l of o.linjer as any[]) {
+      if (erProdukt(l.card_id)) {
+        await tx.execute({
+          sql: "UPDATE produkter SET antall = antall + ?, updated_at = ? WHERE id = ?",
+          args: [Math.abs(Number(l.antall)), tid, Number(String(l.card_id).slice(2))],
+        });
+        continue;
+      }
       await tx.execute({
         sql: `INSERT INTO lager_bevegelser (card_id, finish, condition, antall, grunn, order_id, notat, created_at)
               VALUES (?, ?, ?, ?, 'reversert', NULL, ?, ?)`,

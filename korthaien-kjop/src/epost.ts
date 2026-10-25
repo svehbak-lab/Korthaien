@@ -391,7 +391,7 @@ function salgslinjer(linjer: any[]): string {
       <td style="padding:6px 8px;color:#7a746c;font-size:13px">${trygg(l.set_name)}${
         l.collector_number ? ` #${trygg(l.collector_number)}` : ""
       }${l.rarity ? `<br><span style="font-size:11px">${trygg(l.rarity)}</span>` : ""}</td>
-      <td style="padding:6px 8px">${trygg(l.condition)}</td>
+      <td style="padding:6px 8px">${l.produkt_id != null ? "—" : trygg(l.condition)}</td>
       <td style="padding:6px 8px;text-align:right">${l.antall}</td>
       <td style="padding:6px 8px;text-align:right;white-space:nowrap">${kr(Number(l.enhet_ore) * Number(l.antall))}</td>
     </tr>`

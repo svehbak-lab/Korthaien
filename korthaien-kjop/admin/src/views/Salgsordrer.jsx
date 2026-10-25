@@ -318,7 +318,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                     </td>
                     <td style={{ fontSize: 12.5 }}>{l.set_name}</td>
                     <td className="tall">{l.collector_number}</td>
-                    <td>{l.condition}</td>
+                    <td>{l.produkt ? <span className="dempet">—</span> : l.condition}</td>
                     <td className="h tall" style={{ whiteSpace: "nowrap" }}>
                       {l.paa_lager ? (
                         <>

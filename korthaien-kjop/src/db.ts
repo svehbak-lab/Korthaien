@@ -355,6 +355,7 @@ async function leggTilNyeKolonner(): Promise<void> {
       ["pakket_at", "TEXT"], ["sendt_at", "TEXT"], ["kansellert_at", "TEXT"], ["sporingsnr", "TEXT"],
       ["kunde_notat", "TEXT"], ["admin_notat", "TEXT"],
       ["rabattkode", "TEXT"], ["rabatt_ore", "INTEGER NOT NULL DEFAULT 0"], ["gavekort_ore", "INTEGER NOT NULL DEFAULT 0"],
+      ["mva_varer_ore", "INTEGER NOT NULL DEFAULT 0"],
     ];
     for (const [navn, type] of nye) {
       if (!so.has(navn)) await db().execute(`ALTER TABLE salgsordrer ADD COLUMN ${navn} ${type}`);
@@ -362,6 +363,10 @@ async function leggTilNyeKolonner(): Promise<void> {
   }
 
   if (lager.size) await ryddFeilkoblinger();
+
+  const sl = await kolonner("salgsordre_linjer");
+  if (sl.size && !sl.has("produkt_id")) await db().execute("ALTER TABLE salgsordre_linjer ADD COLUMN produkt_id INTEGER");
+  if (sl.size && !sl.has("mva")) await db().execute("ALTER TABLE salgsordre_linjer ADD COLUMN mva INTEGER NOT NULL DEFAULT 0");
 
   const pr = await kolonner("produkter");
   if (pr.size && !pr.has("foil")) await db().execute("ALTER TABLE produkter ADD COLUMN foil INTEGER NOT NULL DEFAULT 0");
