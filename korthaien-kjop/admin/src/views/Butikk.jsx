@@ -1720,7 +1720,9 @@ function OmSettet({ info }) {
     ["Settkode", info.code.toUpperCase()],
     ["Utgitt", info.utgitt ? nordato(info.utgitt) : "—"],
     ["Type", SETTYPER[info.set_type] || (info.set_type ? info.set_type.replace(/_/g, " ") : "—")],
-    ["Antall kort", info.kort_i_settet || "—"],
+    ["Antall kort", info.kort_i_settet
+      ? `${info.kort_i_settet}${info.kort_med_varianter > info.kort_i_settet ? ` (${info.kort_med_varianter} med varianter)` : ""}`
+      : "—"],
     ["Lovlig i", info.formater?.length ? info.formater.join(", ") : "—"],
     ["Foils", info.foil === "begge" ? "Ja" : info.foil === "bare_foil" ? "Bare foil" : "Nei"],
   ];
@@ -1740,7 +1742,7 @@ function OmSettet({ info }) {
             <tr>
               <th>Korthaien har</th>
               <td>
-                {info.ulike_på_lager} {info.kort_i_settet ? `av ${info.kort_i_settet} ` : ""}kort på lager
+                {info.ulike_på_lager} {info.kort_med_varianter || info.kort_i_settet ? `av ${info.kort_med_varianter || info.kort_i_settet} ` : ""}kort på lager
               </td>
             </tr>
           </tbody>

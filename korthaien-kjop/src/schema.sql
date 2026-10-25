@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS sets (
   name         TEXT NOT NULL,
   released_at  TEXT,
   card_count   INTEGER DEFAULT 0,
+  -- Settet slik det er trykket, uten varianter (Scryfall printed_size).
+  printed_size INTEGER,
   -- Ditt eget navn på settet, der Scryfalls offisielle er upraktisk. Kundene
   -- sier «Beta», ikke «Limited Edition Beta». Scryfall-navnet blir stående i
   -- «name», så importen kan fortsette å oppdatere det uten å røre ditt.

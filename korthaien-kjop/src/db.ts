@@ -367,6 +367,9 @@ async function leggTilNyeKolonner(): Promise<void> {
 
   const st = await kolonner("sets");
   if (st.size && !st.has("set_type")) await db().execute("ALTER TABLE sets ADD COLUMN set_type TEXT");
+  // Antall kort i selve settet slik det er trykket (ONE: 271), uten
+  // showcase, borderless og andre varianter som card_count teller med (479).
+  if (st.size && !st.has("printed_size")) await db().execute("ALTER TABLE sets ADD COLUMN printed_size INTEGER");
   if (st.size && !st.has("ikon")) await db().execute("ALTER TABLE sets ADD COLUMN ikon TEXT");
 
   const sl = await kolonner("salgsordre_linjer");

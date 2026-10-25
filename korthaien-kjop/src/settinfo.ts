@@ -26,6 +26,8 @@ export type Settinfo = {
   utgitt: string | null;
   // Hvor mange kort settet har i alt, slik Scryfall teller dem.
   kort_i_settet: number;
+  // Med showcase, borderless og andre varianter.
+  kort_med_varianter: number;
   // Hvor mange forskjellige du har på lager, og hvor mange eksemplarer.
   ulike_på_lager: number;
   eksemplarer: number;
@@ -54,7 +56,7 @@ export async function settinfo(kode: string): Promise<Settinfo | null> {
   if (!code) return null;
 
   const s = await db().execute({
-    sql: `SELECT code, name, visningsnavn, released_at, card_count, parent_code, set_type, ikon
+    sql: `SELECT code, name, visningsnavn, released_at, card_count, printed_size, parent_code, set_type, ikon
             FROM sets WHERE code = ?`,
     args: [code],
   });
@@ -125,7 +127,8 @@ export async function settinfo(kode: string): Promise<Settinfo | null> {
     navn: String(rad.visningsnavn || rad.name),
     offisielt_navn: String(rad.name),
     utgitt: rad.released_at ? String(rad.released_at) : null,
-    kort_i_settet: Number(rad.card_count || 0),
+    kort_i_settet: Number(rad.printed_size || 0) || Number(rad.card_count || 0),
+    kort_med_varianter: Number(rad.card_count || 0),
     ulike_på_lager: Number(l?.ulike || 0),
     eksemplarer: Number(l?.eksemplarer || 0),
     rariteter: (rariteter.rows as any[])

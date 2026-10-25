@@ -78,7 +78,7 @@ export async function hentProdukter(
   if (opts.barePåLager) hvor.push("p.antall > 0");
 
   const r = await db().execute({
-    sql: `SELECT p.*, COALESCE(s.visningsnavn, s.name) AS set_navn, s.card_count AS set_antall
+    sql: `SELECT p.*, COALESCE(s.visningsnavn, s.name) AS set_navn, COALESCE(NULLIF(s.printed_size, 0), s.card_count) AS set_antall
             FROM produkter p LEFT JOIN sets s ON s.code = p.set_code
            ${hvor.length ? "WHERE " + hvor.join(" AND ") : ""}
            ORDER BY p.sortering, p.navn`,
