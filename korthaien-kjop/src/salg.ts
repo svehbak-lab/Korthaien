@@ -399,7 +399,14 @@ export async function åpneKasse(
         customer_email: email,
         client_reference_id: ordrenr,
         metadata: { ordrenr },
-        payment_intent_data: { metadata: { ordrenr }, description: `Korthaien ${ordrenr}` },
+        // Stripe-kontoen deles med andre prosjekter, så kontoens eget navn er
+        // ikke nødvendigvis Korthaien. Suffikset legges etter kontoens
+        // forkortede navn på kundens kontoutskrift: «PREFIKS* KORTHAIEN».
+        payment_intent_data: {
+          metadata: { ordrenr },
+          description: `Korthaien ${ordrenr}`,
+          statement_descriptor_suffix: "KORTHAIEN",
+        },
         // Låst til betalingsmåter som bekreftes med en gang. En metode som
         // bekreftes dager senere, ville holdt kortene av i dager.
         allowed_payment_method_types: (vipps() ? ["card", "vipps"] : ["card"]) as any,
