@@ -483,7 +483,7 @@ export async function åpneKasse(
   try {
     const tilbake = `${butikkUrl()}/?kasse=ok&ordre=${encodeURIComponent(ordrenr)}&m=${merke}`;
     const avbrutt = `${butikkUrl()}/?kasse=avbrutt&ordre=${encodeURIComponent(ordrenr)}&m=${merke}`;
-    const sesjon = await stripe().checkout.sessions.create(
+    const lagSesjon = (medVipps: boolean) => stripe().checkout.sessions.create(
       {
         mode: "payment",
         currency: "nok",
@@ -508,7 +508,7 @@ export async function åpneKasse(
         },
         // Låst til betalingsmåter som bekreftes med en gang. En metode som
         // bekreftes dager senere, ville holdt kortene av i dager.
-        allowed_payment_method_types: (vipps() ? ["card", "vipps"] : ["card"]) as any,
+        allowed_payment_method_types: (medVipps ? ["card", "vipps"] : ["card"]) as any,
         line_items: [
           {
             quantity: 1,
@@ -532,8 +532,19 @@ export async function åpneKasse(
         cancel_url: avbrutt,
         locale: "nb",
       },
-      vipps() ? { apiVersion: `${Stripe.API_VERSION}; vipps_preview=v1` as any } : undefined
+      medVipps ? { apiVersion: `${Stripe.API_VERSION}; vipps_preview=v1` as any } : undefined
     );
+    // Vipps er i lukket prøveperiode hos Stripe. Er STRIPE_VIPPS satt før
+    // kontoen har fått tilgang (eller tilgangen faller bort), avviser Stripe
+    // hele sesjonen. Da betaler kunden med kort i stedet for å bli stående.
+    let sesjon;
+    try {
+      sesjon = await lagSesjon(vipps());
+    } catch (e: any) {
+      if (!vipps()) throw e;
+      console.warn(`Vipps avvist av Stripe, bruker bare kort: ${e?.message || e}`);
+      sesjon = await lagSesjon(false);
+    }
     await db().execute({ sql: "UPDATE salgsordrer SET stripe_session = ? WHERE id = ?", args: [sesjon.id, ordreId] });
     return { ordrenr, url: sesjon.url, betalt: false, merke };
   } catch (e: any) {
