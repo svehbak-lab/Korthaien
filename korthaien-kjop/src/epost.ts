@@ -448,7 +448,7 @@ export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
      ${o.kunde_notat ? `<div style="font-size:13px;color:#7a746c;margin-bottom:4px">Din kommentar</div>
        <div style="white-space:pre-line;margin-bottom:14px">${trygg(o.kunde_notat)}</div>` : ""}
      <p style="font-size:13px;color:#7a746c;margin:14px 0 0">Kortene selges etter avansemetoden for brukte
-     varer, så merverdiavgift er ikke spesifisert for dem. Frakt inkluderer 25 % mva.
+     varer, så merverdiavgift er ikke spesifisert for dem. Frakt inkluderer 25 % mva${Number(o.frakt_ore) > 0 ? ` (${kr(Math.round(Number(o.frakt_ore) / 5))})` : ""}.
      Angrerett: 14 dager fra du mottar varene. Korthaien Svein-Harald Bakke, org.nr. 914 503 493.</p>`,
     "Ordrebekreftelse"
   );

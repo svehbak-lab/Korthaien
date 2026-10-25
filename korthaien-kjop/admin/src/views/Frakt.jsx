@@ -16,6 +16,10 @@ import { api, kroner } from "../api.js";
 const tilØre = (kr) => Math.round((parseFloat(String(kr).replace(",", ".")) || 0) * 100);
 const tilKr = (ore) => (ore === null || ore === undefined ? "" : String(ore / 100));
 
+// Frakt selges med ordinær moms, 25 %, og prisen du skriver er inkludert
+// moms. Momsen er da en femtedel av prisen — samme regel som rapportene.
+const mvaAv = (ore) => Math.round((Number(ore) || 0) / 5);
+
 const TOM = { navn: "", pris_kr: "", forsikret_kr: "", beskrivelse: "", sortering: 0 };
 
 export default function Frakt({ onFeil, onMelding }) {
@@ -209,6 +213,11 @@ function Fraktalternativer({ onFeil, onMelding }) {
             Kunden velger fritt — vi tvinger ingen over på sporing — men
             forsikringsgrensen vises, så valget er opplyst.
           </p>
+          <p className="dempet" style={{ margin: "0 0 4px" }}>
+            Prisen er <b>inkludert 25 % mva</b>. Momsen regnes ut av seg selv —
+            en femtedel av prisen — og føres på frakten i salgsrapportene.
+            Kortene selges etter avansemetoden og har ingen mva på kvitteringen.
+          </p>
           <p className="dempet" style={{ margin: 0 }}>
             Tomt forsikringsfelt betyr uten sporing og forsikring. Det er noe
             annet enn null kroner, og kassen sier det ulikt.
@@ -220,7 +229,8 @@ function Fraktalternativer({ onFeil, onMelding }) {
             <tr>
               <th style={{ width: 60 }}>Rekke</th>
               <th>Navn</th>
-              <th className="h" style={{ width: 100 }}>Pris</th>
+              <th className="h" style={{ width: 100 }}>Pris inkl. mva</th>
+              <th className="h" style={{ width: 90 }}>Herav mva</th>
               <th className="h" style={{ width: 130 }}>Forsikret til</th>
               <th>Merknad</th>
               <th style={{ width: 150 }}></th>
@@ -251,6 +261,7 @@ function Fraktalternativer({ onFeil, onMelding }) {
                       style={{ width: 78, textAlign: "right" }}
                     />
                   </td>
+                  <td className="h tall dempet">{kroner(mvaAv(tilØre(redigerer.pris_kr)))}</td>
                   <td className="h">
                     <input
                       type="text" inputMode="decimal" value={redigerer.forsikret_kr}
@@ -283,6 +294,7 @@ function Fraktalternativer({ onFeil, onMelding }) {
                     {!f.aktiv && <span className="merkelapp m-av" style={{ marginLeft: 8 }}>av</span>}
                   </td>
                   <td className="h tall">{kroner(f.pris_ore)}</td>
+                  <td className="h tall dempet">{kroner(mvaAv(f.pris_ore))}</td>
                   <td className="h tall">
                     {f.forsikret_ore === null
                       ? <span className="dempet">ingen</span>

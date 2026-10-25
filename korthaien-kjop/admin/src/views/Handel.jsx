@@ -452,7 +452,15 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
             <table>
               <tbody>
                 <tr><td>Kort ({priset.reduce((n, l) => n + l.antall, 0)})</td><td className="h tall">{kroner(varer)}</td></tr>
-                <tr><td>Frakt</td><td className="h tall">{valgtFrakt ? kroner(valgtFrakt.pris_ore) : "—"}</td></tr>
+                <tr>
+                  <td>
+                    Frakt
+                    {valgtFrakt && valgtFrakt.pris_ore > 0 && (
+                      <div className="dempet" style={{ fontSize: 12 }}>herav mva {kroner(Math.round(valgtFrakt.pris_ore / 5))}</div>
+                    )}
+                  </td>
+                  <td className="h tall">{valgtFrakt ? kroner(valgtFrakt.pris_ore) : "—"}</td>
+                </tr>
                 {kreditt > 0 && (
                   <tr><td>Kreditt</td><td className="h tall">−{kroner(kreditt)}</td></tr>
                 )}
