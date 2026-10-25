@@ -283,7 +283,10 @@ export async function sendOppgjør(orderId: number): Promise<Utfall> {
   const o = await db().execute({ sql: "SELECT * FROM orders WHERE id = ?", args: [orderId] });
   const ordre: any = o.rows[0];
   if (!ordre?.email) return { sendt: false, grunn: "ordren har ingen e-post" };
-  if (!ordre.discount_code) return { sendt: false, grunn: "ingen rabattkode lagt inn" };
+  // Etter overgangen gjøres ordren opp som kreditt på e-postadressen, uten kode.
+  const somKreditt = !ordre.discount_code && !!ordre.credit_sent_at;
+  if (!ordre.discount_code && !somKreditt) return { sendt: false, grunn: "ingen rabattkode lagt inn" };
+  const butikk = (process.env.SHOP_URL || "https://korthaien.no").replace(/\/+$/, "");
 
   const l = await db().execute({
     sql: `SELECT * FROM order_lines WHERE order_id = ? AND fjernet_at IS NULL
@@ -305,6 +308,16 @@ export async function sendOppgjør(orderId: number): Promise<Utfall> {
 
   const html = RAMME(`
     <h1 style="font-size:21px;margin:0 0 10px">Kortene er mottatt og godkjent</h1>
+    ${somKreditt ? `
+    <p style="margin:0 0 16px;line-height:1.6">Oppgjøret er lagt inn som kreditt i butikken:</p>
+    <div style="background:#f6f5f2;border-radius:8px;padding:18px;text-align:center;margin-bottom:8px">
+      <div style="font-size:26px;font-weight:700">${kr(nå)}</div>
+      <div style="color:#7a746c;font-size:13px;margin-top:6px">på ${trygg(ordre.email)}</div>
+    </div>
+    <p style="margin:0 0 4px;color:#7a746c;font-size:13px;line-height:1.6">
+      Logg inn på <a href="${butikk}/?innlogging=1">korthaien.no</a> med denne e-postadressen — eller lag en
+      konto med den — så ligger kreditten klar i kassen. Den utløper ikke. Ordrenummer ${trygg(ordre.order_no)}.
+    </p>` : `
     <p style="margin:0 0 16px;line-height:1.6">Rabattkoden din på korthaien.no er:</p>
     <div style="background:#f6f5f2;border-radius:8px;padding:18px;text-align:center;margin-bottom:8px">
       <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:26px;
@@ -313,7 +326,7 @@ export async function sendOppgjør(orderId: number): Promise<Utfall> {
     </div>
     <p style="margin:0 0 4px;color:#7a746c;font-size:13px">
       Bruk koden i kassen på korthaien.no. Ordrenummer ${trygg(ordre.order_no)}.
-    </p>
+    </p>`}
     ${ordre.credit_note ? `<p style="margin:14px 0 0;line-height:1.6">${trygg(ordre.credit_note)}</p>` : ""}
     ${endringer}
     <h2 style="font-size:16px;margin:22px 0 4px">Kortene jeg tok imot</h2>
@@ -322,8 +335,9 @@ export async function sendOppgjør(orderId: number): Promise<Utfall> {
 
   const tekst = `Kortene er mottatt og godkjent.
 
-Rabattkoden din på korthaien.no: ${ordre.discount_code}
-Verdi: ${kr(nå)}
+${somKreditt
+    ? `Oppgjøret er lagt inn som kreditt i butikken: ${kr(nå)} på ${ordre.email}.\nLogg inn eller lag konto på korthaien.no med denne e-postadressen, så ligger kreditten klar i kassen.`
+    : `Rabattkoden din på korthaien.no: ${ordre.discount_code}\nVerdi: ${kr(nå)}`}
 Ordrenummer: ${ordre.order_no}
 ${ordre.credit_note ? `\n${ordre.credit_note}\n` : ""}${
     logg.length

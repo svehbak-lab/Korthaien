@@ -568,6 +568,47 @@ export async function markerKredittSendt(orderId: number) {
   });
 }
 
+// ── oppgjør som kreditt ──────────────────────────────────────────────────────
+// Etter overgangen fra Mystore: oppgjøret føres rett i kredittboka på
+// e-postadressen på ordren, i stedet for en rabattkode laget i Mystore.
+// Kunden trenger ikke konto — kreditten venter på adressen til hen logger
+// inn eller lager konto med den. Kan kjøres flere ganger uten at kreditten
+// føres to ganger.
+export async function gjørOppSomKreditt(orderId: number, notat?: string | null) {
+  const r = await db().execute({ sql: "SELECT * FROM orders WHERE id = ?", args: [orderId] });
+  const o: any = r.rows[0];
+  if (!o) throw new HttpFeil(404, "Fant ikke ordren");
+  const email = String(o.email || "").trim().toLowerCase();
+  if (!email.includes("@")) throw new HttpFeil(400, "Ordren har ingen e-postadresse å føre kreditten på.");
+  const ore = Number(o.total_ore || 0);
+  if (!(ore > 0)) throw new HttpFeil(400, "Ordren har ingen sum å gjøre opp.");
+  const nå = new Date().toISOString();
+  const tx = await db().transaction("write");
+  try {
+    const før = await tx.execute({
+      sql: "SELECT 1 FROM kreditt_bevegelser WHERE order_no = ? AND grunn = 'kjopsordre' LIMIT 1",
+      args: [o.order_no],
+    });
+    if (!før.rows.length) {
+      await tx.execute({
+        sql: `INSERT INTO kreditt_bevegelser (email, ore, grunn, notat, order_no, created_at)
+              VALUES (?, ?, 'kjopsordre', ?, ?, ?)`,
+        args: [email, ore, `Oppgjør for kjøpsordre ${o.order_no}`, o.order_no, nå],
+      });
+    }
+    await tx.execute({
+      sql: "UPDATE orders SET discount_code = NULL, credit_note = ?, credit_sent_at = COALESCE(credit_sent_at, ?) WHERE id = ?",
+      args: [notat ?? null, nå, orderId],
+    });
+    await tx.commit();
+  } catch (e) {
+    await tx.rollback().catch(() => {});
+    throw e;
+  } finally {
+    tx.close();
+  }
+}
+
 export class HttpFeil extends Error {
   status: number;
   data: any;

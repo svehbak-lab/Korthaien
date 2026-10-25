@@ -32,7 +32,7 @@ import {
   lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal,
   leggTilLinje,
   leggTilAnnet, fjernLinje, byttKort, endringslogg, instruksjoner, SORTERING,
-  settRabattkode, markerKredittSendt, HttpFeil,
+  settRabattkode, markerKredittSendt, gjørOppSomKreditt, HttpFeil,
 } from "./orders.js";
 import { hentSetRule } from "./pricing.js";
 import { importerScryfall } from "./import-scryfall.js";
@@ -1611,6 +1611,18 @@ app.delete("/api/admin/mystore/stock/:cardId", krevAdmin, fang(async (req: any, 
 // Rabattkoden lages manuelt i Mystore og limes inn her.
 app.put("/api/admin/orders/:id/kreditt", krevAdmin, fang(async (req: any, res: any) => {
   const id = Number(req.params.id);
+  // Etter overgangen: oppgjøret blir kreditt i kredittboka, ikke en kode.
+  if (req.body?.som_kreditt) {
+    if (req.body?.sendt) {
+      await gjørOppSomKreditt(id, req.body?.credit_note ?? null);
+      if (req.body?.varsle !== false) iBakgrunnen("oppgjør", sendOppgjør(id));
+    } else {
+      await db().execute({ sql: "UPDATE orders SET credit_note = ? WHERE id = ?", args: [req.body?.credit_note ?? null, id] });
+    }
+    const r = await db().execute({ sql: "SELECT * FROM orders WHERE id = ?", args: [id] });
+    if (!r.rows[0]) throw new HttpFeil(404, "Fant ikke ordren");
+    return res.json(r.rows[0]);
+  }
   await settRabattkode(id, req.body?.discount_code ?? null, req.body?.credit_note ?? null);
   if (req.body?.sendt) {
     await markerKredittSendt(id);

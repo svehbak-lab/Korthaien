@@ -190,7 +190,8 @@ function Lagerovergang({ onFeil, onMelding }) {
         {ferdig ? (
           <div className="varsel ok" style={{ marginTop: 14, marginBottom: 0 }}>
             Overgangen er gjort. Beholdningen føres nå i lagerboken: salg trekker fra, kjøpsordrer som legges inn
-            fører til. Mystore-synken kan slås av.
+            fører til. Kjøpsordrer gjøres nå opp som kreditt på kundens e-postadresse i stedet for med en
+            Mystore-kode. Mystore-synken kan slås av.
           </div>
         ) : (
           <>
@@ -198,6 +199,7 @@ function Lagerovergang({ onFeil, onMelding }) {
               Knappen gjør tre ting i én operasjon: tømmer lagerboken, fører inn hele Mystore-beholdningen som
               åpningsbeholdning (alt som NM), og bytter butikken over til lagerboken. Går noe galt underveis, skjer
               ingenting. Kjør den fulle lagersynken rett før, etter at du har stengt Mystore og pakket alle ordrene der.
+              Fra da av gjøres kjøpsordrer opp som kreditt i stedet for med rabattkode i Mystore.
             </p>
             {st.kjop_ikke_lagt_inn > 0 && (
               <div className="varsel info">

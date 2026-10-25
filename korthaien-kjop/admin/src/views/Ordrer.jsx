@@ -125,6 +125,9 @@ function Ordre({ ordre, åpen, onVeksle, onLukk, onEndret, onFeil }) {
             {dager > 0 ? `${dager} dager igjen` : "Fristen har gått ut"}
           </span>
         )}
+        {!ordre.discount_code && ordre.credit_sent_at && (
+          <span className="merkelapp m-ok" title="Gjort opp som kreditt">Kreditt</span>
+        )}
         {ordre.discount_code && (
           <span className="merkelapp m-ok" title="Rabattkode lagt inn">{ordre.discount_code}</span>
         )}
@@ -758,6 +761,12 @@ function Oppgjør({ ordre, onEndret, onFerdig, onFeil }) {
   const [sendEpost, setSendEpost] = useState(true);
   const [tester, setTester] = useState(false);
   const ferdig = ordre.status === "stocked";
+  // Etter overgangen fra Mystore føres oppgjøret som kreditt på kundens
+  // e-postadresse. Før det lages koden i Mystore som før.
+  const [somKreditt, setSomKreditt] = useState(null);
+  useEffect(() => {
+    api.overgang().then((s) => setSomKreditt(s.lagerkilde === "bok")).catch(() => setSomKreditt(false));
+  }, []);
 
   async function test() {
     setTester(true);
@@ -774,12 +783,14 @@ function Oppgjør({ ordre, onEndret, onFerdig, onFeil }) {
   async function lagre(gjørOpp) {
     setJobber(true);
     try {
-      await api.lagreKreditt(ordre.id, {
-        discount_code: kode.trim() || null,
-        credit_note: notat.trim() || null,
-        sendt: gjørOpp,
-        varsle: sendEpost,
-      });
+      await api.lagreKreditt(ordre.id, somKreditt
+        ? { som_kreditt: true, credit_note: notat.trim() || null, sendt: gjørOpp, varsle: sendEpost }
+        : {
+            discount_code: kode.trim() || null,
+            credit_note: notat.trim() || null,
+            sendt: gjørOpp,
+            varsle: sendEpost,
+          });
       // Kvoten holdes helt til ordren er gjort opp. Da overtar beholdningen i
       // Mystore tellingen, og derfor må kortene være lagt inn der først.
       if (gjørOpp) await api.endreOrdre(ordre.id, { status: "stocked", varsle: false });
@@ -798,7 +809,7 @@ function Oppgjør({ ordre, onEndret, onFerdig, onFeil }) {
         <div className="krop">
           <div className="rad-flex">
             <strong>Gjort opp</strong>
-            <span className="kode">{ordre.discount_code || "ingen kode"}</span>
+            <span className="kode">{ordre.discount_code || (ordre.credit_sent_at ? `${kroner(ordre.total_ore)} som kreditt` : "ingen kode")}</span>
             <span className="dempet">{ordre.credit_sent_at ? dato(ordre.credit_sent_at) : ""}</span>
             {ordre.credit_note && <span className="dempet">{ordre.credit_note}</span>}
           </div>
@@ -809,6 +820,44 @@ function Oppgjør({ ordre, onEndret, onFerdig, onFeil }) {
               hylla — det haster ikke, ordren blir liggende til du rekker det.
             </p>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  if (somKreditt === null) return null;
+  if (somKreditt) {
+    return (
+      <div className="panel" style={{ marginTop: 14, background: "var(--aksent-svak)", borderColor: "#ccd8f7" }}>
+        <div className="krop">
+          <strong>Gjør opp som kreditt</strong>
+          <p className="dempet" style={{ margin: "4px 0 12px" }}>
+            {kroner(ordre.total_ore)} føres som kreditt på <b>{ordre.email}</b>. Kunden trenger ikke konto nå —
+            kreditten ligger på adressen og er klar i kassen når hen logger inn eller lager konto med den.
+            Kortene kommer ikke på lager av dette; det gjør du med «Legg inn i beholdningen».
+          </p>
+          <label style={{ display: "block", marginBottom: 10 }}>
+            <span className="navn">Notat <span className="dempet">— hva som eventuelt ble endret</span></span>
+            <input
+              type="text"
+              value={notat}
+              onChange={(e) => setNotat(e.target.value)}
+              placeholder="To kort var EX, ikke NM"
+              style={{ width: "100%" }}
+            />
+          </label>
+          <label className="dempet" style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+            <input type="checkbox" checked={sendEpost} onChange={(e) => setSendEpost(e.target.checked)} />
+            Send oppgjørsepost til kunden
+          </label>
+          <div className="rad-flex">
+            <button className="knapp" onClick={() => lagre(false)} disabled={jobber}>
+              Lagre notatet
+            </button>
+            <button className="knapp primar" onClick={() => lagre(true)} disabled={jobber || !(Number(ordre.total_ore) > 0)}>
+              {jobber ? "Lagrer…" : `Mottatt og godkjent — gi ${kroner(ordre.total_ore)} i kreditt`}
+            </button>
+          </div>
         </div>
       </div>
     );
