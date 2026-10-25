@@ -1567,7 +1567,7 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
             gang, og hvor mange jeg har plass til.
           </p>
         </div>
-        <a href="https://kortsalg.korthaien.no">Til innkjøp →</a>
+        <a href="https://kortsalg.korthaien.no">Selg dine kort →</a>
       </div>
 
       {nyeste && nyeste.length > 0 && (
