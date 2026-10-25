@@ -415,7 +415,10 @@ function summer(o: any): { html: string; tekst: string } {
   rader.push(["Totalt", kr(Number(o.varer_ore) - rabatt + Number(o.frakt_ore))]);
   if (Number(o.gavekort_ore) > 0) rader.push([`Betalt med gavekort (${o.rabattkode})`, kr(o.gavekort_ore)]);
   if (Number(o.kreditt_ore) > 0) rader.push(["Betalt med kreditt", kr(o.kreditt_ore)]);
-  if (Number(o.stripe_ore) > 0) rader.push(["Betalt med kort/Vipps", kr(o.stripe_ore)]);
+  if (Number(o.stripe_ore) > 0) {
+    const måte = o.betalingsmate === "vipps" ? "Vipps" : o.betalingsmate === "kort" ? "kort" : "kort/Vipps";
+    rader.push([`Betalt med ${måte}`, kr(o.stripe_ore)]);
+  }
   return {
     html: `<table style="width:100%;font-size:14px;margin:4px 0 16px">${rader
       .map(
@@ -468,7 +471,7 @@ export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
      ${o.kunde_notat ? `<div style="font-size:13px;color:#7a746c;margin-bottom:4px">Din kommentar</div>
        <div style="white-space:pre-line;margin-bottom:14px">${trygg(o.kunde_notat)}</div>` : ""}
      <p style="font-size:13px;color:#7a746c;margin:14px 0 0">Kortene selges etter avansemetoden for brukte
-     varer, så merverdiavgift er ikke spesifisert for dem. Frakt inkluderer 25 % mva${Number(o.frakt_ore) > 0 ? ` (${kr(Math.round(Number(o.frakt_ore) / 5))})` : ""}.
+     varer, så merverdiavgift er ikke spesifisert for dem.${Number(o.mva_varer_ore) > 0 ? ` Sealed-produkter inkluderer 25 % mva (${kr(Math.round(Number(o.mva_varer_ore) / 5))}).` : ""} Frakt inkluderer 25 % mva${Number(o.frakt_ore) > 0 ? ` (${kr(Math.round(Number(o.frakt_ore) / 5))})` : ""}.
      Angrerett: 14 dager fra du mottar varene. Korthaien Svein-Harald Bakke, org.nr. 914 503 493.</p>
      ${angreskjema(o)}`,
     "Ordrebekreftelse"

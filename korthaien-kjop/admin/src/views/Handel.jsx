@@ -348,6 +348,15 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
   // Henter kunden selv, er adressen valgfri.
   const henter = /\bhent/i.test(valgtFrakt?.navn || "");
   const varer = priset.reduce((n, l) => n + l.enhet_ore * l.antall, 0);
+  // Kort, sealed og komplette sett hver for seg. Sealed er nye varer med
+  // 25 % mva, som skal vises; kort og komplette sett følger avansemetoden.
+  const grupper = [
+    { navn: "Kort", linjer: priset.filter((l) => !l.produkt) },
+    { navn: "Sealed", linjer: priset.filter((l) => l.produkt && l.produkt_type === "sealed"), mva: true },
+    { navn: "Komplette sett", linjer: priset.filter((l) => l.produkt && l.produkt_type !== "sealed") },
+  ]
+    .map((g) => ({ ...g, antall: g.linjer.reduce((n, l) => n + l.antall, 0), sum: g.linjer.reduce((n, l) => n + l.enhet_ore * l.antall, 0) }))
+    .filter((g) => g.antall > 0);
   const totalt = varer + (valgtFrakt?.pris_ore || 0);
   const harKreditt = !!(h.kunde?.bekreftet && h.kreditt_ore > 0);
   // Samme rekkefølge som serveren: prosent av kortene, så gavekort, så
@@ -518,7 +527,19 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
             )}
             <table>
               <tbody>
-                <tr><td>Kort ({priset.reduce((n, l) => n + l.antall, 0)})</td><td className="h tall">{kroner(varer)}</td></tr>
+                {grupper.map((g) => (
+                  <tr key={g.navn}>
+                    <td>
+                      {g.navn} ({g.antall})
+                      {g.mva && (
+                        <div className="dempet" style={{ fontSize: 12 }}>
+                          herav mva {kroner(Math.round((g.sum * (varer ? 1 - rabatt / varer : 1)) / 5))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="h tall">{kroner(g.sum)}</td>
+                  </tr>
+                ))}
                 {rabatt > 0 && (
                   <tr><td>Rabatt {kode.prosent} % <span className="dempet">({kode.kode})</span></td><td className="h tall">−{kroner(rabatt)}</td></tr>
                 )}
@@ -587,9 +608,9 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
                 </label>
               </div>
             )}
-            <label className="rad-flex" style={{ gap: 8, margin: "12px 0", fontSize: 13.5, alignItems: "flex-start" }}>
-              <input type="checkbox" checked={vilkår} onChange={(e) => setVilkår(e.target.checked)} />
-              <span>
+            <label className="rad-flex" style={{ gap: 8, margin: "12px 0", fontSize: 13.5, alignItems: "flex-start", flexWrap: "nowrap" }}>
+              <input type="checkbox" checked={vilkår} onChange={(e) => setVilkår(e.target.checked)} style={{ flex: "none", marginTop: 3 }} />
+              <span style={{ flex: 1, minWidth: 0 }}>
                 Jeg godtar <a href="?side=vilkar" target="_blank" rel="noopener">kjøpsvilkårene</a> og har lest om{" "}
                 <a href="?side=retur" target="_blank" rel="noopener">angrerett</a>.
               </span>
