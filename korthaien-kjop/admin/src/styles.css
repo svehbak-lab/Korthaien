@@ -1149,3 +1149,39 @@ label.kreditt-boks { cursor: pointer; }
 .kunde-tallboks { padding: 12px 14px; margin: 0; }
 
 .rabattkode { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--strek); }
+
+/* ── komplett sett: tegnet bilde ────────────────────────────────────────── */
+.settstabel {
+  position: relative; width: 100%; aspect-ratio: 488 / 680; overflow: hidden;
+  border-radius: 8px; background: var(--flate, #fffcf6); border: 1px solid var(--strek, #ddd3c2);
+}
+.settstabel .ss-kort {
+  position: absolute; left: 50%; top: 42%; width: 58%; aspect-ratio: 63 / 88; border-radius: 6%;
+  background: linear-gradient(160deg, #3b332b, #1f1a15); border: 3px solid #2a241e;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.settstabel .ss-kort i { position: absolute; inset: 7%; border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 4%; }
+.settstabel.foil .ss-kort {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 18%, #a1c4fd 38%, #c2e9fb 52%, #d4fc79 68%, #fbc2eb 84%, #a6c1ee 100%);
+}
+.settstabel .ss-symbol {
+  position: absolute; left: 50%; top: 37%; transform: translate(-50%, -50%);
+  width: 28%; aspect-ratio: 1; border-radius: 50%; background: #fffcf6; z-index: 2;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.settstabel .ss-symbol img { width: 62%; height: 62%; object-fit: contain; }
+.settstabel .ss-etikett {
+  position: absolute; left: 6%; right: 6%; bottom: 5%; z-index: 2; text-align: center;
+  background: rgba(31, 26, 21, 0.9); color: #fbf7ef; border-radius: 7px; padding: 5px 7px;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.settstabel .ss-etikett b { font-size: 12px; line-height: 1.2; }
+.settstabel .ss-etikett span { font-size: 10.5px; opacity: 0.85; white-space: nowrap; }
+/* Samme gule merke som foil ellers i butikken. */
+.settstabel .ss-foil {
+  position: absolute; top: 5%; right: 6%; z-index: 2; background: #f5d020; color: #3b2f05;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 3px;
+}
+.settstabel.liten { border-radius: 4px; }
+.settstabel.liten .ss-kort { border-width: 1.5px; }
+.settstabel.liten .ss-foil { font-size: 7px; padding: 0 3px; }

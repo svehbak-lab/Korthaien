@@ -1,3 +1,4 @@
+import SettStabel from "./SettStabel.jsx";
 import Bulksok from "./Bulksok.jsx";
 import { useState, useEffect, useMemo } from "react";
 import { api, kroner, CONDITIONS } from "../api.js";
@@ -1747,6 +1748,8 @@ function Produktflis({ produkt: p }) {
     <div className="b-flis b-flis-stille">
       {p.bilde_url ? (
         <img src={p.bilde_url} alt={p.navn} loading="lazy" />
+      ) : p.type === "komplettsett" && p.set_code ? (
+        <SettStabel setCode={p.set_code} setNavn={p.set_navn} antall={p.set_antall} foil={p.foil} />
       ) : (
         <div
           className="b-flis-tomt"

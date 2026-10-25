@@ -31,6 +31,10 @@ export type Produkt = {
   antall: number;
   bilde_url: string | null;
   set_code: string | null;
+  foil: boolean;
+  // Fra settet, til bildet som tegnes for komplette sett.
+  set_navn: string | null;
+  set_antall: number | null;
   sortering: number;
   aktiv: number;
 };
@@ -44,6 +48,9 @@ const rad = (x: any): Produkt => ({
   antall: Number(x.antall || 0),
   bilde_url: x.bilde_url ? String(x.bilde_url) : null,
   set_code: x.set_code ? String(x.set_code) : null,
+  foil: !!Number(x.foil || 0),
+  set_navn: x.set_navn ? String(x.set_navn) : null,
+  set_antall: x.set_antall != null ? Number(x.set_antall) : null,
   sortering: Number(x.sortering || 0),
   aktiv: Number(x.aktiv),
 });
@@ -60,20 +67,21 @@ export async function hentProdukter(
   const hvor: string[] = [];
   const args: any[] = [];
   if (opts.type) {
-    hvor.push("type = ?");
+    hvor.push("p.type = ?");
     args.push(opts.type);
   }
   if (opts.set_code) {
-    hvor.push("set_code = ?");
+    hvor.push("p.set_code = ?");
     args.push(String(opts.set_code).toLowerCase());
   }
-  if (opts.bareAktive !== false) hvor.push("aktiv = 1");
-  if (opts.barePåLager) hvor.push("antall > 0");
+  if (opts.bareAktive !== false) hvor.push("p.aktiv = 1");
+  if (opts.barePåLager) hvor.push("p.antall > 0");
 
   const r = await db().execute({
-    sql: `SELECT * FROM produkter
+    sql: `SELECT p.*, COALESCE(s.visningsnavn, s.name) AS set_navn, s.card_count AS set_antall
+            FROM produkter p LEFT JOIN sets s ON s.code = p.set_code
            ${hvor.length ? "WHERE " + hvor.join(" AND ") : ""}
-           ORDER BY sortering, navn`,
+           ORDER BY p.sortering, p.navn`,
     args,
   });
   return (r.rows as any[]).map(rad);
@@ -105,6 +113,7 @@ export type NyttProdukt = {
   beskrivelse?: string | null;
   bilde_url?: string | null;
   set_code?: string | null;
+  foil?: boolean;
   sortering?: number;
 };
 
@@ -117,8 +126,8 @@ export async function leggTilProdukt(p: NyttProdukt): Promise<number> {
   const r = await db().execute({
     sql: `INSERT INTO produkter
             (type, navn, beskrivelse, pris_ore, antall, bilde_url, set_code,
-             sortering, aktiv, created_at, updated_at)
-          VALUES (?,?,?,?,?,?,?,?,1,?,?)`,
+             sortering, aktiv, created_at, updated_at, foil)
+          VALUES (?,?,?,?,?,?,?,?,1,?,?,?)`,
     args: [
       p.type,
       navn,
@@ -130,6 +139,7 @@ export async function leggTilProdukt(p: NyttProdukt): Promise<number> {
       heltall(p.sortering ?? 0),
       nå,
       nå,
+      p.foil ? 1 : 0,
     ],
   });
   return Number(r.lastInsertRowid);
@@ -147,7 +157,7 @@ export async function endreProdukt(id: number, p: Partial<NyttProdukt & { aktiv:
     sql: `UPDATE produkter
              SET type = ?, navn = ?, beskrivelse = ?, pris_ore = ?, antall = ?,
                  bilde_url = ?, set_code = ?, sortering = ?, aktiv = ?,
-                 updated_at = ?
+                 updated_at = ?, foil = ?
            WHERE id = ?`,
     args: [
       p.type ?? nå.type,
@@ -160,6 +170,7 @@ export async function endreProdukt(id: number, p: Partial<NyttProdukt & { aktiv:
       p.sortering === undefined ? nå.sortering : heltall(p.sortering),
       p.aktiv === undefined ? nå.aktiv : p.aktiv ? 1 : 0,
       new Date().toISOString(),
+      p.foil === undefined ? (nå.foil ? 1 : 0) : p.foil ? 1 : 0,
       id,
     ],
   });

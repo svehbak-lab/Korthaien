@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { api, kroner, lastOppBilde, bildeFraLenke, bildeUrl } from "../api.js";
+import SettStabel from "./SettStabel.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EGNE PRODUKTER
@@ -20,7 +21,7 @@ const TYPER = [
 
 const TOM = {
   type: "sealed", navn: "", pris_kr: "", antall: "0",
-  beskrivelse: "", bilde_url: "", set_code: "", sortering: "0",
+  beskrivelse: "", bilde_url: "", set_code: "", sortering: "0", foil: false,
 };
 
 const tilØre = (kr) => Math.round((parseFloat(String(kr).replace(",", ".")) || 0) * 100);
@@ -54,6 +55,7 @@ export default function Produkter({ onFeil, onMelding }) {
       beskrivelse: p.beskrivelse,
       bilde_url: p.bilde_url,
       set_code: p.set_code,
+      foil: !!p.foil,
       sortering: parseInt(p.sortering, 10) || 0,
     };
   }
@@ -123,7 +125,7 @@ export default function Produkter({ onFeil, onMelding }) {
               />
             </label>
             <label>
-              <div className="dempet" style={{ fontSize: 12, marginBottom: 3 }}>Pris kr</div>
+              <div className="dempet" style={{ fontSize: 12, marginBottom: 3 }}>Pris per stk (kr)</div>
               <input
                 type="text" inputMode="decimal" value={ny.pris_kr} placeholder="3490"
                 onChange={(e) => setNy({ ...ny, pris_kr: e.target.value })}
@@ -146,6 +148,12 @@ export default function Produkter({ onFeil, onMelding }) {
                 style={{ width: 80 }}
               />
             </label>
+            {ny.type === "komplettsett" && (
+              <label className="rad-flex" style={{ gap: 6, paddingBottom: 6 }}>
+                <input type="checkbox" checked={ny.foil} onChange={(e) => setNy({ ...ny, foil: e.target.checked })} />
+                Foil
+              </label>
+            )}
             <button className="knapp primar" disabled={jobber || !ny.navn.trim()} onClick={leggTil}>
               Legg til
             </button>
@@ -154,7 +162,22 @@ export default function Produkter({ onFeil, onMelding }) {
           <div className="rad-flex" style={{ gap: 14, marginTop: 12, flexWrap: "wrap" }}>
             <div style={{ flex: 1, minWidth: 260 }}>
               <div className="dempet" style={{ fontSize: 12, marginBottom: 3 }}>Bilde</div>
-              <BildeFelt verdi={ny.bilde_url} onEndre={(u) => setNy((x) => ({ ...x, bilde_url: u }))} onFeil={onFeil} />
+              {ny.type === "komplettsett" && !ny.bilde_url ? (
+                <div className="rad-flex" style={{ gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ width: 110, flex: "none" }}>
+                    <SettStabel setCode={ny.set_code} setNavn={null} foil={ny.foil} />
+                  </div>
+                  <span className="dempet" style={{ fontSize: 12.5 }}>
+                    Bildet tegnes av seg selv ut fra settkoden og foil-haken, med settnavn og antall kort.
+                    Vil du heller bruke et eget bilde, last det opp under.
+                    <span style={{ display: "block", marginTop: 6 }}>
+                      <BildeFelt verdi={ny.bilde_url} onEndre={(u) => setNy((x) => ({ ...x, bilde_url: u }))} onFeil={onFeil} />
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <BildeFelt verdi={ny.bilde_url} onEndre={(u) => setNy((x) => ({ ...x, bilde_url: u }))} onFeil={onFeil} />
+              )}
             </div>
             <label style={{ flex: 2, minWidth: 260 }}>
               <div className="dempet" style={{ fontSize: 12, marginBottom: 3 }}>Beskrivelse</div>
@@ -195,7 +218,7 @@ export default function Produkter({ onFeil, onMelding }) {
                     <th style={{ width: 60 }}>Rekke</th>
                     <th>Navn</th>
                     <th style={{ width: 70 }}>Sett</th>
-                    <th className="h" style={{ width: 100 }}>Pris</th>
+                    <th className="h" style={{ width: 100 }}>Pris per stk</th>
                     <th className="h" style={{ width: 80 }}>Antall</th>
                     <th>Beskrivelse</th>
                     <th style={{ width: 150 }}></th>
@@ -222,6 +245,12 @@ export default function Produkter({ onFeil, onMelding }) {
                             type="text" value={redigerer.set_code || ""} style={{ width: 58 }}
                             onChange={(e) => setRedigerer({ ...redigerer, set_code: e.target.value })}
                           />
+                          {redigerer.type === "komplettsett" && (
+                            <label className="rad-flex" style={{ gap: 4, fontSize: 12, marginTop: 4 }}>
+                              <input type="checkbox" checked={!!redigerer.foil} onChange={(e) => setRedigerer({ ...redigerer, foil: e.target.checked })} />
+                              Foil
+                            </label>
+                          )}
                         </td>
                         <td className="h">
                           <input
@@ -266,8 +295,11 @@ export default function Produkter({ onFeil, onMelding }) {
                           <span className="rad-flex" style={{ gap: 8, display: "inline-flex" }}>
                             {p.bilde_url
                               ? <img src={p.bilde_url} alt="" style={{ width: 32, height: 32, objectFit: "contain", borderRadius: 4 }} />
-                              : <span className="dempet" style={{ width: 32, fontSize: 10, textAlign: "center" }}>uten bilde</span>}
+                              : p.type === "komplettsett" && p.set_code
+                                ? <span style={{ width: 32, flex: "none" }}><SettStabel setCode={p.set_code} foil={p.foil} liten /></span>
+                                : <span className="dempet" style={{ width: 32, fontSize: 10, textAlign: "center" }}>uten bilde</span>}
                             {p.navn}
+                            {p.foil && <span style={{ background: "#f5d020", color: "#3b2f05", fontSize: 10.5, fontWeight: 700, padding: "0 6px", borderRadius: 3 }}>FOIL</span>}
                           </span>
                           {p.antall === 0 && (
                             <span className="merkelapp m-av" style={{ marginLeft: 8 }}>utsolgt</span>

@@ -363,6 +363,9 @@ async function leggTilNyeKolonner(): Promise<void> {
 
   if (lager.size) await ryddFeilkoblinger();
 
+  const pr = await kolonner("produkter");
+  if (pr.size && !pr.has("foil")) await db().execute("ALTER TABLE produkter ADD COLUMN foil INTEGER NOT NULL DEFAULT 0");
+
   // Ordrer betalt før rapportene gikk over til pengebeløpet: delvis betalt
   // med kreditt, men ført med hele ordresummen. Engangs i praksis — etterpå
   // er summen lik stripe_ore og raden treffes ikke igjen.
