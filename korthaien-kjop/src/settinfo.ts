@@ -1,3 +1,4 @@
+import { settStørrelser } from "./produkter.js";
 import { butikklagerSql } from "./lager.js";
 import { db } from "./db.js";
 
@@ -127,7 +128,10 @@ export async function settinfo(kode: string): Promise<Settinfo | null> {
     navn: String(rad.visningsnavn || rad.name),
     offisielt_navn: String(rad.name),
     utgitt: rad.released_at ? String(rad.released_at) : null,
-    kort_i_settet: Number(rad.printed_size || 0) || Number(rad.card_count || 0),
+    kort_i_settet:
+      Number(rad.printed_size || 0) ||
+      (await settStørrelser([String(rad.code)])).get(String(rad.code)) ||
+      Number(rad.card_count || 0),
     kort_med_varianter: Number(rad.card_count || 0),
     ulike_på_lager: Number(l?.ulike || 0),
     eksemplarer: Number(l?.eksemplarer || 0),

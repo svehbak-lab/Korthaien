@@ -463,6 +463,8 @@ CREATE TABLE IF NOT EXISTS produkter (
   -- Komplette sett: foil eller ikke. Uten eget bilde tegnes bildet ut fra
   -- settet og dette flagget.
   foil        INTEGER NOT NULL DEFAULT 0,
+  -- Komplette sett: antall kort i settet, hvis det utregnede er feil.
+  antall_kort INTEGER,
   sortering   INTEGER NOT NULL DEFAULT 0,
   -- Produkter slettes ikke mens de kan stå på en ordre. De slås av.
   aktiv       INTEGER NOT NULL DEFAULT 1,

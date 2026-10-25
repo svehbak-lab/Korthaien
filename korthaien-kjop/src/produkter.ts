@@ -35,6 +35,8 @@ export type Produkt = {
   // Fra settet, til bildet som tegnes for komplette sett.
   set_navn: string | null;
   set_antall: number | null;
+  // Overstyrt antall kort (komplette sett). Null betyr «regn ut».
+  antall_kort: number | null;
   sortering: number;
   aktiv: number;
 };
@@ -51,6 +53,7 @@ const rad = (x: any): Produkt => ({
   foil: !!Number(x.foil || 0),
   set_navn: x.set_navn ? String(x.set_navn) : null,
   set_antall: x.set_antall != null ? Number(x.set_antall) : null,
+  antall_kort: x.antall_kort != null ? Number(x.antall_kort) : null,
   sortering: Number(x.sortering || 0),
   aktiv: Number(x.aktiv),
 });
@@ -78,13 +81,61 @@ export async function hentProdukter(
   if (opts.barePåLager) hvor.push("p.antall > 0");
 
   const r = await db().execute({
-    sql: `SELECT p.*, COALESCE(s.visningsnavn, s.name) AS set_navn, COALESCE(NULLIF(s.printed_size, 0), s.card_count) AS set_antall
+    sql: `SELECT p.*, COALESCE(s.visningsnavn, s.name) AS set_navn, s.printed_size, s.card_count
             FROM produkter p LEFT JOIN sets s ON s.code = p.set_code
            ${hvor.length ? "WHERE " + hvor.join(" AND ") : ""}
            ORDER BY p.sortering, p.navn`,
     args,
   });
-  return (r.rows as any[]).map(rad);
+  const koder = [...new Set((r.rows as any[]).filter((x) => x.set_code && !x.printed_size).map((x) => String(x.set_code)))];
+  const utregnet = await settStørrelser(koder);
+  return (r.rows as any[]).map((x) =>
+    rad({
+      ...x,
+      set_antall:
+        (Number(x.antall_kort) || 0) ||
+        (Number(x.printed_size) || 0) ||
+        utregnet.get(String(x.set_code)) ||
+        (Number(x.card_count) || null),
+    })
+  );
+}
+
+// Hvor mange kort selve settet har, uten showcase, borderless og andre
+// varianter. Scryfall oppgir det (printed_size) bare for noen sett. Ellers:
+// hovedsettet er nummerert 1, 2, 3 … uten hull i vanlig ramme, og
+// variantene kommer etter. Vi teller oss oppover til første hull.
+export async function settStørrelser(koder: string[]): Promise<Map<string, number>> {
+  const ut = new Map<string, number>();
+  if (!koder.length) return ut;
+  const r = await db().execute({
+    sql: `SELECT set_code, collector_number FROM cards
+           WHERE set_code IN (${koder.map(() => "?").join(",")})
+             AND variant = 'vanlig' AND er_token = 0
+             AND collector_number NOT GLOB '*[^0-9]*' AND collector_number <> ''`,
+    args: koder,
+  });
+  const tall = new Map<string, Set<number>>();
+  for (const x of r.rows as any[]) {
+    const k = String(x.set_code);
+    if (!tall.has(k)) tall.set(k, new Set());
+    tall.get(k)!.add(Number(x.collector_number));
+  }
+  const totalt = await db().execute({
+    sql: `SELECT code, card_count FROM sets WHERE code IN (${koder.map(() => "?").join(",")})`,
+    args: koder,
+  });
+  const kortTotalt = new Map((totalt.rows as any[]).map((x) => [String(x.code), Number(x.card_count || 0)]));
+  for (const [k, s] of tall) {
+    let n = 0;
+    while (s.has(n + 1)) n++;
+    // Hovedsettet er alltid en god del av settet — ofte halvparten eller mer.
+    // Er rekka mye kortere, mangler kortene i katalogen, og tallet er ikke
+    // til å stole på.
+    const alle = kortTotalt.get(k) || 0;
+    if (n > 0 && (!alle || n >= alle * 0.3)) ut.set(k, n);
+  }
+  return ut;
 }
 
 export async function hentProdukt(id: number): Promise<Produkt | null> {
@@ -114,6 +165,7 @@ export type NyttProdukt = {
   bilde_url?: string | null;
   set_code?: string | null;
   foil?: boolean;
+  antall_kort?: number | null;
   sortering?: number;
 };
 
@@ -126,8 +178,8 @@ export async function leggTilProdukt(p: NyttProdukt): Promise<number> {
   const r = await db().execute({
     sql: `INSERT INTO produkter
             (type, navn, beskrivelse, pris_ore, antall, bilde_url, set_code,
-             sortering, aktiv, created_at, updated_at, foil)
-          VALUES (?,?,?,?,?,?,?,?,1,?,?,?)`,
+             sortering, aktiv, created_at, updated_at, foil, antall_kort)
+          VALUES (?,?,?,?,?,?,?,?,1,?,?,?,?)`,
     args: [
       p.type,
       navn,
@@ -140,6 +192,7 @@ export async function leggTilProdukt(p: NyttProdukt): Promise<number> {
       nå,
       nå,
       p.foil ? 1 : 0,
+      Number(p.antall_kort) > 0 ? heltall(p.antall_kort) : null,
     ],
   });
   return Number(r.lastInsertRowid);
@@ -157,7 +210,7 @@ export async function endreProdukt(id: number, p: Partial<NyttProdukt & { aktiv:
     sql: `UPDATE produkter
              SET type = ?, navn = ?, beskrivelse = ?, pris_ore = ?, antall = ?,
                  bilde_url = ?, set_code = ?, sortering = ?, aktiv = ?,
-                 updated_at = ?, foil = ?
+                 updated_at = ?, foil = ?, antall_kort = ?
            WHERE id = ?`,
     args: [
       p.type ?? nå.type,
@@ -171,6 +224,7 @@ export async function endreProdukt(id: number, p: Partial<NyttProdukt & { aktiv:
       p.aktiv === undefined ? nå.aktiv : p.aktiv ? 1 : 0,
       new Date().toISOString(),
       p.foil === undefined ? (nå.foil ? 1 : 0) : p.foil ? 1 : 0,
+      p.antall_kort === undefined ? nå.antall_kort : Number(p.antall_kort) > 0 ? heltall(p.antall_kort) : null,
       id,
     ],
   });

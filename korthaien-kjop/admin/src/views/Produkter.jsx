@@ -21,7 +21,7 @@ const TYPER = [
 
 const TOM = {
   type: "sealed", navn: "", pris_kr: "", antall: "0",
-  beskrivelse: "", bilde_url: "", set_code: "", sortering: "0", foil: false,
+  beskrivelse: "", bilde_url: "", set_code: "", sortering: "0", foil: false, antall_kort: "",
 };
 
 const tilØre = (kr) => Math.round((parseFloat(String(kr).replace(",", ".")) || 0) * 100);
@@ -56,6 +56,7 @@ export default function Produkter({ onFeil, onMelding }) {
       bilde_url: p.bilde_url,
       set_code: p.set_code,
       foil: !!p.foil,
+      antall_kort: parseInt(p.antall_kort, 10) || null,
       sortering: parseInt(p.sortering, 10) || 0,
     };
   }
@@ -149,10 +150,21 @@ export default function Produkter({ onFeil, onMelding }) {
               />
             </label>
             {ny.type === "komplettsett" && (
-              <label className="rad-flex" style={{ gap: 6, paddingBottom: 6 }}>
-                <input type="checkbox" checked={ny.foil} onChange={(e) => setNy({ ...ny, foil: e.target.checked })} />
-                Foil
-              </label>
+              <>
+                <label>
+                  <div className="dempet" style={{ fontSize: 12, marginBottom: 3 }}>Antall kort</div>
+                  <input
+                    type="text" inputMode="numeric" value={ny.antall_kort} placeholder="auto"
+                    title="La stå tomt for å regne ut av settet. Fyll inn hvis tallet blir feil."
+                    onChange={(e) => setNy({ ...ny, antall_kort: e.target.value.replace(/\D/g, "") })}
+                    style={{ width: 70, textAlign: "right" }}
+                  />
+                </label>
+                <label className="rad-flex" style={{ gap: 6, paddingBottom: 6 }}>
+                  <input type="checkbox" checked={ny.foil} onChange={(e) => setNy({ ...ny, foil: e.target.checked })} />
+                  Foil
+                </label>
+              </>
             )}
             <button className="knapp primar" disabled={jobber || !ny.navn.trim()} onClick={leggTil}>
               Legg til
@@ -246,10 +258,21 @@ export default function Produkter({ onFeil, onMelding }) {
                             onChange={(e) => setRedigerer({ ...redigerer, set_code: e.target.value })}
                           />
                           {redigerer.type === "komplettsett" && (
-                            <label className="rad-flex" style={{ gap: 4, fontSize: 12, marginTop: 4 }}>
-                              <input type="checkbox" checked={!!redigerer.foil} onChange={(e) => setRedigerer({ ...redigerer, foil: e.target.checked })} />
-                              Foil
-                            </label>
+                            <>
+                              <label className="rad-flex" style={{ gap: 4, fontSize: 12, marginTop: 4 }}>
+                                <input type="checkbox" checked={!!redigerer.foil} onChange={(e) => setRedigerer({ ...redigerer, foil: e.target.checked })} />
+                                Foil
+                              </label>
+                              <label style={{ display: "block", fontSize: 12, marginTop: 4 }}>
+                                <span className="dempet">Antall kort</span>
+                                <input
+                                  type="text" inputMode="numeric" value={redigerer.antall_kort ?? ""} placeholder={redigerer.set_antall ? String(redigerer.set_antall) : "auto"}
+                                  title="La stå tomt for å regne ut av settet."
+                                  onChange={(e) => setRedigerer({ ...redigerer, antall_kort: e.target.value.replace(/\D/g, "") })}
+                                  style={{ width: 58, display: "block" }}
+                                />
+                              </label>
+                            </>
                           )}
                         </td>
                         <td className="h">
