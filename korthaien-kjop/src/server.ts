@@ -1922,6 +1922,17 @@ migrate()
   .then(async () => {
     // Har overgangen skjedd, leser butikken lagerboken.
     settBokSomLagerkilde((await hentSettings()).lagerkilde === "bok");
+    // Settstørrelsen (printed_size) kom til senere. Mangler den, hentes
+    // settlista fra Scryfall med en gang i stedet for å vente på nattimporten.
+    if (!process.env.DATABASE_URL?.startsWith("file:/tmp")) {
+      db().execute("SELECT COUNT(*) AS n FROM sets WHERE printed_size IS NOT NULL")
+        .then(async (r) => {
+          if (Number((r.rows[0] as any)?.n || 0) > 0) return;
+          const { importerSett } = await import("./import-scryfall.js");
+          await importerSett();
+        })
+        .catch((e) => console.error("Henting av settlista feilet:", e?.message));
+    }
     server = app.listen(PORT, () => console.log(`Korthaien Kjøp lytter på :${PORT}`));
     // Rydder reservasjoner hver time, så kvoter ikke blir stående låst.
     // unref, slik at en test som importerer serveren ikke holdes i live av
