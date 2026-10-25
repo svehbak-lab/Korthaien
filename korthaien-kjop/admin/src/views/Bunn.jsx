@@ -38,6 +38,7 @@ const SPALTER = [
     punkter: [
       { tekst: "Selg kortene dine", url: BUYLIST },
       { tekst: "Selg MTGO-tix", skjerm: "tix" },
+      { tekst: "Bulksøk", skjerm: "bulksok" },
       { tekst: "Lim inn hele lista", url: BUYLIST },
       { tekst: "Tilstandsguide", url: BUYLIST },
       { tekst: "Alle sett", skjerm: "sett" },

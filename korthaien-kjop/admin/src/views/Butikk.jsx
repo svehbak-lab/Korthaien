@@ -1,3 +1,4 @@
+import Bulksok from "./Bulksok.jsx";
 import { useState, useEffect, useMemo } from "react";
 import { api, kroner, CONDITIONS } from "../api.js";
 import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside, OmOss, Retur, Tix } from "./Bunn.jsx";
@@ -129,9 +130,13 @@ function ButikkSider({ onFeil }) {
   // Hvor mange sealed og komplette sett som finnes paa lager. Styrer om
   // menypunktet og forsideseksjonen vises i det hele tatt.
   const [produktantall, setProduktantall] = useState(null);
+  // Sealed kan slås av under Produkter i admin. Da teller vi dem som null,
+  // så menyen, forsiden og sidene for dem forsvinner av seg selv.
+  const [visSealed, setVisSealed] = useState(true);
+  const produktantallVist = visSealed ? produktantall : {};
 
   useEffect(() => {
-    api.innstillinger().then((s) => setTema(s.tema || "dagens")).catch(() => setTema("dagens"));
+    api.innstillinger().then((s) => { setTema(s.tema || "dagens"); setVisSealed(s.vis_sealed !== false); }).catch(() => setTema("dagens"));
   }, []);
 
   useEffect(() => {
@@ -224,7 +229,7 @@ function ButikkSider({ onFeil }) {
       <Topp
         onKonto={() => { setÅpentKort(null); setSkjerm("konto"); }}
         onKurv={() => { setÅpentKort(null); setKurvmelding(""); setSkjerm("kurv"); }}
-        produkter={produktantall}
+        produkter={produktantallVist}
         onProdukt={(t) => { setÅpentKort(null); setSkjerm(t); }}
         onHjem={() => { setÅpentKort(null); setSkjerm("forside"); }}
         onSøk={(t) => {
@@ -258,7 +263,7 @@ function ButikkSider({ onFeil }) {
   if (skjerm === "forside") {
     return skall(
       <Forside
-        produktantall={produktantall}
+        produktantall={produktantallVist}
         onProdukt={(t) => setSkjerm(t)}
         onButikk={() => setSkjerm("liste")}
         onÅpne={setÅpentKort}
@@ -321,8 +326,9 @@ function ButikkSider({ onFeil }) {
   if (skjerm === "kreditt") return skall(<Kredittside />);
   if (skjerm === "omoss") return skall(<OmOss />);
   if (skjerm === "retur") return skall(<Retur />);
+  if (skjerm === "bulksok") return skall(<Bulksok onKurv={() => { setKurvmelding(""); setSkjerm("kurv"); }} />);
   if (skjerm === "tix") return skall(<Tix onFeil={onFeil} onKonto={() => setSkjerm("konto")} />);
-  if (PRODUKTTYPER.some((t) => t.id === skjerm)) {
+  if (visSealed && PRODUKTTYPER.some((t) => t.id === skjerm)) {
     return skall(<Produktliste type={skjerm} onFeil={onFeil} />);
   }
 

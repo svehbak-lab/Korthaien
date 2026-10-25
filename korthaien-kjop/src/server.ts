@@ -1,3 +1,4 @@
+import { bulkSøk } from "./bulksok.js";
 import { sjekkKode, KodeFeil, alleKoder, opprettKode, importerKoder, justerSaldo, endreKode, bevegelser as kodeBevegelser, lagKode } from "./rabattkoder.js";
 import { randomBytes } from "node:crypto";
 import "dotenv/config";
@@ -765,6 +766,13 @@ app.get("/api/butikk/oppsett", fang(async (_req: any, res: any) => {
     reservasjon_min: RESERVASJON_MIN,
     overgang_dato: (await hentSettings()).overgang_dato || "",
   });
+}));
+
+// Bulksøk: lim inn en liste, se hva som er på lager.
+app.post("/api/butikk/bulksok", grense(REGLER.bulk), fang(async (req: any, res: any) => {
+  const tekst = String(req.body?.tekst || "");
+  if (tekst.length > 60_000) throw new HttpFeil(400, "Lista er for lang.");
+  res.json(await bulkSøk(tekst, !!req.body?.kun_foil));
 }));
 
 // Kassen sjekker en rabattkode før kunden betaler. Eget tak, så ingen kan
@@ -1553,8 +1561,9 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
     "usd_nok", "buy_pct", "min_buy_ore", "min_order_ore", "min_usd",
     "salg_trapp", "salg_faktor", "salg_avrunding", "default_conditions",
     "default_ladder", "order_expiry_days", "ship_to", "tema", "forside_sett",
-    "firmanavn", "org_nr", "retur_frakt", "toppbanner", "tix_kreditt_ore", "overgang_dato",
+    "firmanavn", "org_nr", "retur_frakt", "toppbanner", "tix_kreditt_ore", "overgang_dato", "vis_sealed",
   ];
+  if (req.body && "vis_sealed" in req.body) req.body.vis_sealed = !!req.body.vis_sealed;
   if (req.body && "overgang_dato" in req.body) {
     const d = String(req.body.overgang_dato || "").trim();
     if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new HttpFeil(400, "Datoen må være på formen ÅÅÅÅ-MM-DD.");

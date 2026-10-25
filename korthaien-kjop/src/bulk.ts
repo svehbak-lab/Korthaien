@@ -86,13 +86,13 @@ const PRISHALE =
 // telle klammer riktig er ikke verdt det når «{noPrice}» ligger inni «[...]».
 const SKROT = /\s*[[({][^[({]*?(maybeboard|sideboard|commander|deck|main(?:board)?|list)[^\n]*$/i;
 
-export function parseBulk(tekst: string): BulkLinje[] {
+export function parseBulk(tekst: string, maks = MAX_LINJER): BulkLinje[] {
   const linjer = String(tekst || "")
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean)
     .filter((l) => !OVERSKRIFT.test(l))
-    .slice(0, MAX_LINJER);
+    .slice(0, maks);
 
   return linjer.map((rå, i) => tolkLinje(rå, i + 1));
 }

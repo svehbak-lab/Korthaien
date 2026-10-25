@@ -480,6 +480,9 @@ export type Settings = {
   // Dagen den nye butikken tok over (ÅÅÅÅ-MM-DD). Står den, sier
   // innloggingen at kunder fra før må velge nytt passord første gang.
   overgang_dato: string;
+  // Sealed og komplette sett i butikken. Slått av, forsvinner menyen,
+  // forsiden og sidene for dem.
+  vis_sealed: boolean;
 };
 
 const STANDARD: Settings = {
@@ -509,6 +512,7 @@ const STANDARD: Settings = {
   retur_frakt: "kunde",
   tix_kreditt_ore: 1000,
   overgang_dato: "",
+  vis_sealed: true,
 };
 
 export async function hentSettings(): Promise<Settings> {

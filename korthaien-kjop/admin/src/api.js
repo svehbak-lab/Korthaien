@@ -309,6 +309,7 @@ export const kunde = {
   kurv: (linjer) => kundekall("/api/butikk/kurv", { method: "POST", body: { linjer } }),
   kasse: (felt) => kundekall("/api/butikk/kasse", { method: "POST", body: felt }),
   rabattkode: (kode) => kundekall("/api/butikk/rabattkode", { method: "POST", body: { kode } }),
+  bulksok: (tekst, kun_foil) => kundekall("/api/butikk/bulksok", { method: "POST", body: { tekst, kun_foil } }),
   avbryt: (nr, m) => kundekall(`/api/butikk/kasse/${encodeURIComponent(nr)}/avbryt`, { method: "POST", body: { m } }),
   toppbanner: () => kundekall("/api/butikk/toppbanner"),
   kvittering: (nr, m) => kundekall(`/api/butikk/ordre/${encodeURIComponent(nr)}?m=${encodeURIComponent(m)}`),

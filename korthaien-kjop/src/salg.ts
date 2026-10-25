@@ -96,7 +96,7 @@ export function riktigMerke(ordrenr: string, merke: string): boolean {
 // kvarteret er ute: Stripe-siden kan fortsatt betales til vi har lukket den
 // (se utløpGamle). Teller vi den som ledig før det, kan siste eksemplar
 // selges to ganger.
-async function tilgjengeligFor(linjer: { card_id: string }[], utenOrdre?: number) {
+export async function tilgjengeligFor(linjer: { card_id: string }[], utenOrdre?: number) {
   const ider = [...new Set(linjer.map((l) => l.card_id))];
   const kart = new Map<string, number>();
   if (!ider.length) return kart;
@@ -190,7 +190,17 @@ export async function prisKurv(inn: any, utenOrdre?: number): Promise<PrisetLinj
   const manuellKjøp = await hentManuellePriser(ider);
   const ledig = await tilgjengeligFor(linjer, utenOrdre);
 
-  return linjer.map((l) => {
+  const RARITET: Record<string, number> = { mythic: 0, rare: 1, uncommon: 2, common: 3 };
+  // Samme rekkefølge som salgsordrene: sett, raritet, navn.
+  const sortert = [...linjer].sort((a, b) => {
+    const ka: any = kort.get(a.card_id), kb: any = kort.get(b.card_id);
+    const sa = String(ka?.set_name || ka?.set_code || ""), sb = String(kb?.set_name || kb?.set_code || "");
+    if (sa !== sb) return sa.localeCompare(sb, "nb");
+    const ra = RARITET[String(ka?.rarity || "").toLowerCase()] ?? 4, rb = RARITET[String(kb?.rarity || "").toLowerCase()] ?? 4;
+    if (ra !== rb) return ra - rb;
+    return String(ka?.name || "").localeCompare(String(kb?.name || ""), "nb");
+  });
+  return sortert.map((l) => {
     const k: any = kort.get(l.card_id);
     const tilgjengelig = Math.max(0, ledig.get(`${l.card_id}:${l.finish}:${l.condition}`) || 0);
     if (!k) {

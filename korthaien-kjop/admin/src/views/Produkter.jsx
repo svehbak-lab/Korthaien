@@ -103,6 +103,7 @@ export default function Produkter({ onFeil, onMelding }) {
 
   return (
     <>
+      <VisSealed onFeil={onFeil} onMelding={onMelding} />
       <div className="panel">
         <header><h3>Nytt produkt</h3></header>
         <div className="krop">
@@ -290,5 +291,42 @@ export default function Produkter({ onFeil, onMelding }) {
         );
       })}
     </>
+  );
+}
+
+// Én hake: skal sealed og komplette sett vises i butikken? Slått av,
+// forsvinner menyen, forsiden og sidene for dem. Produktene blir stående her.
+function VisSealed({ onFeil, onMelding }) {
+  const [på, setPå] = useState(null);
+  useEffect(() => {
+    api.innstillinger().then((s) => setPå(s.vis_sealed !== false)).catch(onFeil);
+  }, []);
+  if (på === null) return null;
+  return (
+    <div className="panel">
+      <div className="krop rad-flex">
+        <label className="rad-flex" style={{ gap: 8, fontWeight: 600 }}>
+          <input
+            type="checkbox"
+            checked={på}
+            onChange={async (e) => {
+              const ny = e.target.checked;
+              setPå(ny);
+              try {
+                await api.lagreInnstillinger({ vis_sealed: ny });
+                onMelding(ny ? "Sealed vises i butikken." : "Sealed er skjult i butikken.");
+              } catch (err) {
+                setPå(!ny);
+                onFeil(err);
+              }
+            }}
+          />
+          Vis sealed og komplette sett i butikken
+        </label>
+        <span className="dempet" style={{ fontSize: 13 }}>
+          Slått av, forsvinner de fra menyen og forsiden. Produktene under blir liggende.
+        </span>
+      </div>
+    </div>
   );
 }
