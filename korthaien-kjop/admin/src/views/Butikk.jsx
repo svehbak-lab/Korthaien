@@ -3,7 +3,7 @@ import SettStabel from "./SettStabel.jsx";
 import Bulksok from "./Bulksok.jsx";
 import { useState, useEffect, useMemo } from "react";
 import { api, kroner, CONDITIONS } from "../api.js";
-import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside, OmOss, Retur, Tix } from "./Bunn.jsx";
+import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside, OmOss, Retur, Tix, Vilkar, Personvern } from "./Bunn.jsx";
 import { LeggProduktIKurven, HandelProvider, useHandel, LeggIKurven, KurvSide, Kasse, Kvittering, LoggInn, NyttPassord, MinSide, Bekreft } from "./Handel.jsx";
 import { kunde as kapi, bildeUrl } from "../api.js";
 
@@ -75,8 +75,9 @@ function lesLenke() {
     innlogging: p.get("innlogging"),
     bekreft: p.get("bekreft"),
     kort: p.get("kort"),
+    side: p.get("side"),
   };
-  if (ut.kasse || ut.nyttpassord || ut.innlogging || ut.bekreft || ut.kort) {
+  if (ut.kasse || ut.nyttpassord || ut.innlogging || ut.bekreft || ut.kort || ut.side) {
     window.history.replaceState(null, "", window.location.pathname);
   }
   return ut;
@@ -111,6 +112,7 @@ function ButikkSider({ onFeil }) {
       : lenke.nyttpassord ? "nyttpassord"
       : lenke.bekreft ? "bekreft"
       : lenke.innlogging ? "konto"
+      : ["vilkar", "personvern", "retur", "frakt"].includes(lenke.side) ? lenke.side
       : "forside"
   );
   const [kvittering, setKvittering] = useState(
@@ -345,6 +347,8 @@ function ButikkSider({ onFeil }) {
   if (skjerm === "kreditt") return skall(<Kredittside />);
   if (skjerm === "omoss") return skall(<OmOss />);
   if (skjerm === "retur") return skall(<Retur />);
+  if (skjerm === "vilkar") return skall(<Vilkar onSkjerm={(id) => setSkjerm(id)} />);
+  if (skjerm === "personvern") return skall(<Personvern />);
   if (skjerm === "bulksok") return skall(<Bulksok onKurv={() => { setKurvmelding(""); setSkjerm("kurv"); }} />);
   if (skjerm === "tix") return skall(<Tix onFeil={onFeil} onKonto={() => setSkjerm("konto")} />);
   if (visSealed && PRODUKTTYPER.some((t) => t.id === skjerm)) {

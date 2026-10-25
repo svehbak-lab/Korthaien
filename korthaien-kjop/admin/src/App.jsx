@@ -42,7 +42,7 @@ export default function App() {
   // Lenker tilbake fra Stripe, Google og «glemt passord» skal lande i
   // butikken, der kunden var — ikke på ordrelista i admin.
   const [side, setSide] = useState(() =>
-    /[?&](kasse|nyttpassord|innlogging|bekreft)=/.test(window.location.search) ? "butikk" : "salgsordrer"
+    /[?&](kasse|nyttpassord|innlogging|bekreft|kort|side)=/.test(window.location.search) ? "butikk" : "salgsordrer"
   );
   const [antallSalg, setAntallSalg] = useState(null);
   const [valgtSett, setValgtSett] = useState(null);

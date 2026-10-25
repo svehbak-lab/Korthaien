@@ -571,7 +571,8 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
             <label className="rad-flex" style={{ gap: 8, margin: "12px 0", fontSize: 13.5, alignItems: "flex-start" }}>
               <input type="checkbox" checked={vilkår} onChange={(e) => setVilkår(e.target.checked)} />
               <span>
-                Jeg godtar kjøpsvilkårene og har lest om angrerett.
+                Jeg godtar <a href="?side=vilkar" target="_blank" rel="noopener">kjøpsvilkårene</a> og har lest om{" "}
+                <a href="?side=retur" target="_blank" rel="noopener">angrerett</a>.
               </span>
             </label>
             <button

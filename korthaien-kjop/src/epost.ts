@@ -432,6 +432,24 @@ const leveringsadresse = (o: any) =>
     .filter(Boolean)
     .join("\n");
 
+// Standard angreskjema etter angrerettloven, i ordrebekreftelsen. Kunden skal
+// ha det på et varig medium — en e-post er det, en lenke er det ikke.
+function angreskjema(o: any): string {
+  const dato = o.betalt_at ? new Date(o.betalt_at).toLocaleDateString("nb-NO", { timeZone: "Europe/Oslo" }) : "";
+  const linje = '<span style="display:inline-block;min-width:220px;border-bottom:1px solid #b9b2a7">&nbsp;</span>';
+  return `<div style="margin-top:22px;padding:14px 16px;border:1px solid #e3ded5;border-radius:8px;font-size:13px">
+    <div style="font-weight:700;font-size:14px;margin-bottom:2px">Angreskjema</div>
+    <div style="color:#7a746c;margin-bottom:10px">Fyll ut og send dette skjemaet bare hvis du vil gå fra kjøpet. Det er like greit å svare på denne e-posten og skrive at du angrer.</div>
+    <div>Til: Korthaien Svein-Harald Bakke, korthaien@gmail.com</div>
+    <div style="margin-top:6px">Jeg underretter herved om at jeg ønsker å gå fra avtalen om kjøp av følgende varer: ordre <b>${trygg(o.ordrenr)}</b> ${linje}</div>
+    <div style="margin-top:6px">Bestilt den: ${trygg(dato)} &nbsp; Mottatt den: ${linje}</div>
+    <div style="margin-top:6px">Forbrukerens navn: ${trygg(o.kunde_navn || "")}</div>
+    <div style="margin-top:6px">Forbrukerens adresse: ${trygg([o.adresse, `${o.postnr || ""} ${o.poststed || ""}`.trim()].filter(Boolean).join(", "))}</div>
+    <div style="margin-top:6px">Dato: ${linje}</div>
+    <div style="margin-top:6px">Forbrukerens underskrift (bare hvis skjemaet sendes på papir): ${linje}</div>
+  </div>`;
+}
+
 export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
   const { hentOrdre } = await import("./salg.js");
   const r = await db().execute({ sql: "SELECT ordrenr FROM salgsordrer WHERE id = ?", args: [ordreId] });
@@ -451,7 +469,8 @@ export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
        <div style="white-space:pre-line;margin-bottom:14px">${trygg(o.kunde_notat)}</div>` : ""}
      <p style="font-size:13px;color:#7a746c;margin:14px 0 0">Kortene selges etter avansemetoden for brukte
      varer, så merverdiavgift er ikke spesifisert for dem. Frakt inkluderer 25 % mva${Number(o.frakt_ore) > 0 ? ` (${kr(Math.round(Number(o.frakt_ore) / 5))})` : ""}.
-     Angrerett: 14 dager fra du mottar varene. Korthaien Svein-Harald Bakke, org.nr. 914 503 493.</p>`,
+     Angrerett: 14 dager fra du mottar varene. Korthaien Svein-Harald Bakke, org.nr. 914 503 493.</p>
+     ${angreskjema(o)}`,
     "Ordrebekreftelse"
   );
   const tekst = [

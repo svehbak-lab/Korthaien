@@ -40,7 +40,7 @@ const SPALTER = [
       { tekst: "Selg kortene dine", url: BUYLIST },
       { tekst: "Selg MTGO-tix", skjerm: "tix" },
       { tekst: "Bulksøk", skjerm: "bulksok" },
-      { tekst: "Lim inn hele lista", url: BUYLIST },
+      { tekst: "Selg en hel liste", url: BUYLIST },
       { tekst: "Alle sett", skjerm: "sett" },
     ],
   },
@@ -49,7 +49,8 @@ const SPALTER = [
     punkter: [
       { tekst: "Om oss", skjerm: "omoss" },
       { tekst: "Butikkreditt", skjerm: "kreditt" },
-      { tekst: "Kontakt oss", skjerm: "kontakt" },
+      { tekst: "Kjøpsvilkår", skjerm: "vilkar" },
+      { tekst: "Personvern", skjerm: "personvern" },
     ],
   },
 ];
@@ -84,7 +85,9 @@ export default function Bunn({ onSkjerm }) {
 
       <div className="b-midt b-bunnjus">
         <span>
-          <a href={BUYLIST}>Vilkår og personvern</a>
+          <button className="b-bunnlenke" style={{ display: "inline", padding: 0 }} onClick={() => onSkjerm("vilkar")}>Kjøpsvilkår</button>
+          {" · "}
+          <button className="b-bunnlenke" style={{ display: "inline", padding: 0 }} onClick={() => onSkjerm("personvern")}>Personvern</button>
         </span>
         <span className="dempet">
           © {new Date().getFullYear()} Korthaien · Magic: The Gathering er et varemerke
@@ -159,7 +162,7 @@ export function Kontakt({ onFeil }) {
           <label style={{ display: "block", marginBottom: 10 }}>
             <div className="dempet" style={{ fontSize: 12, marginBottom: 3 }}>Hva gjelder det?</div>
             <input type="text" value={felt.emne} onChange={(e) => endre("emne", e.target.value)}
-              placeholder="Ordre K-1043" style={{ width: "100%" }} />
+              placeholder="Ordre S-15001" style={{ width: "100%" }} />
           </label>
           <label style={{ display: "block", marginBottom: 14 }}>
             <div className="dempet" style={{ fontSize: 12, marginBottom: 3 }}>Melding</div>
@@ -169,7 +172,21 @@ export function Kontakt({ onFeil }) {
             {sender ? "Sender…" : "Send melding"}
           </button>
         </form>
+        <KontaktInfo />
       </div>
+    </div>
+  );
+}
+
+// Ehandelsloven: navn, adresse, e-post og organisasjonsnummer skal være lett
+// å finne. Hentes fra innstillingene, som returssiden.
+function KontaktInfo() {
+  const f = useForetak();
+  if (!f) return null;
+  return (
+    <div style={{ marginTop: 22, paddingTop: 14, borderTop: "1px solid var(--strek)" }}>
+      <div style={{ fontWeight: 600, marginBottom: 2 }}>Korthaien</div>
+      <Foretak f={f} />
     </div>
   );
 }
@@ -250,9 +267,8 @@ export function Frakt({ onFeil }) {
 //
 // To ting loven krever, og som ikke kan løses her inne:
 //
-//  1. Angreskjemaet må nå kunden på et varig medium — vedlagt kvitteringen
-//     som PDF, ikke som en lenke. Får de bare en lenke, forlenges fristen
-//     til inntil ett år og fjorten dager. Du sa du ordner skjemaet selv.
+//  1. Angreskjemaet må nå kunden på et varig medium, ikke som en lenke. Det
+//     står derfor i selve ordrebekreftelsen (se angreskjema() i epost.ts).
 //
 //  2. Angrer kunden, skal pengene tilbake med samme betalingsmåte, ikke som
 //     butikkreditt — med mindre kunden selv sier ja til kreditt i stedet.
@@ -403,7 +419,7 @@ export function Kreditt() {
             <b>Du kan følge den.</b> Hver bevegelse inn og ut står med dato og
             grunn, så du kan se hvor saldoen kommer fra.
           </li>
-          <li>Blir en ordre refundert, går beløpet tilbake til kreditten.</li>
+          <li>Blir en ordre kansellert, går kredittdelen tilbake som kreditt, og det du betalte med kort tilbake til kortet.</li>
         </ul>
         <p className="dempet" style={{ marginBottom: 0 }}>
           Vil du selge kort, finner du prisene på{" "}
@@ -529,6 +545,217 @@ export function Tix({ onFeil, onKonto }) {
             </span>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KJØPSVILKÅR
+// ─────────────────────────────────────────────────────────────────────────────
+// Bygget over Forbrukertilsynets standard salgsbetingelser for forbrukerkjøp
+// av varer over Internett, tilpasset det butikken faktisk gjør: kreditt,
+// gavekort, Stripe, frakt du velger selv. Foretaksopplysningene og hvem som
+// betaler returfrakten hentes fra innstillingene. Skrevet av en maskin, ikke
+// en jurist — få den lest før butikken åpnes.
+function useForetak() {
+  const [s, setS] = useState(null);
+  useEffect(() => {
+    let avbrutt = false;
+    api.innstillinger().then((r) => !avbrutt && setS(r)).catch(() => !avbrutt && setS({}));
+    return () => { avbrutt = true; };
+  }, []);
+  if (!s) return null;
+  const orgnr = (s.org_nr || "").replace(/\s/g, "");
+  return {
+    navn: s.firmanavn || "Korthaien",
+    orgnr: orgnr.length === 9 ? `${orgnr.slice(0, 3)} ${orgnr.slice(3, 6)} ${orgnr.slice(6)}` : orgnr,
+    adresse: (s.ship_to || "").trim(),
+    kundenBetalerRetur: (s.retur_frakt || "kunde") === "kunde",
+  };
+}
+
+function Foretak({ f }) {
+  return (
+    <p className="dempet" style={{ whiteSpace: "pre-line" }}>
+      {f.navn}
+      {f.orgnr ? `\nOrganisasjonsnummer ${f.orgnr}` : ""}
+      {"\nE-post: korthaien@gmail.com"}
+      {f.adresse ? `\n${f.adresse}` : ""}
+    </p>
+  );
+}
+
+const H = ({ children }) => <h3 style={{ fontSize: 15, margin: "18px 0 4px" }}>{children}</h3>;
+
+export function Vilkar({ onSkjerm }) {
+  const f = useForetak();
+  if (!f) return <p className="dempet">Henter…</p>;
+  return (
+    <div className="panel" style={{ maxWidth: 760 }}>
+      <div className="krop" style={{ lineHeight: 1.7 }}>
+        <h1 style={{ fontSize: 22, marginTop: 0 }}>Kjøpsvilkår</h1>
+        <p>
+          Disse vilkårene gjelder når du som forbruker kjøper kort og andre varer i nettbutikken til Korthaien.
+          Vilkårene, sammen med opplysningene du gir i kassen og ordrebekreftelsen, er avtalen mellom oss.
+          Forbrukerkjøpsloven, angrerettloven, markedsføringsloven og ehandelsloven gjelder i tillegg, og gir deg
+          rettigheter som disse vilkårene ikke kan ta fra deg.
+        </p>
+
+        <H>1. Selger</H>
+        <Foretak f={f} />
+
+        <H>2. Priser</H>
+        <p>
+          Prisen som står ved varen og i kassen, er det du betaler. Alle priser er i norske kroner. Frakt kommer i
+          tillegg og vises i kassen før du betaler; frakten inkluderer 25 % merverdiavgift. Enkeltkort og komplette
+          sett er brukte varer og selges etter avansemetoden, så merverdiavgift spesifiseres ikke for dem. Sealed er
+          nye varer, og prisen inkluderer merverdiavgift. Er en pris åpenbart feil — for eksempel på grunn av en
+          tastefeil — er du ikke bundet av kjøpet, og heller ikke vi.
+        </p>
+
+        <H>3. Avtalen og bestillingen</H>
+        <p>
+          Avtalen er bindende når du har betalt og fått ordrebekreftelsen på e-post. Les gjennom den og si fra med
+          en gang hvis noe er feil. Kortene holdes av for deg i 15 minutter mens du betaler; betaler du ikke innen
+          det, frigis de.
+        </p>
+
+        <H>4. Betaling</H>
+        <p>
+          Du betaler med kort eller Vipps på Stripes sikre betalingsside. Vi ser aldri kortnummeret ditt. Du kan også
+          bruke butikkreditt (krever innlogget konto med bekreftet e-postadresse) og rabattkoder eller gavekort.
+          Gavekort brukes ned over flere kjøp; det som er igjen, står på koden til neste gang. Beløpet trekkes når du
+          fullfører kjøpet.
+        </p>
+
+        <H>5. Levering</H>
+        <p>
+          Du velger selv fraktmåte i kassen. Ved siden av hvert valg står det om sendingen har sporing, og hvor mye den
+          er forsikret for. Vi sender så snart vi kan, og du får e-post når pakken er levert til Posten. Etter loven
+          skal varen leveres uten unødig opphold og senest 30 dager etter kjøpet, om ikke annet er avtalt.
+        </p>
+
+        <H>6. Risikoen for varen</H>
+        <p>
+          Risikoen går over på deg når du — eller noen du har pekt ut — har fått varen. Blir en sending borte eller
+          skadet på veien, er det vårt ansvar, uansett hvilken fraktmåte du valgte.
+        </p>
+
+        <H>7. Angrerett</H>
+        <p>
+          Du har 14 dagers angrerett fra du har fått varen, uten å oppgi noen grunn.{" "}
+          {f.kundenBetalerRetur ? "Du betaler returfrakten." : "Vi dekker returfrakten."}{" "}
+          Pengene går tilbake samme vei som du betalte: det du betalte med kort eller Vipps tilbake til kortet, det du
+          betalte med kreditt tilbake som kreditt, og gavekort tilbake på gavekortet. Les mer på{" "}
+          <button className="lenke" style={{ padding: 0, font: "inherit" }} onClick={() => onSkjerm?.("retur")}>Retur og angrerett</button>.
+          Angreskjemaet står i ordrebekreftelsen.
+        </p>
+
+        <H>8. Forsinkelse</H>
+        <p>
+          Kommer ikke varen til avtalt tid, og det ikke skyldes deg, kan du holde tilbake betalingen, kreve levering,
+          heve kjøpet eller kreve erstatning etter forbrukerkjøpslovens regler. Si fra skriftlig, gjerne på e-post.
+        </p>
+
+        <H>9. Mangel ved varen — reklamasjon</H>
+        <p>
+          Er kortet i dårligere stand enn oppgitt, feil kort eller skadet, må du si fra innen rimelig tid etter at du
+          oppdaget det, og senest to år etter at du fikk varen. Reklamasjon innen to måneder regnes alltid som i tide.
+          Send en e-post med ordrenummer og gjerne et bilde. Ved en berettiget reklamasjon kan du kreve retting,
+          omlevering, prisavslag eller å heve kjøpet; vi dekker frakten.
+        </p>
+
+        <H>10. Tilstand</H>
+        <p>
+          Enkeltkort selges i tilstandene NM, EX, VG og G. Hva de betyr, står i{" "}
+          <a href={BUYLIST}>tilstandsguiden</a>. Kortene sorteres for hånd, og vurderingen gjøres så nøyaktig vi kan.
+        </p>
+
+        <H>11. Hvis du ikke betaler</H>
+        <p>
+          Betalingen skjer før vi sender, så dette gjelder bare om en betaling blir trukket tilbake etterpå. Da kan vi
+          heve kjøpet og kreve varen tilbake.
+        </p>
+
+        <H>12. Personopplysninger</H>
+        <p>
+          Vi bruker opplysningene dine til å gjennomføre kjøpet og til regnskapet, som loven krever. Se{" "}
+          <button className="lenke" style={{ padding: 0, font: "inherit" }} onClick={() => onSkjerm?.("personvern")}>Personvern</button>.
+        </p>
+
+        <H>13. Uenighet</H>
+        <p style={{ marginBottom: 0 }}>
+          Ta kontakt med oss først — det meste løser seg der. Kommer vi ikke til enighet, kan du klage til
+          Forbrukerrådet, som megler, og saken kan gå videre til Forbrukerklageutvalget. Du kan også bruke EU-kommisjonens
+          klageportal for nettkjøp.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERSONVERN
+// ─────────────────────────────────────────────────────────────────────────────
+// Hva som faktisk lagres, hvor, og hvorfor — slik systemet er bygget i dag.
+// Endres det som lagres eller hvem som behandler det, må denne siden følge.
+export function Personvern() {
+  const f = useForetak();
+  if (!f) return <p className="dempet">Henter…</p>;
+  return (
+    <div className="panel" style={{ maxWidth: 760 }}>
+      <div className="krop" style={{ lineHeight: 1.7 }}>
+        <h1 style={{ fontSize: 22, marginTop: 0 }}>Personvern</h1>
+        <p>
+          Denne siden forklarer hvilke opplysninger Korthaien lagrer om deg, hvorfor, og hvilke rettigheter du har.
+          Behandlingsansvarlig er {f.navn}{f.orgnr ? `, org.nr. ${f.orgnr}` : ""}. Spørsmål sendes til{" "}
+          <a href="mailto:korthaien@gmail.com">korthaien@gmail.com</a>.
+        </p>
+
+        <H>Hva vi lagrer, og hvorfor</H>
+        <ul style={{ paddingLeft: 20 }}>
+          <li><b>Når du handler:</b> navn, e-post, telefon, leveringsadresse, hva du kjøpte og hvordan du betalte.
+            Det trengs for å sende varen (avtalen) og for regnskapet (bokføringsloven).</li>
+          <li><b>Kundekonto:</b> e-post, navn og adresse du har lagret, og passordet ditt — som et kryptert avtrykk vi ikke
+            kan lese. Logger du inn med Google, lagrer vi bare en ID fra Google, ikke passordet ditt der.</li>
+          <li><b>Kreditt og gavekort:</b> hver bevegelse inn og ut, så du og vi kan se hvor saldoen kommer fra.</li>
+          <li><b>Ønskeliste:</b> kortene du vil ha beskjed om. Du får e-post når de er på lager; fjerner du dem, stopper det.</li>
+          <li><b>Salg til oss:</b> når du selger kort til Korthaien, lagres ordren med kontaktopplysningene dine.</li>
+          <li><b>Kontaktskjema:</b> meldingen sendes som e-post til oss og lagres ikke i nettbutikken.</li>
+        </ul>
+
+        <H>Hvor lenge</H>
+        <p>
+          Ordrer og betalinger oppbevares i fem år etter regnskapsåret, fordi bokføringsloven krever det. Kundekontoen
+          beholdes til du ber oss slette den. Ønskelista og lagrede adresser slettes sammen med kontoen.
+        </p>
+
+        <H>Hvem som behandler opplysningene for oss</H>
+        <ul style={{ paddingLeft: 20 }}>
+          <li><b>Stripe</b> — betaling med kort og Vipps.</li>
+          <li><b>Render</b> (servere i Frankfurt) og <b>Turso</b> (database i Irland) — drift av nettbutikken.</li>
+          <li><b>Resend</b> — utsending av ordrebekreftelser og andre e-poster.</li>
+          <li><b>Google</b> — bare hvis du velger å logge inn med Google.</li>
+          <li><b>Posten/Bring</b> — navn og adresse på sendingen.</li>
+        </ul>
+        <p>
+          Kortbildene lastes fra Scryfall, og symbolene for settene derfra. Nettleseren din henter dem direkte, slik at
+          Scryfall ser IP-adressen din, men ingen opplysninger om deg eller kjøpene dine.
+        </p>
+
+        <H>Informasjonskapsler</H>
+        <p>
+          Vi bruker bare det som trengs for at butikken skal virke: en informasjonskapsel som holder deg innlogget, og
+          handlekurven, som lagres i nettleseren din. Ingen sporing, ingen statistikkverktøy og ingen annonser.
+        </p>
+
+        <H>Dine rettigheter</H>
+        <p style={{ marginBottom: 0 }}>
+          Du kan be om innsyn i hva vi har lagret om deg, få det rettet eller slettet (så langt loven ikke krever at vi
+          beholder det), og protestere mot bruken. Send en e-post, så svarer vi innen 30 dager. Mener du vi bryter
+          personvernreglene, kan du klage til Datatilsynet.
+        </p>
       </div>
     </div>
   );
