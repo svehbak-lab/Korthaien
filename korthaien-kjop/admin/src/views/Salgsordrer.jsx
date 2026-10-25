@@ -227,7 +227,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
 
   return (
     <>
-      {svev && svev.l.image_uri && (() => {
+      {svev && bildeFor(svev.l) && (() => {
         // Bildet følger musa, på den siden av skjermen det er plass.
         const B = 300, H = 418;
         const x = svev.x + 24 + B > window.innerWidth ? svev.x - 24 - B : svev.x + 24;
@@ -235,7 +235,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
         return (
           <img
             className="kortsvev"
-            src={svev.l.image_uri}
+            src={bildeFor(svev.l)}
             alt=""
             style={{ left: x, top: y, width: B, height: H }}
           />
@@ -244,8 +244,8 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
       {vis && (
         <div className="kortvisning" onClick={() => setVis(null)} role="dialog" aria-label={vis.card_name}>
           <div onClick={(e) => e.stopPropagation()}>
-            {vis.image_uri ? (
-              <img src={vis.image_uri.replace("/normal/", "/large/")} alt={vis.card_name} />
+            {bildeFor(vis, true) ? (
+              <img src={bildeFor(vis, true)} alt={vis.card_name} />
             ) : (
               <div className="kortvisning-tom">Ingen bilde</div>
             )}
@@ -501,4 +501,15 @@ function Kanseller({ o, onFerdig, onFeil }) {
       </div>
     </div>
   );
+}
+
+// Bildet fra katalogen. Mangler det, spørres Scryfall direkte etter sett og
+// nummer — da finnes det et bilde så lenge kortet finnes der.
+function bildeFor(l, stort = false) {
+  if (!l || l.produkt) return null;
+  if (l.image_uri) return stort ? String(l.image_uri).replace("/normal/", "/large/") : l.image_uri;
+  if (l.set_code && l.collector_number) {
+    return `https://api.scryfall.com/cards/${encodeURIComponent(String(l.set_code).toLowerCase())}/${encodeURIComponent(l.collector_number)}?format=image&version=${stort ? "large" : "normal"}`;
+  }
+  return null;
 }

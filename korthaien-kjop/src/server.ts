@@ -971,11 +971,12 @@ app.get("/api/admin/salg/ordrer", krevAdmin, fang(async (req: any, res: any) => 
   res.json(await adminOrdrer(String(req.query.status || "pakkes")));
 }));
 
-app.get("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: any) => {
-  const o = await hentSalgsordre(String(req.params.nr));
-  if (!o) throw new HttpFeil(404, "Fant ikke ordren");
-  // Bilde og lagerbeholdning nå, så du kan se kunsten og ta stikkprøver av
-  // lageret mens du plukker. Bare i admin.
+// Bilde og lagerbeholdning nå, så du kan se kunsten og ta stikkprøver av
+// lageret mens du plukker. Bare i admin. Brukes også i svaret etter en
+// statusendring eller kansellering — ellers forsvant bildene og «På lager»
+// fra skjermen så snart du merket ordren som sendt.
+async function medBilderOgLager(o: any) {
+  if (!o) return o;
   const ider = o.linjer.map((l: any) => String(l.card_id));
   const [lagerNå, bilder] = await Promise.all([
     lagerForPlukk(ider),
@@ -989,16 +990,22 @@ app.get("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: any)
     image_uri: bilde.get(String(l.card_id)) || null,
     paa_lager: lagerNå.get(`${l.card_id}:${l.finish}:${l.condition}`) || { hylle: 0, ledig: 0 },
   }));
-  res.json({ ordre: o });
+  return o;
+}
+
+app.get("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: any) => {
+  const o = await hentSalgsordre(String(req.params.nr));
+  if (!o) throw new HttpFeil(404, "Fant ikke ordren");
+  res.json({ ordre: await medBilderOgLager(o) });
 }));
 
 app.patch("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: any) => {
-  res.json({ ordre: await settStatus(String(req.params.nr), req.body || {}) });
+  res.json({ ordre: await medBilderOgLager(await settStatus(String(req.params.nr), req.body || {})) });
 }));
 
 app.post("/api/admin/salg/ordrer/:nr/kanseller", krevAdmin, fang(async (req: any, res: any) => {
   const måte = req.body?.maate === "kreditt" ? "kreditt" : "kort";
-  res.json({ ordre: await kanseller(String(req.params.nr), String(req.body?.grunn || ""), måte) });
+  res.json({ ordre: await medBilderOgLager(await kanseller(String(req.params.nr), String(req.body?.grunn || ""), måte)) });
 }));
 
 app.get("/api/admin/salg/statistikk", krevAdmin, fang(async (_req: any, res: any) => {
