@@ -1,7 +1,10 @@
 const BASE = import.meta.env.VITE_API_URL || "";
 
 async function kall(sti, opts = {}) {
+  // credentials: innloggingen i butikken (samme domene) følger med, så
+  // salget kan knyttes til kontoen.
   const r = await fetch(BASE + sti, {
+    credentials: "include",
     headers: opts.body ? { "Content-Type": "application/json" } : undefined,
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
@@ -18,6 +21,7 @@ async function kall(sti, opts = {}) {
 
 export const api = {
   config: () => kall("/api/config"),
+  meg: () => kall("/api/konto/meg"),
   sett: () => kall("/api/sets"),
   søk: (p) => kall("/api/search?" + new URLSearchParams(p)),
   bulk: (tekst) => kall("/api/bulk", { method: "POST", body: { tekst } }),

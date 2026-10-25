@@ -265,14 +265,52 @@ export function Gjennomgang({ kurv, onAntall, onCondition, onBytt, onTilbake, on
 }
 
 // ── kontaktskjema ────────────────────────────────────────────────────────────
-export function Skjema({ kurv, sender, config, onTilbake, onSend, onVilkår }) {
+export function Skjema({ kurv, sender, config, meg, onTilbake, onSend, onVilkår }) {
+  const kreverKonto = !!config?.krev_konto;
+  const kunde = meg?.kunde || null;
   const [f, setF] = useState({ customer_name: "", email: "", phone: "", note: "" });
   const [godtatt, setGodtatt] = useState(false);
+  // Innlogget: navn og e-post fra kontoen. E-posten kan ikke endres — det er
+  // der kreditten havner.
+  useEffect(() => {
+    if (kreverKonto && kunde) setF((x) => ({ ...x, customer_name: x.customer_name || kunde.navn || "", email: kunde.email }));
+  }, [kreverKonto, kunde?.email]);
   const gyldig =
     godtatt &&
     f.customer_name.trim().length >= 2 &&
     /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.email) &&
     f.phone.replace(/\D/g, "").length >= 8;
+
+  if (kreverKonto && !meg?.lastet) return <p className="dempet">Et øyeblikk…</p>;
+  if (kreverKonto && (!kunde || !kunde.bekreftet)) {
+    const tilbake = `${window.location.origin}${window.location.pathname}?steg=skjema`;
+    const butikk = String(config.butikk_url || "https://korthaien.no").replace(/\/+$/, "");
+    return (
+      <>
+        <h1>{kunde ? "Bekreft e-postadressen din" : "Logg inn for å selge"}</h1>
+        <div className="panel" style={{ maxWidth: 560 }}>
+          {kunde ? (
+            <p style={{ marginTop: 0 }}>
+              Du er logget inn som <b>{kunde.email}</b>, men adressen er ikke bekreftet ennå. Trykk på lenken i
+              e-posten vi sendte, så kommer du tilbake hit og kan sende inn.
+            </p>
+          ) : (
+            <p style={{ marginTop: 0 }}>
+              For å sende inn trenger du en konto i butikken. Oppgjøret blir kreditt på kontoen din, og der finner
+              du også salget igjen under «Mine salg». Kurven din er lagret og venter her når du kommer tilbake.
+            </p>
+          )}
+          <a className="knapp primar" href={`${butikk}/?tilbake=${encodeURIComponent(tilbake)}`}>
+            {kunde ? "Gå til kontoen min" : "Logg inn eller lag konto"}
+          </a>
+        </div>
+        <div className="rad-flex">
+          <button className="knapp" onClick={onTilbake}>Tilbake</button>
+          <span className="sum tall">{kroner(total(kurv))}</span>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -300,6 +338,8 @@ export function Skjema({ kurv, sender, config, onTilbake, onSend, onVilkår }) {
               value={f.email}
               onChange={(e) => setF({ ...f, email: e.target.value })}
               autoComplete="email"
+              readOnly={kreverKonto && !!kunde}
+              title={kreverKonto && kunde ? "E-posten fra kontoen din. Kreditten havner her." : undefined}
             />
           </label>
         </div>

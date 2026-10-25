@@ -342,6 +342,35 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
     );
   }
   if (!oppsett || !priset) return <p className="dempet">Henter kassen…</p>;
+
+  // Ingen gjestekjøp etter overgangen: kunden logger inn (eller lager konto)
+  // og bekrefter e-postadressen før kassen åpnes. Kurven blir liggende.
+  if (oppsett.krev_konto && (!h.kunde || !h.kunde.bekreftet)) {
+    return (
+      <>
+        <button className="knapp liten" style={{ marginBottom: 14 }} onClick={onTilbake}>← Tilbake til kurven</button>
+        <div className="panel" style={{ maxWidth: 520 }}>
+          <div className="krop">
+            <h1 style={{ marginTop: 0, fontSize: 22 }}>{h.kunde ? "Bekreft e-postadressen din" : "Logg inn for å handle"}</h1>
+            {h.kunde ? (
+              <>
+                <p>Du er logget inn som <b>{h.kunde.email}</b>. Bekreft adressen med lenken vi sendte, så kan du fullføre kjøpet.</p>
+                <IkkeBekreftet />
+              </>
+            ) : (
+              <>
+                <p>
+                  Du trenger en konto for å handle. Da finner du ordrene dine under Min side, og kan bruke kreditten
+                  for kort du har solgt til oss. Kurven din blir liggende mens du logger inn.
+                </p>
+                <button className="knapp primar" onClick={onLoggInn}>Logg inn eller lag konto</button>
+              </>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
   const medVipps = !!oppsett.vipps && betaling === "vipps";
 
   const valgtFrakt = oppsett.frakt.find((f) => f.id === frakt);

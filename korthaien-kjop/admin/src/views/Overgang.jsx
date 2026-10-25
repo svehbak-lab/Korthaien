@@ -18,6 +18,7 @@ export default function Overgang({ onFeil, onMelding }) {
     <>
       <Landingsside onFeil={onFeil} onMelding={onMelding} />
       <Lagerovergang onFeil={onFeil} onMelding={onMelding} />
+      <KrevKonto onFeil={onFeil} onMelding={onMelding} />
       <Rekkefolge />
     </>
   );
@@ -223,6 +224,45 @@ function Lagerovergang({ onFeil, onMelding }) {
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Konto påkrevd: ingen gjestekjøp, og kort sendes bare inn fra en konto.
+// Slås på av overgangsknappen; haken er her for å prøve det på forhånd eller
+// slå det av igjen.
+function KrevKonto({ onFeil, onMelding }) {
+  const [på, setPå] = useState(null);
+  useEffect(() => {
+    api.innstillinger().then((s) => setPå(!!s.krev_konto)).catch(onFeil);
+  }, []);
+  async function bytt(v) {
+    try {
+      const s = await api.lagreInnstillinger({ krev_konto: v });
+      setPå(!!s.krev_konto);
+      onMelding(s.krev_konto ? "Konto kreves nå for å handle og for å selge kort." : "Gjestekjøp og innsending uten konto er slått på igjen.");
+    } catch (e) {
+      onFeil(e);
+    }
+  }
+  if (på === null) return null;
+  return (
+    <div className="panel">
+      <header>
+        <h3>Konto påkrevd</h3>
+        <span className={`merkelapp ${på ? "m-lager" : "m-av"}`} style={{ marginLeft: "auto" }}>{på ? "På" : "Av"}</span>
+      </header>
+      <div className="krop">
+        <p className="dempet" style={{ marginTop: 0, maxWidth: "70ch" }}>
+          Når dette er på, må kundene være innlogget med bekreftet e-postadresse for å handle, og for å sende inn kort på
+          salgssiden. Salgskurven kan fortsatt brukes uten konto, så folk kan se hva de får. Oppgjør for kjøpsordrer blir
+          kreditt på kontoen. Overgangsknappen slår dette på.
+        </p>
+        <label className="rad-flex" style={{ gap: 8 }}>
+          <input type="checkbox" checked={på} onChange={(e) => bytt(e.target.checked)} />
+          Krev konto for å handle og selge
+        </label>
       </div>
     </div>
   );

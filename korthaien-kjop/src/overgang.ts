@@ -54,6 +54,12 @@ export async function gjennomførOvergang() {
               ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
         args: [],
       },
+      // Fra overgangen kreves konto for å handle og for å selge kort.
+      {
+        sql: `INSERT INTO settings (key, value) VALUES ('krev_konto', 'true')
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        args: [],
+      },
     ],
     "write"
   );

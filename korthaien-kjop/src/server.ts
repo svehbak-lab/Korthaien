@@ -124,6 +124,9 @@ app.get("/api/config", grense(REGLER.søk), fang(async (_req: any, res: any) => 
     org_nr: s.org_nr,
     retur_frakt: s.retur_frakt,
     tix_kreditt_ore: s.tix_kreditt_ore,
+    // Etter overgangen må kunden være innlogget for å sende inn kort.
+    krev_konto: !!s.krev_konto,
+    butikk_url: butikkUrl(),
   });
 }));
 
@@ -192,8 +195,15 @@ function iBakgrunnen(navn: string, p: Promise<{ sendt: boolean; grunn?: string }
   }).catch((e) => console.error(`E-post «${navn}» kastet:`, e?.message));
 }
 
-app.post("/api/orders", grense(REGLER.ordre), fang(async (req: any, res: any) => {
+app.post("/api/orders", grense(REGLER.ordre), kundeValgfri, fang(async (req: any, res: any) => {
   await utløpGamleOrdrer();
+  // Etter overgangen sendes kort bare inn fra en konto med bekreftet
+  // e-postadresse. Kreditten havner da garantert der kunden finner den.
+  if ((await hentSettings()).krev_konto) {
+    if (!req.kunde) throw new HttpFeil(401, "Logg inn for å sende inn kortene.");
+    if (!req.kunde.bekreftet) throw new HttpFeil(403, "Bekreft e-postadressen din først — lenken ligger i e-posten du fikk da du lagde kontoen.");
+    req.body = { ...(req.body || {}), email: req.kunde.email, customer_name: String(req.body?.customer_name || "").trim() || req.kunde.navn || req.kunde.email };
+  }
   const ordre = await lagOrdre({
     customer_name: req.body?.customer_name,
     email: req.body?.email,
@@ -936,6 +946,7 @@ app.get("/api/butikk/oppsett", fang(async (_req: any, res: any) => {
     frakt: await hentFrakt(true),
     betaling: harStripe(),
     vipps: harVipps(),
+    krev_konto: !!(await hentSettings()).krev_konto,
     google: harGoogle(),
     reservasjon_min: RESERVASJON_MIN,
     overgang_dato: (await hentSettings()).overgang_dato || "",
@@ -965,6 +976,11 @@ app.post("/api/butikk/kasse", grense(REGLER.kasse), kundeValgfri, fang(async (re
   // prøvekjøpe.
   if ((await hentSettings()).stengt?.aktiv && !erAdmin(req)) {
     throw new HttpFeil(503, "Butikken er stengt mens vi bytter til ny løsning. Prøv igjen litt senere.");
+  }
+  // Ingen gjestekjøp etter overgangen: konto med bekreftet e-postadresse.
+  if ((await hentSettings()).krev_konto) {
+    if (!req.kunde) throw new HttpFeil(401, "Logg inn for å handle.");
+    if (!req.kunde.bekreftet) throw new HttpFeil(403, "Bekreft e-postadressen din først — lenken ligger i e-posten du fikk da du lagde kontoen.");
   }
   res.json(await åpneKasse(req.body || {}, req.kunde || null));
 }));
@@ -1785,7 +1801,7 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
     "usd_nok", "buy_pct", "min_buy_ore", "min_order_ore", "min_usd",
     "salg_trapp", "salg_faktor", "salg_avrunding", "default_conditions",
     "default_ladder", "order_expiry_days", "ship_to", "tema", "forside_sett",
-    "firmanavn", "org_nr", "retur_frakt", "toppbanner", "tix_kreditt_ore", "overgang_dato", "vis_sealed", "stengt",
+    "firmanavn", "org_nr", "retur_frakt", "toppbanner", "tix_kreditt_ore", "overgang_dato", "vis_sealed", "stengt", "krev_konto",
   ];
   if (req.body && "stengt" in req.body) {
     const b = req.body.stengt;
@@ -1794,6 +1810,7 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
       : null;
   }
   if (req.body && "vis_sealed" in req.body) req.body.vis_sealed = !!req.body.vis_sealed;
+  if (req.body && "krev_konto" in req.body) req.body.krev_konto = !!req.body.krev_konto;
   if (req.body && "overgang_dato" in req.body) {
     const d = String(req.body.overgang_dato || "").trim();
     if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new HttpFeil(400, "Datoen må være på formen ÅÅÅÅ-MM-DD.");

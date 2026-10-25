@@ -500,6 +500,8 @@ export type Settings = {
   stengt: { aktiv: boolean; tittel?: string; tekst?: string } | null;
   // Settes av overgangsknappen. Da leser butikken lagerboken (se lager.ts).
   lagerkilde: "mystore" | "bok";
+  // Etter overgangen: konto kreves for å handle og for å sende inn kort.
+  krev_konto: boolean;
 };
 
 const STANDARD: Settings = {
@@ -532,6 +534,7 @@ const STANDARD: Settings = {
   vis_sealed: true,
   stengt: null,
   lagerkilde: "mystore",
+  krev_konto: false,
 };
 
 export async function hentSettings(): Promise<Settings> {

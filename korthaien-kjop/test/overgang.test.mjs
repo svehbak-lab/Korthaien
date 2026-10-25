@@ -41,6 +41,7 @@ test("overgang tømmer boken og fører inn Mystore-beholdningen", async () => {
   const r = await db().execute("SELECT card_id, created_at FROM lager_bevegelser ORDER BY card_id");
   assert.ok(r.rows.every((x) => x.card_id === "a" && x.created_at === "2026-01-02T00:00:00Z"));
   assert.equal((await hentSettings()).lagerkilde, "bok");
+  assert.equal((await hentSettings()).krev_konto, true);
   settBokSomLagerkilde(false);
 });
 

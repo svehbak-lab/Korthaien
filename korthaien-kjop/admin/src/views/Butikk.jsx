@@ -63,6 +63,26 @@ export default function Butikk(props) {
   );
 }
 
+// Bare tilbake til våre egne sider — ellers kunne en lenke brukt innloggingen
+// til å sende folk videre hvor som helst.
+const TILBAKE = "korthaien-tilbake";
+function trygtTilbake(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname === "localhost") return true;
+    return u.protocol === "https:" && (u.hostname === "korthaien.no" || u.hostname.endsWith(".korthaien.no"));
+  } catch {
+    return false;
+  }
+}
+function hentTilbake() {
+  try {
+    const x = JSON.parse(localStorage.getItem(TILBAKE) || "null");
+    if (x && Date.now() - x.t < 3 * 3600_000 && trygtTilbake(x.url)) return x.url;
+  } catch {}
+  return null;
+}
+
 // Lenkene tilbake fra Stripe, Google og «glemt passord»-e-posten lander på
 // butikkens adresse med et spørsmål i URL-en. Det leses én gang og fjernes,
 // så en oppdatering av siden ikke gjør det samme på nytt.
@@ -77,8 +97,16 @@ function lesLenke() {
     bekreft: p.get("bekreft"),
     kort: p.get("kort"),
     side: p.get("side"),
+    tilbake: p.get("tilbake"),
   };
-  if (ut.kasse || ut.nyttpassord || ut.innlogging || ut.bekreft || ut.kort || ut.side) {
+  // Salgssiden sender kunden hit for å logge inn, og vil ha henne tilbake
+  // etterpå. Huskes i nettleseren, så det overlever Google-innloggingen og
+  // lenken i bekreftelseseposten.
+  if (ut.tilbake && trygtTilbake(ut.tilbake)) {
+    try { localStorage.setItem(TILBAKE, JSON.stringify({ url: ut.tilbake, t: Date.now() })); } catch {}
+    ut.innlogging = ut.innlogging || "1";
+  }
+  if (ut.kasse || ut.nyttpassord || ut.innlogging || ut.bekreft || ut.kort || ut.side || ut.tilbake) {
     window.history.replaceState(null, "", window.location.pathname);
   }
   return ut;
@@ -124,6 +152,15 @@ function ButikkSider({ onFeil }) {
   // Etter innlogging fra kassen skal kunden tilbake til kassen, ikke til
   // «Min side».
   const [etterInnlogging, setEtterInnlogging] = useState(null);
+
+  // Innlogget med bekreftet e-post og kom fra salgssiden: tilbake dit.
+  useEffect(() => {
+    if (!h.kunde?.bekreftet) return;
+    const url = hentTilbake();
+    if (!url) return;
+    try { localStorage.removeItem(TILBAKE); } catch {}
+    window.location.assign(url);
+  }, [h.kunde?.bekreftet]);
 
   // Trykket kunden «tilbake» på Stripe-siden, frigis kortene med en gang.
   useEffect(() => {

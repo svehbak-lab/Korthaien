@@ -309,14 +309,14 @@ export async function sendOppgjør(orderId: number): Promise<Utfall> {
   const html = RAMME(`
     <h1 style="font-size:21px;margin:0 0 10px">Kortene er mottatt og godkjent</h1>
     ${somKreditt ? `
-    <p style="margin:0 0 16px;line-height:1.6">Oppgjøret er lagt inn som kreditt i butikken:</p>
+    <p style="margin:0 0 16px;line-height:1.6">Kreditten er nå tilgjengelig på kontoen din:</p>
     <div style="background:#f6f5f2;border-radius:8px;padding:18px;text-align:center;margin-bottom:8px">
       <div style="font-size:26px;font-weight:700">${kr(nå)}</div>
       <div style="color:#7a746c;font-size:13px;margin-top:6px">på ${trygg(ordre.email)}</div>
     </div>
     <p style="margin:0 0 4px;color:#7a746c;font-size:13px;line-height:1.6">
-      Logg inn på <a href="${butikk}/?innlogging=1">korthaien.no</a> med denne e-postadressen — eller lag en
-      konto med den — så ligger kreditten klar i kassen. Den utløper ikke. Ordrenummer ${trygg(ordre.order_no)}.
+      Logg inn på <a href="${butikk}/?innlogging=1">korthaien.no</a>, så ligger kreditten klar i kassen.
+      Den utløper ikke. Ordrenummer ${trygg(ordre.order_no)}.
     </p>` : `
     <p style="margin:0 0 16px;line-height:1.6">Rabattkoden din på korthaien.no er:</p>
     <div style="background:#f6f5f2;border-radius:8px;padding:18px;text-align:center;margin-bottom:8px">
@@ -336,7 +336,7 @@ export async function sendOppgjør(orderId: number): Promise<Utfall> {
   const tekst = `Kortene er mottatt og godkjent.
 
 ${somKreditt
-    ? `Oppgjøret er lagt inn som kreditt i butikken: ${kr(nå)} på ${ordre.email}.\nLogg inn eller lag konto på korthaien.no med denne e-postadressen, så ligger kreditten klar i kassen.`
+    ? `Kreditten er nå tilgjengelig på kontoen din: ${kr(nå)}.\nLogg inn på korthaien.no, så ligger den klar i kassen.`
     : `Rabattkoden din på korthaien.no: ${ordre.discount_code}\nVerdi: ${kr(nå)}`}
 Ordrenummer: ${ordre.order_no}
 ${ordre.credit_note ? `\n${ordre.credit_note}\n` : ""}${

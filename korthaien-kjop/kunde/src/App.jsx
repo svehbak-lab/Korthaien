@@ -20,6 +20,12 @@ export default function App() {
   const [beskjed, setBeskjed] = useState(null);
   const [sender, setSender] = useState(false);
   const [klar, setKlar] = useState(false);
+  // Kontoen i butikken. Etter overgangen må kunden være innlogget for å
+  // sende inn — men kan legge i kurven og se prisene uten.
+  const [meg, setMeg] = useState({ lastet: false, kunde: null });
+  useEffect(() => {
+    api.meg().then((r) => setMeg({ lastet: true, kunde: r.kunde })).catch(() => setMeg({ lastet: true, kunde: null }));
+  }, []);
 
   function visFeil(e) {
     setFeil(e.message);
@@ -47,7 +53,16 @@ export default function App() {
         }
       })
       .catch(() => {})
-      .finally(() => !avbrutt && setKlar(true));
+      .finally(() => {
+        if (avbrutt) return;
+        setKlar(true);
+        // Tilbake fra innloggingen i butikken: rett til skjemaet igjen.
+        const p = new URLSearchParams(window.location.search);
+        if (p.get("steg") === "skjema") {
+          window.history.replaceState(null, "", window.location.pathname);
+          setSteg("skjema");
+        }
+      });
     return () => {
       avbrutt = true;
     };
@@ -209,6 +224,7 @@ export default function App() {
           <Skjema
             kurv={kurv}
             config={config}
+            meg={meg}
             sender={sender}
             onTilbake={() => setSteg("gjennomgang")}
             onVilkår={() => { setSteg("vilkar"); window.scrollTo(0, 0); }}
