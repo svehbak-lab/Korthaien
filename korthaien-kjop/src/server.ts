@@ -791,6 +791,45 @@ app.get("/api/konto/ordrer/:nr", krevKunde, fang(async (req: any, res: any) => {
   res.json({ ordre: offentlig(o) });
 }));
 
+// Kort kunden har solgt til Korthaien (innkjøpsordrene). Følger
+// e-postadressen, så bare når den er bekreftet — ellers kunne hvem som helst
+// registrere en annens adresse og se salgene deres.
+app.get("/api/konto/salg", krevKunde, fang(async (req: any, res: any) => {
+  if (!req.kunde.bekreftet) return res.json({ bekreftet: false, ordrer: [] });
+  const epost = String(req.kunde.email).trim().toLowerCase();
+  const r = await db().execute({
+    sql: `SELECT o.id, o.order_no, o.status, o.created_at, o.received_at, o.credit_sent_at,
+                 o.total_ore, o.quoted_ore, o.discount_code
+            FROM orders o
+           WHERE lower(trim(o.email)) = ? AND o.status NOT IN ('expired')
+           ORDER BY o.created_at DESC LIMIT 200`,
+    args: [epost],
+  });
+  const ider = r.rows.map((x: any) => Number(x.id));
+  const linjer = ider.length
+    ? await db().execute({
+        sql: `SELECT order_id, card_name, set_name, finish, condition, qty, unit_ore
+                FROM order_lines WHERE order_id IN (${ider.map(() => "?").join(",")}) AND fjernet_at IS NULL
+               ORDER BY set_name, card_name`,
+        args: ider,
+      })
+    : { rows: [] as any[] };
+  const perOrdre = new Map<number, any[]>();
+  for (const l of linjer.rows as any[]) {
+    const k = Number(l.order_id);
+    if (!perOrdre.has(k)) perOrdre.set(k, []);
+    perOrdre.get(k)!.push({ card_name: l.card_name, set_name: l.set_name, finish: l.finish, condition: l.condition, antall: Number(l.qty), enhet_ore: Number(l.unit_ore) });
+  }
+  res.json({
+    bekreftet: true,
+    ordrer: (r.rows as any[]).map((o) => ({
+      ordrenr: o.order_no, status: o.status, created_at: o.created_at, received_at: o.received_at,
+      oppgjort_at: o.credit_sent_at, sum_ore: Number(o.total_ore) || Number(o.quoted_ore) || 0,
+      linjer: perOrdre.get(Number(o.id)) || [],
+    })),
+  });
+}));
+
 app.get("/api/konto/kreditt", krevKunde, fang(async (req: any, res: any) => {
   if (!req.kunde.bekreftet) return res.json({ bekreftet: false, tilgjengelig_ore: 0, bevegelser: [] });
   res.json({

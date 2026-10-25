@@ -28,7 +28,7 @@ const SPALTER = [
       { tekst: "Kontakt oss", skjerm: "kontakt" },
       { tekst: "Frakt og levering", skjerm: "frakt" },
       { tekst: "Retur og angrerett", skjerm: "retur" },
-      { tekst: "Tilstandsguide", url: BUYLIST },
+      { tekst: "Tilstandsguide", skjerm: "tilstand" },
     ],
   },
   {
@@ -36,7 +36,7 @@ const SPALTER = [
     punkter: [
       { tekst: "Logg inn", skjerm: "konto" },
       { tekst: "Mine kjøp", skjerm: "minekjop" },
-      { tekst: "Mine salg", url: BUYLIST },
+      { tekst: "Mine salg", skjerm: "minesalg" },
       { tekst: "Ønskeliste", skjerm: "onskeliste" },
     ],
   },
@@ -46,8 +46,6 @@ const SPALTER = [
       { tekst: "Selg kortene dine", url: BUYLIST },
       { tekst: "Selg MTGO-tix", skjerm: "tix" },
       { tekst: "Bulksøk", skjerm: "bulksok" },
-      { tekst: "Selg en hel liste", url: BUYLIST },
-      { tekst: "Alle sett", skjerm: "sett" },
     ],
   },
   {
@@ -675,7 +673,7 @@ export function Vilkar({ onSkjerm }) {
         <H>10. Tilstand</H>
         <p>
           Enkeltkort selges i tilstandene NM, EX, VG og G. Hva de betyr, står i{" "}
-          <a href={BUYLIST}>tilstandsguiden</a>. Kortene sorteres for hånd, og vurderingen gjøres så nøyaktig vi kan.
+          <a href="?side=tilstand" onClick={(e) => { if (onSkjerm) { e.preventDefault(); onSkjerm("tilstand"); } }}>tilstandsguiden</a>. Kortene sorteres for hånd, og vurderingen gjøres så nøyaktig vi kan.
         </p>
 
         <H>11. Hvis du ikke betaler</H>

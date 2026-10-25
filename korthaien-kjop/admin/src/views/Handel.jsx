@@ -898,7 +898,8 @@ export function NyttPassord({ token, onFerdig }) {
 
 // ── min side ────────────────────────────────────────────────────────────────
 const SIDEFANER = [
-  { id: "ordrer", navn: "Ordrer" },
+  { id: "ordrer", navn: "Mine kjøp" },
+  { id: "salg", navn: "Mine salg" },
   { id: "onskeliste", navn: "Ønskeliste" },
   { id: "kreditt", navn: "Kreditt" },
   { id: "profil", navn: "Profil" },
@@ -937,6 +938,7 @@ export function MinSide({ onUt, startfane = "ordrer" }) {
       </div>
       {fane === "ordrer" && (åpen ? <KundeOrdre nr={åpen} onLukk={() => setÅpen(null)} /> : <KundeOrdrer onÅpne={setÅpen} />)}
       {fane === "onskeliste" && <Ønskeliste />}
+      {fane === "salg" && <MineSalg />}
       {fane === "kreditt" && <KundeKreditt />}
       {fane === "profil" && <Profil />}
     </>
@@ -1008,6 +1010,78 @@ const GRUNNER = {
   refusjon: "Refundert til kreditt",
   retting: "Retting",
 };
+
+// Kort kunden har solgt til oss — innkjøpsordrene fra kortsalg-siden.
+const SALGSSTATUS = {
+  pending: "Venter på kortene",
+  received: "Mottatt",
+  stocked: "Mottatt",
+  cancelled: "Kansellert",
+};
+function MineSalg() {
+  const [d, setD] = useState(null);
+  const [åpen, setÅpen] = useState(null);
+  useEffect(() => {
+    kapi.salg().then(setD).catch(() => setD({ ordrer: [] }));
+  }, []);
+  if (!d) return <p className="dempet">Henter…</p>;
+  if (d.bekreftet === false) return <p className="dempet">Salgene dine vises når e-postadressen er bekreftet.</p>;
+  if (!d.ordrer.length) {
+    return (
+      <div className="panel">
+        <div className="tom">
+          <b>Ingen salg ennå</b>
+          Har du kort å selge? <a href="https://kortsalg.korthaien.no">Se hva vi betaler</a> — oppgjøret blir kreditt du kan handle for her.
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="panel">
+      <table>
+        <thead>
+          <tr><th>Ordre</th><th>Sendt inn</th><th>Status</th><th className="h">Kort</th><th className="h">Oppgjør</th></tr>
+        </thead>
+        <tbody>
+          {d.ordrer.map((o) => {
+            const antall = o.linjer.reduce((n, l) => n + l.antall, 0);
+            const vis = åpen === o.ordrenr;
+            return [
+              <tr key={o.ordrenr} onClick={() => setÅpen(vis ? null : o.ordrenr)} style={{ cursor: "pointer" }}>
+                <td><span className="kode">{o.ordrenr}</span></td>
+                <td>{new Date(o.created_at).toLocaleDateString("nb-NO")}</td>
+                <td>
+                  {o.oppgjort_at ? "Oppgjort" : SALGSSTATUS[o.status] || o.status}
+                  {o.oppgjort_at && <div className="dempet" style={{ fontSize: 12 }}>{new Date(o.oppgjort_at).toLocaleDateString("nb-NO")}</div>}
+                </td>
+                <td className="h tall">{antall}</td>
+                <td className="h tall">{kroner(o.sum_ore)}</td>
+              </tr>,
+              vis && (
+                <tr key={o.ordrenr + "-l"}>
+                  <td colSpan={5} style={{ background: "var(--papir)" }}>
+                    <table>
+                      <tbody>
+                        {o.linjer.map((l, i) => (
+                          <tr key={i}>
+                            <td>{l.card_name}{l.finish === "foil" ? " · foil" : ""}<div className="dempet" style={{ fontSize: 12 }}>{l.set_name}</div></td>
+                            <td>{l.condition}</td>
+                            <td className="h tall">{l.antall}</td>
+                            <td className="h tall">{kroner(l.enhet_ore * l.antall)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              ),
+            ];
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function KundeKreditt() {
   const [k, setK] = useState(null);

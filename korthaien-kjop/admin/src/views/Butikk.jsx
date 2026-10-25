@@ -1,6 +1,7 @@
 import { Ønske } from "./Onske.jsx";
 import SettStabel from "./SettStabel.jsx";
 import Bulksok from "./Bulksok.jsx";
+import Tilstandsguide from "./Tilstandsguide.jsx";
 import { useState, useEffect, useMemo } from "react";
 import { api, kroner, CONDITIONS } from "../api.js";
 import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside, OmOss, Retur, Tix, Vilkar, Personvern } from "./Bunn.jsx";
@@ -112,7 +113,7 @@ function ButikkSider({ onFeil }) {
       : lenke.nyttpassord ? "nyttpassord"
       : lenke.bekreft ? "bekreft"
       : lenke.innlogging ? "konto"
-      : ["vilkar", "personvern", "retur", "frakt"].includes(lenke.side) ? lenke.side
+      : ["vilkar", "personvern", "retur", "frakt", "tilstand"].includes(lenke.side) ? lenke.side
       : "forside"
   );
   const [kvittering, setKvittering] = useState(
@@ -255,8 +256,8 @@ function ButikkSider({ onFeil }) {
         onSkjerm={(id) => {
           setÅpentKort(null);
           // Snarveier fra bunnen rett til en fane på «Min side».
-          if (id === "onskeliste" || id === "minekjop") {
-            setMinSideFane(id === "onskeliste" ? "onskeliste" : "ordrer");
+          if (id === "onskeliste" || id === "minekjop" || id === "minesalg") {
+            setMinSideFane(id === "onskeliste" ? "onskeliste" : id === "minesalg" ? "salg" : "ordrer");
             setSkjerm("konto");
           } else {
             if (id === "konto") setMinSideFane("ordrer");
@@ -349,6 +350,7 @@ function ButikkSider({ onFeil }) {
   if (skjerm === "retur") return skall(<Retur />);
   if (skjerm === "vilkar") return skall(<Vilkar onSkjerm={(id) => setSkjerm(id)} />);
   if (skjerm === "personvern") return skall(<Personvern />);
+  if (skjerm === "tilstand") return skall(<Tilstandsguide />);
   if (skjerm === "bulksok") return skall(<Bulksok onKurv={() => { setKurvmelding(""); setSkjerm("kurv"); }} />);
   if (skjerm === "tix") return skall(<Tix onFeil={onFeil} onKonto={() => setSkjerm("konto")} />);
   if (visSealed && PRODUKTTYPER.some((t) => t.id === skjerm)) {

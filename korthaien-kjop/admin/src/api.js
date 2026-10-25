@@ -311,6 +311,7 @@ export const kunde = {
   fjernOnske: (id) => kundekall(`/api/konto/onskeliste/${id}`, { method: "DELETE" }),
   ordre: (nr) => kundekall(`/api/konto/ordrer/${encodeURIComponent(nr)}`),
   kreditt: () => kundekall("/api/konto/kreditt"),
+  salg: () => kundekall("/api/konto/salg"),
 
   oppsett: () => kundekall("/api/butikk/oppsett"),
   // Det offentlige butikkvinduet: katalog, kortsider, sett og sealed uten innlogging.
