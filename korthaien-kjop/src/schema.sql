@@ -578,7 +578,14 @@ CREATE TABLE IF NOT EXISTS kunder (
   poststed          TEXT,
   land              TEXT NOT NULL DEFAULT 'NO',
   created_at        TEXT NOT NULL,
-  sist_inne_at      TEXT);
+  sist_inne_at      TEXT,
+  -- Hvor kontoen kom fra: 'konto' (registrert her) eller 'mystore'
+  -- (importert fra kundelisten i Mystore, uten passord).
+  kilde             TEXT NOT NULL DEFAULT 'konto',
+  nyhetsbrev        INTEGER NOT NULL DEFAULT 0,
+  mystore_ordrer    INTEGER,
+  mystore_ordreverdi_ore INTEGER,
+  mystore_sist_inne TEXT);
 
 -- Sesjonen er et tilfeldig token i en cookie; her ligger bare et hash av
 -- det. Lekker tabellen, kan ingen logge inn med det som står her.

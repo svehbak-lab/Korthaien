@@ -51,6 +51,19 @@ export const bildeUrl = (id) => `${BASE}/api/bilder/${id}`;
 
 // Opplasting: selve filen som kropp, ikke JSON — et bilde på et par
 // megabyte blir en tredjedel større som base64.
+export async function importerKunder(fil) {
+  const r = await fetch(`${BASE}/api/admin/kunder/import`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "text/csv" },
+    body: await fil.text(),
+  });
+  if (r.status === 401) throw new UtloggetFeil();
+  const data = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(data?.feil || `Serveren svarte ${r.status}`);
+  return data;
+}
+
 export async function lastOppBilde(fil) {
   const r = await fetch(`${BASE}/api/admin/bilder`, {
     method: "POST",
@@ -193,6 +206,7 @@ export const api = {
   endreProdukt: (id, p) => kall(`/api/admin/produkter/${id}`, { method: "PUT", body: p }),
   slåAvProdukt: (id) => kall(`/api/admin/produkter/${id}`, { method: "DELETE" }),
 
+  kunder: (q, side) => kall(`/api/admin/kunder?q=${encodeURIComponent(q || "")}&side=${side || 0}`),
   innstillinger: () => kall("/api/admin/settings"),
   lagreInnstillinger: (felt) => kall("/api/admin/settings", { method: "PUT", body: felt }),
   jobb: (navn) => kall(`/api/admin/jobs/${navn}`, { method: "POST" }),

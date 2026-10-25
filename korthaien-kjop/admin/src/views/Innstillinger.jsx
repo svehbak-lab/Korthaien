@@ -3,6 +3,7 @@ import Frakt from "./Frakt.jsx";
 import Kreditt from "./Kreditt.jsx";
 import Utseende from "./Utseende.jsx";
 import Rapporter from "./Rapporter.jsx";
+import Kunder from "./Kunder.jsx";
 import QRCode from "qrcode";
 import { api, CONDITIONS, CONDITION_NAVN, kroner } from "../api.js";
 
@@ -20,6 +21,7 @@ export default function Innstillinger({ fane, onFeil, onMelding }) {
   if (fane === "kreditt") return <Kreditt onFeil={onFeil} />;
   if (fane === "utseende") return <Utseende onFeil={onFeil} onMelding={onMelding} />;
   if (fane === "rapporter") return <Rapporter onFeil={onFeil} />;
+  if (fane === "kunder") return <Kunder onFeil={onFeil} onMelding={onMelding} />;
 
   if (!s) return <p className="dempet">Henter innstillinger…</p>;
 

@@ -1140,3 +1140,7 @@ label.kreditt-boks { cursor: pointer; }
   padding: 12px 14px;
 }
 .tix-sum { font-size: 26px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--brass, var(--blekk)); }
+
+/* ── kunder i admin ──────────────────────────────────────────────────────── */
+.kunde-tall { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 16px; }
+.kunde-tallboks { padding: 12px 14px; margin: 0; }

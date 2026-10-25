@@ -118,6 +118,12 @@ export async function registrer(inn: { email: string; passord: string; navn?: st
   // et passord uten å vite at det er hen. Da må hen bruke «glemt passord»,
   // som beviser at hen eier adressen.
   if (finnes) {
+    // Kontoer uten passord og uten Google — importert fra Mystore, eller
+    // laget av «glemt passord» — er kunder som aldri har valgt passord her.
+    // Serveren sender dem en lenke for å velge passord i stedet.
+    if (!finnes.passord_hash && !finnes.google_sub) {
+      throw new KontoFeil(409, "uten_passord");
+    }
     throw new KontoFeil(409, "Det finnes allerede en konto med denne e-postadressen. Logg inn, eller bruk «Glemt passord».");
   }
   const r = await db().execute({
@@ -440,4 +446,148 @@ export async function googleKunde(kode: string, redirectUri: string): Promise<Ku
     args: [email, String(krav.name || "").slice(0, 120), sub, nå, nå],
   });
   return tilKunde(ny.rows[0]);
+}
+
+// ── import fra Mystore ──────────────────────────────────────────────────────
+// Kundelisten fra Mystore (Kunder → Eksporter, CSV). Kundene får en konto uten
+// passord, med navn, adresse og telefon ferdig utfylt. Første gang de vil
+// logge inn, bruker de «Glemt passord» eller Google — det beviser at de eier
+// adressen, og da følger kreditt og ordrehistorikk med.
+//
+// Fødselsdato tas ikke med: butikken trenger den ikke, og det vi ikke lagrer,
+// kan ikke lekke. Finnes kontoen fra før, fylles bare tomme felt.
+//
+// Mystore-lista har tusenvis av falske registreringer (2024, «Zambia»,
+// tilfeldige bokstaver som postnummer, aldri innlogget, ingen ordrer). En rad
+// uten ordrer og innlogging, og med et postnummer som ikke er tall, hoppes over.
+export function lesCsv(tekst: string): Record<string, string>[] {
+  const t = tekst.replace(/^\uFEFF/, "");
+  const rader: string[][] = [];
+  let rad: string[] = [], felt = "", i = 0, iAnf = false;
+  while (i < t.length) {
+    const c = t[i];
+    if (iAnf) {
+      if (c === '"' && t[i + 1] === '"') { felt += '"'; i += 2; continue; }
+      if (c === '"') { iAnf = false; i++; continue; }
+      felt += c; i++; continue;
+    }
+    if (c === '"') { iAnf = true; i++; continue; }
+    if (c === "," || c === ";") { rad.push(felt); felt = ""; i++; continue; }
+    if (c === "\r") { i++; continue; }
+    if (c === "\n") { rad.push(felt); rader.push(rad); rad = []; felt = ""; i++; continue; }
+    felt += c; i++;
+  }
+  if (felt || rad.length) { rad.push(felt); rader.push(rad); }
+  const [hode, ...resten] = rader;
+  if (!hode) return [];
+  return resten
+    .filter((r) => r.some((x) => x.trim()))
+    .map((r) => Object.fromEntries(hode.map((h, j) => [h.trim(), (r[j] ?? "").trim()])));
+}
+
+const LANDKODE: Record<string, string> = { norge: "NO", sverige: "SE", danmark: "DK", finland: "FI", island: "IS" };
+
+export function erFalskMystoreKunde(r: Record<string, string>): boolean {
+  const ordrer = parseInt(r["Ordrer"] || "0", 10) || 0;
+  const innlogget = !!(r["Siste innlogging"] || "").trim();
+  const postnr = (r["Postnummer"] || "").trim();
+  return ordrer === 0 && !innlogget && postnr !== "" && !/^\d{3,5}$/.test(postnr);
+}
+
+export async function importerMystoreKunder(tekst: string): Promise<{
+  rader: number; nye: number; oppdatert: number; falske: number; ugyldige: number;
+}> {
+  const rader = lesCsv(tekst);
+  if (rader.length && !("E-post" in rader[0])) {
+    throw new KontoFeil(400, "Fant ikke kolonnen «E-post». Er dette kundeeksporten fra Mystore?");
+  }
+  let nye = 0, oppdatert = 0, falske = 0, ugyldige = 0;
+  const sett = new Set<string>();
+  const setninger: { sql: string; args: any[] }[] = [];
+  const nå = new Date().toISOString();
+  for (const r of rader) {
+    const email = normaliserEpost(r["E-post"] || "");
+    // Ugyldig adresse, eller samme adresse to ganger i lista.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || sett.has(email)) { ugyldige++; continue; }
+    if (erFalskMystoreKunde(r)) { falske++; continue; }
+    sett.add(email);
+    const navn = [r["Fornavn"], r["Etternavn"]].filter(Boolean).join(" ").trim().slice(0, 120);
+    const land = LANDKODE[(r["Land"] || "").toLowerCase()] || "NO";
+    const siden = /^\d{4}-\d{2}-\d{2}/.test(r["Kunde siden"] || "") ? `${r["Kunde siden"].slice(0, 10)}T12:00:00.000Z` : nå;
+    const verdi = Math.round((parseFloat((r["Samlet ordreverdi"] || "0").replace(",", ".")) || 0) * 100);
+    const sist = /^\d{4}-\d{2}-\d{2}/.test(r["Siste innlogging"] || "") ? r["Siste innlogging"].slice(0, 10) : null;
+    setninger.push({
+      sql: `INSERT INTO kunder (email, navn, telefon, adresse, postnr, poststed, land, created_at, kilde,
+                                nyhetsbrev, mystore_ordrer, mystore_ordreverdi_ore, mystore_sist_inne)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'mystore', ?, ?, ?, ?)
+            ON CONFLICT(email) DO UPDATE SET
+              navn = CASE WHEN kunder.navn = '' THEN excluded.navn ELSE kunder.navn END,
+              telefon = COALESCE(NULLIF(kunder.telefon, ''), excluded.telefon),
+              adresse = COALESCE(NULLIF(kunder.adresse, ''), excluded.adresse),
+              postnr = COALESCE(NULLIF(kunder.postnr, ''), excluded.postnr),
+              poststed = COALESCE(NULLIF(kunder.poststed, ''), excluded.poststed),
+              created_at = MIN(kunder.created_at, excluded.created_at),
+              nyhetsbrev = excluded.nyhetsbrev,
+              mystore_ordrer = excluded.mystore_ordrer,
+              mystore_ordreverdi_ore = excluded.mystore_ordreverdi_ore,
+              mystore_sist_inne = excluded.mystore_sist_inne`,
+      args: [
+        email, navn, r["Telefon"] || null, r["Gateadresse"] || null, r["Postnummer"] || null, r["By"] || null,
+        land, siden, r["Nyhetsbrev"] === "1" ? 1 : 0, parseInt(r["Ordrer"] || "0", 10) || 0, verdi, sist,
+      ],
+    });
+  }
+  const før = await db().execute("SELECT COUNT(*) AS n FROM kunder");
+  for (let i = 0; i < setninger.length; i += 200) {
+    await db().batch(setninger.slice(i, i + 200), "write");
+  }
+  const etter = await db().execute("SELECT COUNT(*) AS n FROM kunder");
+  nye = Number(etter.rows[0].n) - Number(før.rows[0].n);
+  oppdatert = setninger.length - nye;
+  return { rader: rader.length, nye, oppdatert, falske, ugyldige };
+}
+
+// ── oversikt i admin ────────────────────────────────────────────────────────
+export async function kundeoversikt(q: string, side = 0) {
+  const s = `%${String(q || "").trim().toLowerCase()}%`;
+  const per = 50;
+  const [tall, liste, antall] = await Promise.all([
+    db().execute(`
+      SELECT COUNT(*) AS totalt,
+             SUM(passord_hash IS NOT NULL) AS med_passord,
+             SUM(google_sub IS NOT NULL) AS med_google,
+             SUM(epost_bekreftet_at IS NOT NULL) AS bekreftet,
+             SUM(kilde = 'mystore') AS fra_mystore,
+             SUM(kilde = 'mystore' AND passord_hash IS NULL AND google_sub IS NULL) AS mystore_ikke_aktivert,
+             SUM(kilde = 'konto' AND created_at >= datetime('now', '-30 days')) AS nye_30,
+             SUM(sist_inne_at >= datetime('now', '-30 days')) AS inne_30
+        FROM kunder`),
+    db().execute({
+      sql: `SELECT k.id, k.email, k.navn, k.kilde, k.created_at, k.sist_inne_at, k.epost_bekreftet_at,
+                   k.passord_hash IS NOT NULL AS har_passord, k.google_sub IS NOT NULL AS har_google,
+                   k.poststed, k.mystore_ordrer, k.mystore_ordreverdi_ore,
+                   (SELECT COUNT(*) FROM salgsordrer o WHERE o.kunde_id = k.id AND o.status IN ('betalt','pakket','sendt')) AS ordrer
+              FROM kunder k
+             WHERE ? = '%%' OR lower(k.email) LIKE ? OR lower(k.navn) LIKE ?
+             ORDER BY COALESCE(k.sist_inne_at, '') DESC, k.created_at DESC
+             LIMIT ? OFFSET ?`,
+      args: [s, s, s, per, side * per],
+    }),
+    db().execute({
+      sql: `SELECT COUNT(*) AS n FROM kunder k WHERE ? = '%%' OR lower(k.email) LIKE ? OR lower(k.navn) LIKE ?`,
+      args: [s, s, s],
+    }),
+  ]);
+  const t: any = tall.rows[0];
+  const n = (x: any) => Number(x || 0);
+  return {
+    tall: {
+      totalt: n(t.totalt), med_passord: n(t.med_passord), med_google: n(t.med_google), bekreftet: n(t.bekreftet),
+      fra_mystore: n(t.fra_mystore), mystore_ikke_aktivert: n(t.mystore_ikke_aktivert), nye_30: n(t.nye_30), inne_30: n(t.inne_30),
+    },
+    google_paa: harGoogle(),
+    kunder: liste.rows,
+    antall: n(antall.rows[0].n),
+    per,
+  };
 }

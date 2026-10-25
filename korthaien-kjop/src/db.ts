@@ -376,6 +376,12 @@ async function leggTilNyeKolonner(): Promise<void> {
   if (ku.size && !ku.has("epost_bekreftet_at")) {
     await db().execute("ALTER TABLE kunder ADD COLUMN epost_bekreftet_at TEXT");
   }
+  for (const [navn, type] of [
+    ["kilde", "TEXT NOT NULL DEFAULT 'konto'"], ["nyhetsbrev", "INTEGER NOT NULL DEFAULT 0"],
+    ["mystore_ordrer", "INTEGER"], ["mystore_ordreverdi_ore", "INTEGER"], ["mystore_sist_inne", "TEXT"],
+  ] as const) {
+    if (ku.size && !ku.has(navn)) await db().execute(`ALTER TABLE kunder ADD COLUMN ${navn} ${type}`);
+  }
 
   const um = await kolonner("mystore_unmatched");
   if (um.size && !um.has("category")) {

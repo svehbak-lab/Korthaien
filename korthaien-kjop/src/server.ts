@@ -41,7 +41,7 @@ import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./ra
 import {
   COOKIE as KUNDE_COOKIE, KontoFeil, registrer, loggInn, nySesjon, avsluttSesjon, settKundeCookie,
   fjernKundeCookie, kundeValgfri, krevKunde, oppdaterProfil, byttPassord, lagTilbakestilling,
-  brukTilbakestilling, harGoogle, googleUrl, googleKunde, lagBekreftelse, bekreftEpost,
+  brukTilbakestilling, harGoogle, googleUrl, googleKunde, lagBekreftelse, bekreftEpost, importerMystoreKunder, kundeoversikt,
 } from "./kunder.js";
 import {
   SalgFeil, prisKurv, åpneKasse, avbrytKasse, stripeHendelse, hentOrdre as hentSalgsordre, lagerForPlukk, offentlig, kundensOrdrer,
@@ -639,7 +639,20 @@ app.get("/api/konto/meg", kundeValgfri, fang(async (req: any, res: any) => {
 }));
 
 app.post("/api/konto/registrer", grense(REGLER.konto), fang(async (req: any, res: any) => {
-  const k = await registrer({ email: req.body?.email, passord: req.body?.passord, navn: req.body?.navn });
+  let k;
+  try {
+    k = await registrer({ email: req.body?.email, passord: req.body?.passord, navn: req.body?.navn });
+  } catch (e: any) {
+    // Kunde fra før (Mystore-importen) uten passord: send lenken for å velge
+    // passord. Den beviser at hen eier adressen, så kreditt og historikk
+    // følger med.
+    if (e?.message === "uten_passord") {
+      const t = await lagTilbakestilling(req.body?.email);
+      if (t) await sendTilbakestilling(t.email, `${butikkUrl()}/?nyttpassord=${encodeURIComponent(t.token)}`);
+      throw new HttpFeil(409, "Du er allerede kunde hos Korthaien. Vi har sendt deg en e-post med en lenke der du velger passord.");
+    }
+    throw e;
+  }
   const token = await lagBekreftelse(k.id);
   await sendBekreftEpost(k.email, `${butikkUrl()}/?bekreft=${encodeURIComponent(token)}`);
   settKundeCookie(res, await nySesjon(k.id));
@@ -1492,6 +1505,14 @@ app.post("/api/admin/kreditt", krevAdmin, fang(async (req: any, res: any) => {
   } catch (e: any) {
     throw new HttpFeil(400, e.message);
   }
+}));
+
+app.get("/api/admin/kunder", krevAdmin, fang(async (req: any, res: any) => {
+  res.json(await kundeoversikt(String(req.query.q || ""), Math.max(0, Number(req.query.side) || 0)));
+}));
+
+app.post("/api/admin/kunder/import", krevAdmin, express.text({ type: "*/*", limit: "15mb" }), fang(async (req: any, res: any) => {
+  res.json(await importerMystoreKunder(String(req.body || "")));
 }));
 
 app.get("/api/admin/settings", krevAdmin, fang(async (_req: any, res: any) => {
