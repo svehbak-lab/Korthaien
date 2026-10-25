@@ -467,6 +467,9 @@ export type Settings = {
   // Hvem som betaler returfrakten naar kunden angrer. Loven lar deg velge,
   // men du maa si det paa forhaand: sier du ingenting, maa du dekke den selv.
   retur_frakt: "kunde" | "butikk";
+  // Hva en MTGO-tix gir i butikkreditt. Tix byttes online etter avtale;
+  // siden i butikken viser prisen og regner ut kreditten.
+  tix_kreditt_ore: number;
 };
 
 const STANDARD: Settings = {
@@ -494,6 +497,7 @@ const STANDARD: Settings = {
   firmanavn: "KORTHAIEN SVEIN-HARALD BAKKE",
   org_nr: "914503493",
   retur_frakt: "kunde",
+  tix_kreditt_ore: 1000,
 };
 
 export async function hentSettings(): Promise<Settings> {

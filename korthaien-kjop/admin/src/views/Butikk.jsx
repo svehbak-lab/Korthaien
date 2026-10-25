@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api, kroner, CONDITIONS } from "../api.js";
-import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside, OmOss, Retur } from "./Bunn.jsx";
+import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside, OmOss, Retur, Tix } from "./Bunn.jsx";
 import { HandelProvider, useHandel, LeggIKurven, KurvSide, Kasse, Kvittering, LoggInn, NyttPassord, MinSide, Bekreft } from "./Handel.jsx";
 import { kunde as kapi, bildeUrl } from "../api.js";
 
@@ -235,6 +235,7 @@ function ButikkSider({ onFeil }) {
           setSkjerm("liste");
         }}
         onAlleSett={() => { setÅpentKort(null); setSkjerm("sett"); }}
+        onTix={() => { setÅpentKort(null); setSkjerm("tix"); }}
       />
       <div className="b-innhold">{innhold}</div>
       {/* Bunnen staar paa hver skjerm, som toppen. */}
@@ -320,6 +321,7 @@ function ButikkSider({ onFeil }) {
   if (skjerm === "kreditt") return skall(<Kredittside />);
   if (skjerm === "omoss") return skall(<OmOss />);
   if (skjerm === "retur") return skall(<Retur />);
+  if (skjerm === "tix") return skall(<Tix onFeil={onFeil} onKonto={() => setSkjerm("konto")} />);
   if (PRODUKTTYPER.some((t) => t.id === skjerm)) {
     return skall(<Produktliste type={skjerm} onFeil={onFeil} />);
   }
@@ -634,7 +636,7 @@ const PRODUKTTYPER = [
   { id: "komplettsett", navn: "Komplette sett", ingress: "Hele sett, ferdig samlet." },
 ];
 
-function Topp({ onHjem, onSøk, onAlleSett, produkter, onProdukt, onKonto, onKurv }) {
+function Topp({ onHjem, onSøk, onAlleSett, produkter, onProdukt, onKonto, onKurv, onTix }) {
   const [q, setQ] = useState("");
   const h = useHandel();
 
@@ -707,6 +709,9 @@ function Topp({ onHjem, onSøk, onAlleSett, produkter, onProdukt, onKonto, onKur
               </button>
             ) : null
           )}
+          {/* Tix ved siden av, med omriss i stedet for fylt farge: lett å
+              finne, men «Selg dine kort» er fortsatt det som roper høyest. */}
+          <button className="b-selg-tix" onClick={onTix}>Selg MTGO-tix</button>
           <a className="b-selg" href="https://kortsalg.korthaien.no">Selg dine kort</a>
         </div>
       </div>

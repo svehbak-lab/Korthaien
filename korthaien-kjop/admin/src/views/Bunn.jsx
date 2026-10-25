@@ -37,6 +37,7 @@ const SPALTER = [
     navn: "Verktøy",
     punkter: [
       { tekst: "Selg kortene dine", url: BUYLIST },
+      { tekst: "Selg MTGO-tix", skjerm: "tix" },
       { tekst: "Lim inn hele lista", url: BUYLIST },
       { tekst: "Tilstandsguide", url: BUYLIST },
       { tekst: "Alle sett", skjerm: "sett" },
@@ -408,6 +409,125 @@ export function Kreditt() {
           <a href={BUYLIST}>innkjøpssiden</a>. Du ser hva hvert kort er verdt med
           én gang, og hvor mange jeg har plass til.
         </p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MTGO-TIX
+// ─────────────────────────────────────────────────────────────────────────────
+// Tix kjøpes for butikkreditt. Det skjer ikke i en kasse: kunden tar kontakt,
+// vi avtaler et tidspunkt og møtes på MTGO, tix byttes, og kreditten legges
+// på kontoen. Siden sier prisen, regner ut kreditten og sender henvendelsen
+// med det som trengs for å avtale tid — ingen frem-og-tilbake om brukernavn.
+export function Tix({ onFeil, onKonto }) {
+  const [pris, setPris] = useState(null);
+  const [felt, setFelt] = useState({ navn: "", epost: "", mtgo: "", antall: "", melding: "" });
+  const [sender, setSender] = useState(false);
+  const [sendt, setSendt] = useState(false);
+
+  useEffect(() => {
+    let avbrutt = false;
+    api.innstillinger()
+      .then((r) => !avbrutt && setPris(Number(r.tix_kreditt_ore) || 1000))
+      .catch(() => !avbrutt && setPris(1000));
+    return () => { avbrutt = true; };
+  }, []);
+
+  const endre = (k, v) => setFelt((f) => ({ ...f, [k]: v }));
+  const antall = Math.max(0, Math.floor(Number(String(felt.antall).replace(",", ".")) || 0));
+  const klar = felt.navn.trim() && felt.epost.includes("@") && felt.mtgo.trim() && antall > 0;
+
+  async function send(e) {
+    e.preventDefault();
+    setSender(true);
+    try {
+      await api.kontakt({
+        navn: felt.navn.trim(),
+        epost: felt.epost.trim(),
+        emne: `MTGO-tix: ${antall} tix`,
+        melding: [
+          `Vil selge ${antall} tix (${kroner(antall * pris)} i butikkreditt).`,
+          `MTGO-brukernavn: ${felt.mtgo.trim()}`,
+          felt.melding.trim() ? `\n${felt.melding.trim()}` : "",
+        ].join("\n"),
+      });
+      setSendt(true);
+    } catch (err) {
+      onFeil(err);
+    } finally {
+      setSender(false);
+    }
+  }
+
+  if (pris === null) return <p className="dempet">Henter…</p>;
+
+  if (sendt) {
+    return (
+      <div className="panel" style={{ maxWidth: 680 }}>
+        <div className="krop">
+          <h1 style={{ fontSize: 22, marginTop: 0 }}>Takk — jeg tar kontakt</h1>
+          <p style={{ marginBottom: 0 }}>
+            Jeg svarer på {felt.epost.trim()} med forslag til et tidspunkt vi kan møtes på MTGO.
+            Kreditten legges på kontoen din når tix er byttet.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel" style={{ maxWidth: 720 }}>
+      <div className="krop">
+        <h1 style={{ fontSize: 22, marginTop: 0 }}>Selg MTGO-tix</h1>
+        <p>
+          Jeg kjøper Magic Online-tix for <b>{kroner(pris)} per tix</b> i butikkreditt.
+          Kreditten kan brukes på alt i butikken, også frakt, og den utløper ikke.
+        </p>
+
+        <ol className="tix-steg">
+          <li><b>Send en henvendelse</b> med hvor mange tix du har og MTGO-brukernavnet ditt.</li>
+          <li><b>Vi avtaler et tidspunkt</b> og møtes på MTGO.</li>
+          <li><b>Du trader tix til meg</b>, og kreditten legges på kontoen din med en gang.</li>
+        </ol>
+        <p className="dempet" style={{ fontSize: 13.5 }}>
+          Kreditten følger e-postadressen. Har du ikke konto,{" "}
+          <button type="button" className="lenke" style={{ font: "inherit", padding: 0 }} onClick={onKonto}>lag en</button> med samme
+          adresse, så ser du saldoen og kan bruke den i kassen.
+        </p>
+
+        <form onSubmit={send} className="skjema" style={{ marginTop: 16 }}>
+          <div className="tix-regn">
+            <label>
+              Antall tix
+              <input
+                inputMode="numeric" value={felt.antall} placeholder="f.eks. 120"
+                onChange={(e) => endre("antall", e.target.value.replace(/[^0-9]/g, ""))}
+              />
+            </label>
+            <div>
+              <div className="dempet" style={{ fontSize: 13 }}>Du får</div>
+              <div className="tix-sum">{kroner(antall * pris)}</div>
+              <div className="dempet" style={{ fontSize: 12 }}>i butikkreditt</div>
+            </div>
+          </div>
+          <label>MTGO-brukernavn<input value={felt.mtgo} onChange={(e) => endre("mtgo", e.target.value)} /></label>
+          <label>Navn<input autoComplete="name" value={felt.navn} onChange={(e) => endre("navn", e.target.value)} /></label>
+          <label>E-post<input type="email" autoComplete="email" value={felt.epost} onChange={(e) => endre("epost", e.target.value)} /></label>
+          <label>
+            Når passer det å møtes? (valgfritt)
+            <textarea rows={2} value={felt.melding} onChange={(e) => endre("melding", e.target.value)} placeholder="F.eks. kvelder etter kl. 19" />
+          </label>
+          <div className="rad-flex">
+            <button className="knapp primar" disabled={!klar || sender}>
+              {sender ? "Sender…" : "Send henvendelse"}
+            </button>
+            <span className="dempet" style={{ fontSize: 13 }}>
+              Eller send e-post til <a href="mailto:korthaien@gmail.com?subject=MTGO-tix">korthaien@gmail.com</a>.
+            </span>
+          </div>
+        </form>
       </div>
     </div>
   );

@@ -27,6 +27,7 @@ export default function Frakt({ onFeil, onMelding }) {
     <>
       <Fraktalternativer onFeil={onFeil} onMelding={onMelding} />
       <Foretaket onFeil={onFeil} onMelding={onMelding} />
+      <TixPris onFeil={onFeil} onMelding={onMelding} />
     </>
   );
 }
@@ -386,5 +387,42 @@ function Fraktalternativer({ onFeil, onMelding }) {
         </div>
       </div>
     </>
+  );
+}
+
+// Prisen på MTGO-tix, i butikkreditt. Står på «Selg MTGO-tix» i butikken.
+function TixPris({ onFeil, onMelding }) {
+  const [kr, setKr] = useState(null);
+  const [lagrer, setLagrer] = useState(false);
+  useEffect(() => {
+    api.innstillinger().then((s) => setKr(tilKr(s.tix_kreditt_ore ?? 1000))).catch(onFeil);
+  }, []);
+  async function lagre() {
+    setLagrer(true);
+    try {
+      const s = await api.lagreInnstillinger({ tix_kreditt_ore: tilØre(kr) });
+      setKr(tilKr(s.tix_kreditt_ore));
+      onMelding("Prisen på tix er lagret.");
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setLagrer(false);
+    }
+  }
+  if (kr === null) return null;
+  return (
+    <div className="panel">
+      <header><h3>MTGO-tix</h3></header>
+      <div className="krop">
+        <Felt navn="Butikkreditt per tix (kr)">
+          <input type="text" inputMode="decimal" value={kr} onChange={(e) => setKr(e.target.value)} style={{ width: 90, textAlign: "right" }} />
+          <button className="knapp primar" onClick={lagre} disabled={lagrer}>{lagrer ? "Lagrer…" : "Lagre"}</button>
+        </Felt>
+        <p className="dempet" style={{ marginBottom: 0 }}>
+          Vises på «Selg MTGO-tix» i butikken, som også regner ut kreditten. Henvendelsene kommer
+          på e-post. Når tix er byttet, legger du kreditten på kunden under Admin → Kreditt.
+        </p>
+      </div>
+    </div>
   );
 }

@@ -1124,3 +1124,19 @@ label.kreditt-boks { cursor: pointer; }
 .skall input[type="checkbox"], .skall input[type="radio"] { accent-color: var(--sjo); }
 .skall input:focus, .skall select:focus, .skall textarea:focus { border-color: var(--sjo); }
 .skall :focus-visible { outline-color: var(--sjo); }
+
+/* ── MTGO-tix ────────────────────────────────────────────────────────────── */
+.butikk .b-selg-tix {
+  margin-left: auto; background: none; cursor: pointer;
+  border: 1.5px solid var(--oransje); color: var(--topp2-tekst);
+  font: var(--selg-font); padding: 3.5px 13px; border-radius: var(--pille); white-space: nowrap;
+}
+.butikk .b-selg-tix:hover { background: color-mix(in srgb, var(--oransje) 18%, transparent); }
+.butikk .b-selg-tix + .b-selg { margin-left: 8px; }
+.tix-steg { line-height: 1.7; padding-left: 20px; margin: 4px 0 10px; }
+.tix-regn {
+  display: grid; grid-template-columns: 160px 1fr; gap: 18px; align-items: end;
+  background: var(--papir); border: 1px solid var(--strek); border-radius: var(--runding, 8px);
+  padding: 12px 14px;
+}
+.tix-sum { font-size: 26px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--brass, var(--blekk)); }
