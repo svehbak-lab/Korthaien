@@ -213,10 +213,10 @@ export function KurvSide({ onKasse, onHandleVidere, melding }) {
         <table>
           <thead>
             <tr>
-              <th style={{ width: 56 }} />
+              <th className="b-kun-bred" style={{ width: 56 }} />
               <th>Kort</th>
               <th>Tilstand</th>
-              <th className="h">Pris</th>
+              <th className="h b-kun-bred">Pris</th>
               <th className="h">Antall</th>
               <th className="h">Sum</th>
               <th />
@@ -228,7 +228,7 @@ export function KurvSide({ onKasse, onHandleVidere, melding }) {
               const valg = Math.max(l.antall, l.tilgjengelig, 1);
               return (
                 <tr key={k}>
-                  <td>
+                  <td className="b-kun-bred">
                     {l.image_uri ? (
                       <img src={l.image_uri} alt="" style={{ width: 44, borderRadius: 3, display: "block" }} />
                     ) : l.produkt_type === "komplettsett" && l.set_code ? (
@@ -245,7 +245,7 @@ export function KurvSide({ onKasse, onHandleVidere, melding }) {
                     {l.feil && <div style={{ color: "var(--feil)", fontSize: 12.5 }}>{l.feil}</div>}
                   </td>
                   <td>{l.produkt ? <span className="dempet">—</span> : l.condition}</td>
-                  <td className="h tall pris">{kroner(l.enhet_ore)}</td>
+                  <td className="h tall pris b-kun-bred">{kroner(l.enhet_ore)}</td>
                   <td className="h">
                     <select value={l.antall} onChange={(e) => h.settAntall(k, Number(e.target.value))}>
                       {Array.from({ length: Math.min(99, valg) }, (_, i) => i + 1).map((n) => (
@@ -257,8 +257,8 @@ export function KurvSide({ onKasse, onHandleVidere, melding }) {
                   </td>
                   <td className="h tall">{kroner(l.enhet_ore * l.antall)}</td>
                   <td className="h">
-                    <button className="knapp liten" onClick={() => h.fjern(k)} title="Fjern fra kurven">
-                      Fjern
+                    <button className="knapp liten" onClick={() => h.fjern(k)} title="Fjern fra kurven" aria-label="Fjern fra kurven">
+                      <span className="b-kun-bred">Fjern</span><span className="b-kun-smal">✕</span>
                     </button>
                   </td>
                 </tr>
@@ -430,7 +430,7 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
       <h1 style={{ marginBottom: 12 }}>Kasse</h1>
       {feil && <div className="varsel feil">{feil}</div>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 18, alignItems: "start" }}>
+      <div className="b-kassegrid">
         <div>
           <div className="panel">
             <header><h3>Levering</h3></header>

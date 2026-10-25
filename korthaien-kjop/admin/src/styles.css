@@ -1296,3 +1296,33 @@ label.kreditt-boks { cursor: pointer; }
 @media (max-width: 620px) { .todelt-smal { grid-template-columns: 1fr; gap: 12px; } }
 
 .butikk .tilstandsguide .bildeknapp { border: 0; background: none; padding: 0; box-shadow: none; line-height: 0; }
+
+/* ── søkesiden: filtre til venstre, treff til høyre — og stablet på mobil ── */
+.butikk .b-sokeoppsett { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; }
+.butikk .b-filtre { position: sticky; top: 16px; }
+.butikk .b-filterknapp { display: none; }
+@media (max-width: 760px) {
+  .butikk .b-sokeoppsett { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .butikk .b-filterknapp { display: block; width: 100%; margin-bottom: 12px; font-weight: 600; }
+  .butikk .b-filtre { position: static; display: none; }
+  .butikk .b-filtre.vis { display: block; }
+  /* Fanene og visningsknappene får brytes og rulles i stedet for å skyve
+     siden ut til høyre. */
+  .butikk .faner { gap: 12px; overflow-x: auto; flex-wrap: nowrap; }
+  .butikk .faner button { white-space: nowrap; font-size: 14px; }
+  .butikk .faner > div { flex: none; }
+}
+
+/* ── mobil: kortsiden, kurven og kassen ──────────────────────────────────── */
+.butikk .b-kassegrid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+.butikk .b-kun-smal { display: none; }
+@media (max-width: 760px) {
+  .butikk .b-kassegrid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .butikk .b-kortbilde { width: min(100%, 260px) !important; margin: 0 auto; display: block; }
+  .butikk .b-kortinfo { flex: 1 1 100% !important; }
+  .butikk .b-kun-bred { display: none; }
+  .butikk .b-kun-smal { display: inline; }
+  .butikk .panel table th, .butikk .panel table td { padding-left: 6px; padding-right: 6px; }
+}

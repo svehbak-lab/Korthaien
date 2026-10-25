@@ -92,6 +92,7 @@ function ButikkSider({ onFeil }) {
   const [data, setData] = useState(null);
   const [laster, setLaster] = useState(false);
   const [visning, setVisning] = useState("detalj");
+  const [visFiltre, setVisFiltre] = useState(false);
   // Fanene er én tilstand, ikke to. «Sealed» og «Om settet» er faner paa
   // linje med de andre for den som ser paa, men de er ikke finish — derfor
   // utledes finish herfra, og spoerringen kan aldri faa «sealed» som finish.
@@ -365,8 +366,17 @@ function ButikkSider({ onFeil }) {
 
   return skall(
     <>
-      <div style={{ display: "grid", gridTemplateColumns: "220px minmax(0, 1fr)", gap: 20, alignItems: "start" }}>
-        <div className="panel" style={{ position: "sticky", top: 16 }}>
+      {/* På mobil står filtrene over treffene, sammenfoldet bak en knapp —
+          ellers får treffene en stripe på siden og skyves ut av skjermen. */}
+      <button type="button" className="knapp b-filterknapp" onClick={() => setVisFiltre((v) => !v)} aria-expanded={visFiltre}>
+        {visFiltre ? "Skjul filtre" : "Filtre"}
+        {(() => {
+          const n = (f.rarity?.length || 0) + (f.farge?.length || 0) + (f.prisFra ? 1 : 0) + (f.prisTil ? 1 : 0) + (sett ? 1 : 0);
+          return n ? ` (${n})` : "";
+        })()}
+      </button>
+      <div className="b-sokeoppsett">
+        <div className={`panel b-filtre${visFiltre ? " vis" : ""}`}>
           <div className="krop">
             <Fast navn="Kortnavn">
               <input type="text" value={f.q} onChange={(e) => endre("q", e.target.value)} style={{ width: "100%" }} />
@@ -1268,12 +1278,12 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil, onLoggInn }) {
       <div className="panel">
         <div className="krop" style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
           {k.image_uri ? (
-            <img src={k.image_uri} alt={k.name} style={{ width: 240, borderRadius: 11 }} />
+            <img className="b-kortbilde" src={k.image_uri} alt={k.name} style={{ width: 240, borderRadius: 11 }} />
           ) : (
-            <div style={{ width: 240, aspectRatio: "5 / 7", background: "var(--papir)", borderRadius: 11 }} />
+            <div className="b-kortbilde" style={{ width: 240, aspectRatio: "5 / 7", background: "var(--papir)", borderRadius: 11 }} />
           )}
 
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="b-kortinfo" style={{ flex: 1, minWidth: 0 }}>
             <Rad navn="Utgave">
               <button className="lenke" onClick={() => onSett(k.set_code)}>{k.set_name}</button>
             </Rad>
