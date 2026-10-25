@@ -498,6 +498,14 @@ export async function åpneKasse(
           description: `Korthaien ${ordrenr}`,
           statement_descriptor_suffix: "KORTHAIEN",
         },
+        // Navnet og fargen øverst på betalingssiden. Uten dette viser Stripe
+        // kontoens eget navn — kontoen deles med andre prosjekter, og kunden
+        // skal ikke lure på om hun har havnet hos noen andre.
+        branding_settings: {
+          display_name: "Korthaien",
+          button_color: "#0b3f38",
+          border_style: "rounded",
+        },
         // Låst til betalingsmåter som bekreftes med en gang. En metode som
         // bekreftes dager senere, ville holdt kortene av i dager.
         allowed_payment_method_types: (vipps() ? ["card", "vipps"] : ["card"]) as any,
