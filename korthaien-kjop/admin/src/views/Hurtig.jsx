@@ -86,23 +86,31 @@ export default function Hurtig({ onFeil }) {
     api.sett().then((r) => setAlle(r.sett || [])).catch(onFeil);
   }, []);
 
+  // Uten sett søker feltet i alle sett (minst tre bokstaver). Med sett
+  // filtrerer det bare settet som allerede er hentet.
+  const alleSett = !sett;
+  const søkAlle = alleSett ? søk.trim() : "";
   useEffect(() => {
-    if (!sett) {
+    if (alleSett && søkAlle.length < 3) {
       setData(null);
       return;
     }
     let avbrutt = false;
-    setLaster(true);
-    setUtkast({});
-    api
-      .lager(sett)
-      .then((r) => !avbrutt && setData(r.kort || []))
-      .catch((e) => !avbrutt && onFeil(e))
-      .finally(() => !avbrutt && setLaster(false));
+    const t = setTimeout(() => {
+      setLaster(true);
+      setUtkast({});
+      api
+        .lager(sett, søkAlle)
+        .then((r) => !avbrutt && setData(r.kort || []))
+        .catch((e) => !avbrutt && onFeil(e))
+        .finally(() => !avbrutt && setLaster(false));
+    }, alleSett ? 300 : 0);
     return () => {
       avbrutt = true;
+      clearTimeout(t);
     };
-  }, [sett]);
+  }, [sett, søkAlle]);
+  const visTabell = !!sett || søkAlle.length >= 3;
 
   const vekslet = (liste, verdi) =>
     liste.includes(verdi) ? liste.filter((x) => x !== verdi) : liste.concat(verdi);
@@ -133,7 +141,7 @@ export default function Hurtig({ onFeil }) {
   const synlige = (data || []).filter((k) => {
     if (finish === "foil" ? !Number(k.has_foil) : !Number(k.has_nonfoil)) return false;
     if (rariteter.length && !rariteter.includes(String(k.rarity || ""))) return false;
-    if (q && !String(k.name).toLowerCase().includes(q)) return false;
+    if (q && !alleSett && !String(k.name).toLowerCase().includes(q)) return false;
     return true;
   });
 
@@ -166,7 +174,7 @@ export default function Hurtig({ onFeil }) {
                 onChange={(e) => setSett(e.target.value)}
                 style={{ minWidth: 230 }}
               >
-                <option value="">Velg sett …</option>
+                <option value="">Alle sett (søk på navn)</option>
                 {alle.map((s) => (
                   <option key={s.code} value={s.code}>
                     {s.visningsnavn || s.name} ({String(s.code).toUpperCase()})
@@ -177,13 +185,13 @@ export default function Hurtig({ onFeil }) {
 
             <div style={{ flex: "0 0 auto" }}>
               <label className="dempet" style={{ display: "block", fontSize: 12, marginBottom: 3 }}>
-                Søk i settet
+                {sett ? "Søk i settet" : "Søk i alle sett"}
               </label>
               <input
                 type="text"
                 value={søk}
                 onChange={(e) => setSøk(e.target.value)}
-                placeholder="Kortnavn"
+                placeholder={sett ? "Kortnavn" : "Minst tre bokstaver"}
                 style={{ width: 170 }}
               />
             </div>
@@ -240,24 +248,24 @@ export default function Hurtig({ onFeil }) {
             ))}
 
             <span className="dempet" style={{ marginLeft: "auto" }}>
-              {sett && !laster && `${synlige.length} kort · ${iSettet} stk. i hylla`}
+              {visTabell && !laster && `${synlige.length} kort · ${iSettet} stk. i hylla`}
             </span>
           </div>
         </div>
       </div>
 
-      {!sett && (
+      {!visTabell && (
         <div className="panel">
           <div className="tom">
-            <b>Velg et sett</b>
-            Innstillingene dine over huskes til neste gang, også når du bytter sett.
+            <b>Velg et sett, eller søk på et kort</b>
+            Uten sett søker feltet i alle sett — skriv minst tre bokstaver. Innstillingene dine over huskes til neste gang.
           </div>
         </div>
       )}
 
-      {sett && laster && <p className="dempet">Henter lageret…</p>}
+      {visTabell && laster && <p className="dempet">Henter lageret…</p>}
 
-      {sett && !laster && !kolonner.length && (
+      {visTabell && !laster && !kolonner.length && (
         <div className="panel">
           <div className="tom">
             <b>Ingen tilstander er valgt</b>
@@ -266,13 +274,14 @@ export default function Hurtig({ onFeil }) {
         </div>
       )}
 
-      {sett && !laster && kolonner.length > 0 && (
+      {visTabell && !laster && kolonner.length > 0 && (
         <div className="panel">
           <table>
             <thead>
               <tr>
                 <th style={{ width: 50 }}>Nr.</th>
                 <th>Kort</th>
+                {alleSett && <th>Sett</th>}
                 <th style={{ width: 90 }}>Raritet</th>
                 {kolonner.map((c) => (
                   <th key={c} className="h" style={{ width: 74 }} title={CONDITION_NAVN[c]}>
@@ -295,6 +304,7 @@ export default function Hurtig({ onFeil }) {
                       <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>token</span>
                     )}
                   </td>
+                  {alleSett && <td className="dempet">{k.set_name || String(k.set_code || "").toUpperCase()}</td>}
                   <td className="dempet">{k.rarity || "—"}</td>
                   {kolonner.map((c) => {
                     const nøkkel = `${k.id}:${c}`;

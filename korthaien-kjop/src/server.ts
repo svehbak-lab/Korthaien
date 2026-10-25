@@ -1044,19 +1044,24 @@ app.get("/api/admin/rapporter/salg.pdf", krevAdmin, fang(async (req: any, res: a
 
 app.get("/api/admin/lager", krevAdmin, fang(async (req: any, res: any) => {
   const sett = String(req.query.sett || "").toLowerCase();
-  if (!sett) throw new HttpFeil(400, "Mangler ?sett=");
+  // Uten sett: søk på navn i alle sett. Minst tre tegn, og et tak, så et
+  // søk på «the» ikke henter halve katalogen.
+  const q = normaliser(String(req.query.q || ""));
+  if (!sett && q.length < 3) throw new HttpFeil(400, "Velg et sett, eller søk på minst tre bokstaver.");
   const r = await db().execute({
     sql: `SELECT c.id, c.name, c.collector_number, c.rarity, c.variant,
-                 c.has_foil, c.has_nonfoil, c.er_token,
+                 c.has_foil, c.has_nonfoil, c.er_token, c.set_code,
+                 COALESCE(s.visningsnavn, s.name) AS set_name,
                  b.finish, b.condition, b.n
-            FROM cards c
+            FROM ${sett ? "cards c" : `(SELECT * FROM cards WHERE name_norm LIKE ? ORDER BY name, released_at DESC LIMIT 300) c`}
+            LEFT JOIN sets s ON s.code = c.set_code
             LEFT JOIN (
               SELECT card_id, finish, condition, SUM(antall) AS n
                 FROM lager_bevegelser GROUP BY card_id, finish, condition
             ) b ON b.card_id = c.id
-           WHERE c.set_code = ?
-           ORDER BY CAST(c.collector_number AS INTEGER), c.collector_number`,
-    args: [sett],
+           ${sett ? "WHERE c.set_code = ?" : ""}
+           ORDER BY ${sett ? "CAST(c.collector_number AS INTEGER), c.collector_number" : "c.name, c.released_at DESC, c.set_code, CAST(c.collector_number AS INTEGER)"}`,
+    args: [sett || `%${q}%`],
   });
 
   // Én rad per kort, med beholdningen samlet i et kart. Databasen gir én rad
@@ -1068,7 +1073,7 @@ app.get("/api/admin/lager", krevAdmin, fang(async (req: any, res: any) => {
       kart.set(id, {
         id, name: x.name, collector_number: x.collector_number, rarity: x.rarity,
         variant: x.variant, has_foil: x.has_foil, has_nonfoil: x.has_nonfoil,
-        er_token: x.er_token, lager: {},
+        er_token: x.er_token, set_code: x.set_code, set_name: x.set_name, lager: {},
       });
     }
     if (x.finish && Number(x.n)) {
