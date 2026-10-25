@@ -1,4 +1,4 @@
-import { db, normaliser } from "./db.js";
+import { db, normaliser, ryddFeilkoblinger } from "./db.js";
 import { variantFraScryfall } from "./varianter.js";
 import { Readable } from "node:stream";
 import { createGunzip } from "node:zlib";
@@ -183,6 +183,8 @@ export async function importerScryfall(logg: (s: string) => void = console.log):
 
   const sett = await db().execute("SELECT COUNT(*) AS n FROM sets");
   logg(`Ferdig: ${antall} kort importert, ${hoppet} hoppet over.`);
+  const ryddet = await ryddFeilkoblinger();
+  if (ryddet) logg(`  ${ryddet} feilkoblede Mystore-rader fjernet (display/scroll).`);
   return { kort: antall, sett: Number(sett.rows[0]?.n || 0) };
 }
 

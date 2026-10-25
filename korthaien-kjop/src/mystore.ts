@@ -1,4 +1,4 @@
-import { db, normaliser } from "./db.js";
+import { db, normaliser, ryddFeilkoblinger } from "./db.js";
 import { byggIndeks, finnSett } from "./settnavn.js";
 import { gjettSett } from "./gjett.js";
 import { variantFraNavn, skillUtNummer, skillUtBokstav, nummerFraParentes, oppgirBehandling, erDisplayProdukt, erScrollProdukt } from "./varianter.js";
@@ -639,6 +639,8 @@ export async function synkMystore(
     );
   }
 
+  const ryddet = await ryddFeilkoblinger();
+  if (ryddet) logg(`  ${ryddet} feilkoblede rader fjernet (display/scroll).`);
   logg(`Synk ferdig: ${koblet} produkter koblet i ${settSett.size} sett, ${uløste.length} uten treff.`);
   if (kollisjoner) {
     logg(`  ${kollisjoner} produkter pekte på et kort et annet produkt allerede hadde tatt.`);

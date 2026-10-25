@@ -360,23 +360,7 @@ async function leggTilNyeKolonner(): Promise<void> {
     }
   }
 
-  // Displaykort som er koblet til noe annet enn en displayutgave (The Wise
-  // Mothman landet på showcasen #343). Synken kobler dem riktig neste gang
-  // den ser produktet, men ikke alle sett synkes hver natt — derfor ryddes de
-  // feilkoblede her også. Manuelle koblinger røres ikke.
-  if (lager.size) {
-    await db().execute(`DELETE FROM mystore_stock
-      WHERE lower(product_name) LIKE '%display commander%'
-        AND card_id NOT IN (SELECT id FROM cards WHERE er_display = 1)
-        AND product_id NOT IN (SELECT product_id FROM mystore_links WHERE card_id IS NOT NULL AND product_id IS NOT NULL)`);
-    // Samme for scroll-showcase: Gandalf the Grey (showcase #322) landet på
-    // scroll-showcasen #658. Uten «scroll» i produktnavnet hører ikke
-    // produktet hjemme der.
-    await db().execute(`DELETE FROM mystore_stock
-      WHERE lower(COALESCE(product_name, '')) NOT LIKE '%scroll%'
-        AND card_id IN (SELECT id FROM cards WHERE er_scroll = 1)
-        AND product_id NOT IN (SELECT product_id FROM mystore_links WHERE card_id IS NOT NULL AND product_id IS NOT NULL)`);
-  }
+  if (lager.size) await ryddFeilkoblinger();
 
   const ku = await kolonner("kunder");
   if (ku.size && !ku.has("epost_bekreftet_at")) {
@@ -553,4 +537,29 @@ export async function nesteNummer(serie: "kjop" | "salg"): Promise<string> {
   const x: any = r.rows[0];
   if (!x) throw new Error(`Nummerserien «${serie}» finnes ikke.`);
   return `${x.prefiks}${String(x.nr).padStart(Number(x.siffer) || 0, "0")}`;
+}
+
+// Feilkoblinger til displayutgaver og scroll-showcaser. Kjøres ved oppstart,
+// etter Scryfall-importen og etter hver Mystore-synk. Flaggene (er_display,
+// er_scroll) settes først av importen, så kjøres ryddingen bare ved oppstart,
+// kan den komme før flaggene finnes og ikke gjøre noe — det skjedde med
+// Gandalf the Grey #658 natten etter at scroll-flagget kom.
+export async function ryddFeilkoblinger(): Promise<number> {
+  let n = 0;
+  // Displaykort som er koblet til noe annet enn en displayutgave (The Wise
+  // Mothman landet på showcasen #343). Synken kobler dem riktig neste gang
+  // den ser produktet, men ikke alle sett synkes hver natt — derfor ryddes de
+  // feilkoblede her også. Manuelle koblinger røres ikke.
+  n += (await db().execute(`DELETE FROM mystore_stock
+    WHERE lower(product_name) LIKE '%display commander%'
+      AND card_id NOT IN (SELECT id FROM cards WHERE er_display = 1)
+      AND product_id NOT IN (SELECT product_id FROM mystore_links WHERE card_id IS NOT NULL AND product_id IS NOT NULL)`)).rowsAffected;
+  // Samme for scroll-showcase: Gandalf the Grey (showcase #322) landet på
+  // scroll-showcasen #658. Uten «scroll» i produktnavnet hører ikke
+  // produktet hjemme der.
+  n += (await db().execute(`DELETE FROM mystore_stock
+    WHERE lower(COALESCE(product_name, '')) NOT LIKE '%scroll%'
+      AND card_id IN (SELECT id FROM cards WHERE er_scroll = 1)
+      AND product_id NOT IN (SELECT product_id FROM mystore_links WHERE card_id IS NOT NULL AND product_id IS NOT NULL)`)).rowsAffected;
+  return n;
 }
