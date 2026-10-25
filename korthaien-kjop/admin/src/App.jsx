@@ -88,8 +88,8 @@ export default function App() {
     <div className="skall" data-tema={tema || "dagens"}>
       <aside className="rail">
         <div className="merke">
-          <b>Korthaien Kjøp</b>
-          <span>Innkjøp fra kunder</span>
+          <b>Korthaien</b>
+          <span>Dashboard</span>
         </div>
         <nav>
           {SIDER.map((s) => (
@@ -248,7 +248,7 @@ function Innlogging({ onInn }) {
   return (
     <div className="login">
       <form onSubmit={send}>
-        <h1>Korthaien Kjøp</h1>
+        <h1>Korthaien</h1>
         <p>Logg inn for å se ordrer og innkjøpsregler.</p>
         <input
           type="password"
