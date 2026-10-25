@@ -16,7 +16,10 @@ CREATE TABLE IF NOT EXISTS sets (
   -- brr (Retro Artifacts), brc (Commander) og abro (Art Series). Butikker
   -- holder dem samlet under hovedsettet, slik kundene tenker om dem.
   -- parent_code er Scryfalls egen kobling mellom dem.
-  parent_code  TEXT
+  parent_code  TEXT,
+  -- Fra Scryfall: «expansion», «core», «masters» … og settsymbolet (SVG).
+  set_type     TEXT,
+  ikon         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_sets_parent ON sets(parent_code);
 

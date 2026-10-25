@@ -108,7 +108,7 @@ export default function Innstillinger({ fane, onFeil, onMelding }) {
             for hele sendingen, og sjekkes på det som faktisk blir godkjent.
           </p>
 
-          <h3 style={{ marginBottom: 2 }}>Minste markedspris per sjeldenhet</h3>
+          <h3 style={{ marginBottom: 2 }}>Minste markedspris per raritet</h3>
           <p className="dempet" style={{ margin: "0 0 10px" }}>
             Kort som ligger under terskelen kjøpes ikke, og vises ikke på kundesiden.
             Terskelen gjelder Scryfall-prisen i dollar — eller din egen, der du har

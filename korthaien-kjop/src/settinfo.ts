@@ -36,14 +36,25 @@ export type Settinfo = {
   // Egne produkter med denne settkoden. Styrer om Sealed-fanen vises.
   sealed: number;
   komplettsett: number;
+  set_type: string | null;
+  ikon: string | null;
+  // Finnes kortene i settet som foil, ikke-foil, eller begge?
+  foil: "begge" | "bare_foil" | "ingen_foil";
+  // Formatene der settet er lovlig (de fleste kortene), i MTG-rekkefølge.
+  formater: string[];
 };
+
+const FORMATER: [string, string][] = [
+  ["standard", "Standard"], ["pioneer", "Pioneer"], ["modern", "Modern"], ["legacy", "Legacy"],
+  ["vintage", "Vintage"], ["commander", "Commander"], ["pauper", "Pauper"],
+];
 
 export async function settinfo(kode: string): Promise<Settinfo | null> {
   const code = String(kode || "").toLowerCase().trim();
   if (!code) return null;
 
   const s = await db().execute({
-    sql: `SELECT code, name, visningsnavn, released_at, card_count, parent_code
+    sql: `SELECT code, name, visningsnavn, released_at, card_count, parent_code, set_type, ikon
             FROM sets WHERE code = ?`,
     args: [code],
   });
@@ -52,7 +63,7 @@ export async function settinfo(kode: string): Promise<Settinfo | null> {
 
   // Ett kall per spørsmål ville vært fem turer til basen for en side som
   // åpnes ofte. De som kan svares i samme spørring, svares i samme spørring.
-  const [lager, rariteter, slekt, produkter] = await Promise.all([
+  const [lager, rariteter, slekt, produkter, kortinfo] = await Promise.all([
     db().execute({
       // Prisen staar ikke i lagerbevegelsene — den regnes ut av
       // salgsreglene hver gang. Et prisspenn her ville enten vaert et nytt
@@ -88,7 +99,22 @@ export async function settinfo(kode: string): Promise<Settinfo | null> {
              WHERE set_code = ? AND aktiv = 1 AND antall > 0 GROUP BY type`,
       args: [code],
     }),
+    db().execute({
+      sql: `SELECT has_foil, has_nonfoil, legalities FROM cards WHERE set_code = ? AND er_token = 0`,
+      args: [code],
+    }),
   ]);
+  const kortrader = kortinfo.rows as any[];
+  const medFoil = kortrader.some((x) => Number(x.has_foil));
+  const utenFoil = kortrader.some((x) => Number(x.has_nonfoil));
+  const lovlig: Record<string, number> = {};
+  for (const x of kortrader) {
+    let l: any = null;
+    try { l = x.legalities ? JSON.parse(String(x.legalities)) : null; } catch { l = null; }
+    if (!l) continue;
+    for (const [f] of FORMATER) if (l[f] === "legal" || l[f] === "restricted") lovlig[f] = (lovlig[f] || 0) + 1;
+  }
+  const formater = FORMATER.filter(([f]) => kortrader.length && (lovlig[f] || 0) / kortrader.length >= 0.5).map(([, n]) => n);
 
   const l = lager.rows[0] as any;
   const p: Record<string, number> = {};
@@ -108,6 +134,10 @@ export async function settinfo(kode: string): Promise<Settinfo | null> {
     slektninger: (slekt.rows as any[]).map((x) => ({ code: String(x.code), navn: String(x.navn) })),
     sealed: p.sealed || 0,
     komplettsett: p.komplettsett || 0,
+    set_type: rad.set_type ? String(rad.set_type) : null,
+    ikon: rad.ikon ? String(rad.ikon) : null,
+    foil: medFoil && utenFoil ? "begge" : medFoil ? "bare_foil" : "ingen_foil",
+    formater,
   };
 }
 

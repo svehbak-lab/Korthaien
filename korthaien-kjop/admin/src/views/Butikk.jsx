@@ -1640,84 +1640,53 @@ function Produktliste({ type, setKode, skjulTittel, onFeil }) {
 // Card Kingdom har en redaksjonell tekst her. Den maa noen skrive, og den
 // blir staaende uendret naar lageret endrer seg. Disse tallene er sanne hver
 // gang noen aapner sida, og ingen maa huske aa oppdatere dem.
-function OmSettet({ info, onSett }) {
+function OmSettet({ info }) {
   if (!info) return <p className="dempet">Henter…</p>;
-
-  const dekning =
-    info.kort_i_settet > 0
-      ? Math.round((info.ulike_på_lager / info.kort_i_settet) * 100)
-      : null;
-
+  const ikon = info.ikon || `https://svgs.scryfall.io/sets/${info.code}.svg`;
+  const rader = [
+    ["Sett", info.navn + (info.offisielt_navn !== info.navn ? ` (${info.offisielt_navn})` : "")],
+    ["Settkode", info.code.toUpperCase()],
+    ["Utgitt", info.utgitt ? nordato(info.utgitt) : "—"],
+    ["Type", SETTYPER[info.set_type] || (info.set_type ? info.set_type.replace(/_/g, " ") : "—")],
+    ["Antall kort", info.kort_i_settet || "—"],
+    ["Lovlig i", info.formater?.length ? info.formater.join(", ") : "—"],
+    ["Foils", info.foil === "begge" ? "Ja" : info.foil === "bare_foil" ? "Bare foil" : "Nei"],
+  ];
   return (
     <div className="panel">
       <div className="krop">
-        <h2 style={{ margin: "0 0 2px", fontSize: 20 }}>{info.navn}</h2>
-        {info.offisielt_navn !== info.navn && (
-          <p className="dempet" style={{ margin: "0 0 14px" }}>
-            Heter {info.offisielt_navn} hos Scryfall.
-          </p>
-        )}
-
-        <div className="b-omrute">
-          <Omtall tall={info.kort_i_settet || "—"} tekst="kort i settet" />
-          <Omtall tall={info.ulike_på_lager} tekst="forskjellige på lager" />
-          <Omtall tall={info.eksemplarer} tekst="eksemplarer i hylla" />
-          <Omtall
-            tall={info.utgitt ? new Date(info.utgitt).getFullYear() : "—"}
-            tekst={info.utgitt ? "utgitt " + nordato(info.utgitt) : "utgivelsesdato ukjent"}
-          />
+        <div className="rad-flex" style={{ gap: 14, marginBottom: 14 }}>
+          <img src={ikon} alt="" style={{ width: 44, height: 44, objectFit: "contain" }}
+            onError={(e) => { e.currentTarget.style.display = "none"; }} />
+          <h2 style={{ margin: 0, fontSize: 22 }}>{info.navn}</h2>
         </div>
-
-        {dekning !== null && (
-          <p style={{ marginTop: 16 }}>
-            Du har <b>{dekning} %</b> av settet inne — {info.ulike_på_lager} av{" "}
-            {info.kort_i_settet} kort.
-          </p>
-        )}
-
-        {info.rariteter.length > 0 && (
-          <>
-            <h3 style={{ fontSize: 14, margin: "18px 0 6px" }}>Fordelt på raritet</h3>
-            <div className="b-omrariteter">
-              {info.rariteter.map((r) => (
-                <span key={r.raritet} className={"merkelapp r-" + r.raritet}>
-                  {RARITETSNAVN[r.raritet] || r.raritet} {r.antall}
-                </span>
-              ))}
-            </div>
-          </>
-        )}
-
-        {info.slektninger.length > 0 && (
-          <>
-            <h3 style={{ fontSize: 14, margin: "20px 0 6px" }}>Hører sammen med</h3>
-            <p className="dempet" style={{ margin: "0 0 8px", fontSize: 13 }}>
-              Scryfall deler én utgivelse i flere sett. Kundene tenker på dem
-              som det samme.
-            </p>
-            <div className="b-omrariteter">
-              {info.slektninger.map((x) => (
-                <button key={x.code} className="knapp liten" onClick={() => onSett(x.code)}>
-                  {x.navn}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        {(info.sealed > 0 || info.komplettsett > 0) && (
-          <p className="dempet" style={{ marginTop: 20, marginBottom: 0 }}>
-            {info.sealed > 0 && `${info.sealed} sealed-produkt${info.sealed === 1 ? "" : "er"}`}
-            {info.sealed > 0 && info.komplettsett > 0 && " og "}
-            {info.komplettsett > 0 &&
-              `${info.komplettsett} komplett${info.komplettsett === 1 ? "" : "e"} sett`}{" "}
-            fra denne utgivelsen på lager.
-          </p>
-        )}
+        <table className="b-omtabell">
+          <tbody>
+            {rader.map(([k, v]) => (
+              <tr key={k}><th>{k}</th><td>{v}</td></tr>
+            ))}
+            <tr>
+              <th>Korthaien har</th>
+              <td>
+                {info.ulike_på_lager} {info.kort_i_settet ? `av ${info.kort_i_settet} ` : ""}kort på lager
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
+
+// Scryfalls settyper. Engelske ord, som rariteten — det er det spillerne bruker.
+const SETTYPER = {
+  core: "Core set", expansion: "Expansion", masters: "Masters", draft_innovation: "Draft innovation",
+  commander: "Commander", alchemy: "Alchemy", masterpiece: "Masterpiece", arsenal: "Arsenal",
+  from_the_vault: "From the Vault", spellbook: "Spellbook", premium_deck: "Premium deck",
+  duel_deck: "Duel deck", starter: "Starter", box: "Box set", promo: "Promo", token: "Token",
+  memorabilia: "Memorabilia", funny: "Un-set", planechase: "Planechase", archenemy: "Archenemy",
+  vanguard: "Vanguard", treasure_chest: "Treasure chest", minigame: "Minigame",
+};
 
 function Omtall({ tall, tekst }) {
   return (
@@ -1728,9 +1697,10 @@ function Omtall({ tall, tekst }) {
   );
 }
 
+// Rariteten på engelsk, slik spillerne sier den.
 const RARITETSNAVN = {
-  common: "Vanlig", uncommon: "Uvanlig", rare: "Sjelden",
-  mythic: "Mytisk", special: "Spesial", bonus: "Bonus",
+  common: "Common", uncommon: "Uncommon", rare: "Rare",
+  mythic: "Mythic", special: "Special", bonus: "Bonus",
 };
 
 // Ikke toLocaleString: den gir ulik tekst i ulike nettlesere, og dette skal

@@ -364,6 +364,10 @@ async function leggTilNyeKolonner(): Promise<void> {
 
   if (lager.size) await ryddFeilkoblinger();
 
+  const st = await kolonner("sets");
+  if (st.size && !st.has("set_type")) await db().execute("ALTER TABLE sets ADD COLUMN set_type TEXT");
+  if (st.size && !st.has("ikon")) await db().execute("ALTER TABLE sets ADD COLUMN ikon TEXT");
+
   const sl = await kolonner("salgsordre_linjer");
   if (sl.size && !sl.has("produkt_id")) await db().execute("ALTER TABLE salgsordre_linjer ADD COLUMN produkt_id INTEGER");
   if (sl.size && !sl.has("mva")) await db().execute("ALTER TABLE salgsordre_linjer ADD COLUMN mva INTEGER NOT NULL DEFAULT 0");

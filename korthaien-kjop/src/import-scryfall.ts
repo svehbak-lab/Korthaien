@@ -309,17 +309,19 @@ async function importerSettliste(logg: (s: string) => void): Promise<void> {
   const sett = (data.data || []).filter((s: any) => s.code && s.name && !s.digital);
   await db().batch(
     sett.map((s: any) => ({
-      sql: `INSERT INTO sets (code, name, released_at, card_count, parent_code)
-            VALUES (?, ?, ?, ?, ?)
+      sql: `INSERT INTO sets (code, name, released_at, card_count, parent_code, set_type, ikon)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(code) DO UPDATE SET name = excluded.name,
               released_at = excluded.released_at, card_count = excluded.card_count,
-              parent_code = excluded.parent_code`,
+              parent_code = excluded.parent_code, set_type = excluded.set_type, ikon = excluded.ikon`,
       args: [
         String(s.code).toLowerCase(),
         s.name,
         s.released_at || null,
         s.card_count || 0,
         s.parent_set_code ? String(s.parent_set_code).toLowerCase() : null,
+        s.set_type || null,
+        s.icon_svg_uri || null,
       ],
     })),
     "write"

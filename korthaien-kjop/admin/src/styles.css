@@ -1185,3 +1185,9 @@ label.kreditt-boks { cursor: pointer; }
 .settstabel.liten { border-radius: 4px; }
 .settstabel.liten .ss-kort { border-width: 1.5px; }
 .settstabel.liten .ss-foil { font-size: 7px; padding: 0 3px; }
+
+/* ── om settet: fakta i en tabell, som hos Card Kingdom ──────────────────── */
+.butikk .b-omtabell { width: auto; border-collapse: collapse; }
+.butikk .b-omtabell th { text-align: left; font-weight: 600; font-size: inherit; color: var(--dempet); padding: 7px 28px 7px 0; vertical-align: top; white-space: nowrap; border: 0; }
+.butikk .b-omtabell td { padding: 7px 0; border: 0; }
+.butikk .b-omtabell tr + tr th, .butikk .b-omtabell tr + tr td { border-top: 1px solid var(--strek); }
