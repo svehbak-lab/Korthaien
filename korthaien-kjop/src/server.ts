@@ -533,6 +533,29 @@ app.post(
   })
 );
 
+// Hent et bilde fra en lenke og lagre en kopi hos oss. En lenke til en annen
+// side er lånt: fjerner de bildet eller flytter det, står produktet uten.
+app.post("/api/admin/bilder/fra-lenke", krevAdmin, fang(async (req: any, res: any) => {
+  const url = String(req.body?.url || "").trim();
+  if (!/^https?:\/\//i.test(url)) throw new HttpFeil(400, "Lenken må begynne med https://.");
+  let svar: Response;
+  try {
+    svar = await fetch(url, { signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "Korthaien/1.0" } });
+  } catch {
+    throw new HttpFeil(400, "Fikk ikke hentet bildet fra lenken.");
+  }
+  if (!svar.ok) throw new HttpFeil(400, `Siden svarte ${svar.status}. Er lenken til selve bildet?`);
+  const lengde = Number(svar.headers.get("content-length") || 0);
+  if (lengde > 8 * 1024 * 1024) throw new HttpFeil(400, "Bildet er større enn 8 MB.");
+  const data = Buffer.from(await svar.arrayBuffer());
+  if (data.length > 8 * 1024 * 1024) throw new HttpFeil(400, "Bildet er større enn 8 MB.");
+  try {
+    res.json(await lagreBilde(data));
+  } catch {
+    throw new HttpFeil(400, "Lenken peker ikke på et bilde (JPEG, PNG eller WebP). Høyreklikk på bildet og velg «Kopier bildeadresse».");
+  }
+}));
+
 // Raden med nyeste sett paa forsiden. Oppdaterer seg selv fra lageret med
 // mindre forside_sett er satt i innstillingene.
 app.get("/api/admin/butikk/nyeste", krevAdmin, fang(async (req: any, res: any) => {

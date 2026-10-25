@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { api, kroner } from "../api.js";
+import { useState, useEffect, useRef } from "react";
+import { api, kroner, lastOppBilde, bildeFraLenke, bildeUrl } from "../api.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EGNE PRODUKTER
@@ -152,14 +152,10 @@ export default function Produkter({ onFeil, onMelding }) {
           </div>
 
           <div className="rad-flex" style={{ gap: 14, marginTop: 12, flexWrap: "wrap" }}>
-            <label style={{ flex: 1, minWidth: 260 }}>
-              <div className="dempet" style={{ fontSize: 12, marginBottom: 3 }}>Bildeadresse</div>
-              <input
-                type="text" value={ny.bilde_url} placeholder="https://…"
-                onChange={(e) => setNy({ ...ny, bilde_url: e.target.value })}
-                style={{ width: "100%" }}
-              />
-            </label>
+            <div style={{ flex: 1, minWidth: 260 }}>
+              <div className="dempet" style={{ fontSize: 12, marginBottom: 3 }}>Bilde</div>
+              <BildeFelt verdi={ny.bilde_url} onEndre={(u) => setNy((x) => ({ ...x, bilde_url: u }))} onFeil={onFeil} />
+            </div>
             <label style={{ flex: 2, minWidth: 260 }}>
               <div className="dempet" style={{ fontSize: 12, marginBottom: 3 }}>Beskrivelse</div>
               <input
@@ -246,6 +242,13 @@ export default function Produkter({ onFeil, onMelding }) {
                             type="text" value={redigerer.beskrivelse || ""} style={{ width: "100%" }}
                             onChange={(e) => setRedigerer({ ...redigerer, beskrivelse: e.target.value })}
                           />
+                          <div style={{ marginTop: 8 }}>
+                            <BildeFelt
+                              verdi={redigerer.bilde_url || ""}
+                              onEndre={(u) => setRedigerer((x) => ({ ...x, bilde_url: u }))}
+                              onFeil={onFeil}
+                            />
+                          </div>
                         </td>
                         <td>
                           <button className="knapp liten primar" disabled={jobber} onClick={() => lagre(redigerer)}>
@@ -260,7 +263,12 @@ export default function Produkter({ onFeil, onMelding }) {
                       <tr key={p.id}>
                         <td className="dempet">{p.sortering}</td>
                         <td>
-                          {p.navn}
+                          <span className="rad-flex" style={{ gap: 8, display: "inline-flex" }}>
+                            {p.bilde_url
+                              ? <img src={p.bilde_url} alt="" style={{ width: 32, height: 32, objectFit: "contain", borderRadius: 4 }} />
+                              : <span className="dempet" style={{ width: 32, fontSize: 10, textAlign: "center" }}>uten bilde</span>}
+                            {p.navn}
+                          </span>
                           {p.antall === 0 && (
                             <span className="merkelapp m-av" style={{ marginLeft: 8 }}>utsolgt</span>
                           )}
@@ -326,6 +334,77 @@ function VisSealed({ onFeil, onMelding }) {
         <span className="dempet" style={{ fontSize: 13 }}>
           Slått av, forsvinner de fra menyen og forsiden. Produktene under blir liggende.
         </span>
+      </div>
+    </div>
+  );
+}
+
+// Bildet til et produkt. Last opp en fil, eller lim inn en lenke — da
+// henter vi bildet og lagrer en kopi hos oss med en gang. En lenke til en
+// annen side kan forsvinne når som helst; kopien gjør ikke det.
+const VÅR = /\/api\/bilder\/\d+$/;
+function BildeFelt({ verdi, onEndre, onFeil }) {
+  const [lenke, setLenke] = useState("");
+  const [jobber, setJobber] = useState(false);
+  const fil = useRef(null);
+  const lånt = verdi && !VÅR.test(verdi);
+
+  async function hent(url) {
+    setJobber(true);
+    try {
+      const r = await bildeFraLenke(url);
+      onEndre(bildeUrl(r.id));
+      setLenke("");
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setJobber(false);
+    }
+  }
+  async function lastOpp(e) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setJobber(true);
+    try {
+      const r = await lastOppBilde(f);
+      onEndre(bildeUrl(r.id));
+    } catch (err) {
+      onFeil(err);
+    } finally {
+      setJobber(false);
+    }
+  }
+
+  return (
+    <div className="rad-flex" style={{ gap: 10, alignItems: "flex-start" }}>
+      {verdi ? (
+        <img src={verdi} alt="" style={{ width: 56, height: 56, objectFit: "contain", borderRadius: 6, background: "var(--papir)", flex: "none" }} />
+      ) : (
+        <div style={{ width: 56, height: 56, borderRadius: 6, border: "1px dashed var(--strek)", flex: "none" }} />
+      )}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="rad-flex" style={{ gap: 6 }}>
+          <input ref={fil} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={lastOpp} />
+          <button type="button" className="knapp liten" disabled={jobber} onClick={() => fil.current?.click()}>
+            {jobber ? "Lagrer…" : "Last opp bilde…"}
+          </button>
+          {verdi && <button type="button" className="knapp liten" onClick={() => onEndre("")}>Fjern</button>}
+          {lånt && (
+            <button type="button" className="knapp liten primar" disabled={jobber} onClick={() => hent(verdi)} title="Lagre en kopi, så bildet ikke forsvinner om siden fjerner det">
+              Lagre kopi hos oss
+            </button>
+          )}
+        </div>
+        <div className="rad-flex" style={{ gap: 6 }}>
+          <input
+            type="text" value={lenke} onChange={(e) => setLenke(e.target.value)}
+            placeholder="…eller lim inn lenke til bildet"
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <button type="button" className="knapp liten" disabled={jobber || !lenke.trim()} onClick={() => hent(lenke.trim())}>Hent</button>
+        </div>
+        {lånt && <span style={{ fontSize: 12, color: "var(--advarsel)" }}>Bildet ligger på en annen side og kan forsvinne.</span>}
       </div>
     </div>
   );

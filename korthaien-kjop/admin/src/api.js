@@ -77,6 +77,8 @@ export async function importerRabattkoder(tekst) {
   return data;
 }
 
+export const bildeFraLenke = (url) => kall("/api/admin/bilder/fra-lenke", { method: "POST", body: { url } });
+
 export async function lastOppBilde(fil) {
   const r = await fetch(`${BASE}/api/admin/bilder`, {
     method: "POST",
