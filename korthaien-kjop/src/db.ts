@@ -495,6 +495,10 @@ export type Settings = {
   // Sealed og komplette sett i butikken. Slått av, forsvinner menyen,
   // forsiden og sidene for dem.
   vis_sealed: boolean;
+  // Landingssiden under overgangen: kundene ser bare den, admin ser butikken.
+  stengt: { aktiv: boolean; tittel?: string; tekst?: string } | null;
+  // Settes av overgangsknappen. Da leser butikken lagerboken (se lager.ts).
+  lagerkilde: "mystore" | "bok";
 };
 
 const STANDARD: Settings = {
@@ -525,6 +529,8 @@ const STANDARD: Settings = {
   tix_kreditt_ore: 1000,
   overgang_dato: "",
   vis_sealed: true,
+  stengt: null,
+  lagerkilde: "mystore",
 };
 
 export async function hentSettings(): Promise<Settings> {

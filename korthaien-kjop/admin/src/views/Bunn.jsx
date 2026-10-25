@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { api, kroner } from "../api.js";
+import { api, kroner, kunde } from "../api.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BUNNEN
@@ -123,7 +123,7 @@ export function Kontakt({ onFeil }) {
     e.preventDefault();
     setSender(true);
     try {
-      await api.kontakt(felt);
+      await kunde.kontakt(felt);
       setSendt(true);
     } catch (err) {
       onFeil(err);
@@ -204,7 +204,7 @@ export function Frakt({ onFeil }) {
 
   useEffect(() => {
     let avbrutt = false;
-    api
+    kunde
       .frakt()
       .then((r) => !avbrutt && setAlt((r.alternativer || []).filter((f) => f.aktiv)))
       .catch((e) => {
@@ -287,7 +287,7 @@ export function Retur() {
 
   useEffect(() => {
     let avbrutt = false;
-    api.innstillinger().then((r) => !avbrutt && setS(r)).catch(() => !avbrutt && setS({}));
+    kunde.foretak().then((r) => !avbrutt && setS(r)).catch(() => !avbrutt && setS({}));
     return () => {
       avbrutt = true;
     };
@@ -452,7 +452,7 @@ export function Tix({ onFeil, onKonto }) {
 
   useEffect(() => {
     let avbrutt = false;
-    api.innstillinger()
+    kunde.foretak()
       .then((r) => !avbrutt && setPris(Number(r.tix_kreditt_ore) || 1000))
       .catch(() => !avbrutt && setPris(1000));
     return () => { avbrutt = true; };
@@ -466,7 +466,7 @@ export function Tix({ onFeil, onKonto }) {
     e.preventDefault();
     setSender(true);
     try {
-      await api.kontakt({
+      await kunde.kontakt({
         navn: felt.navn.trim(),
         epost: felt.epost.trim(),
         emne: `MTGO-tix: ${antall} tix`,
@@ -568,7 +568,7 @@ function useForetak() {
   const [s, setS] = useState(null);
   useEffect(() => {
     let avbrutt = false;
-    api.innstillinger().then((r) => !avbrutt && setS(r)).catch(() => !avbrutt && setS({}));
+    kunde.foretak().then((r) => !avbrutt && setS(r)).catch(() => !avbrutt && setS({}));
     return () => { avbrutt = true; };
   }, []);
   if (!s) return null;

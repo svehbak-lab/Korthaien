@@ -228,6 +228,8 @@ export const api = {
   endreRabattkode: (id, felt) => kall(`/api/admin/rabattkoder/${id}`, { method: "PATCH", body: felt }),
   kunder: (q, side) => kall(`/api/admin/kunder?q=${encodeURIComponent(q || "")}&side=${side || 0}`),
   innstillinger: () => kall("/api/admin/settings"),
+  overgang: () => kall("/api/admin/overgang"),
+  kjørOvergang: () => kall("/api/admin/overgang", { method: "POST", body: { bekreft: "OVERGANG" } }),
   lagreInnstillinger: (felt) => kall("/api/admin/settings", { method: "PUT", body: felt }),
   jobb: (navn) => kall(`/api/admin/jobs/${navn}`, { method: "POST" }),
 };
@@ -311,6 +313,24 @@ export const kunde = {
   kreditt: () => kundekall("/api/konto/kreditt"),
 
   oppsett: () => kundekall("/api/butikk/oppsett"),
+  // Det offentlige butikkvinduet: katalog, kortsider, sett og sealed uten innlogging.
+  foretak: () => kundekall("/api/butikk/foretak"),
+  katalog: (f) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(f)) {
+      if (v === "" || v === null || v === undefined || v === false) continue;
+      p.set(k, v === true ? "1" : String(v));
+    }
+    return kundekall(`/api/butikk/katalog?${p}`);
+  },
+  kort: (id) => kundekall(`/api/butikk/kort/${encodeURIComponent(id)}`),
+  nyesteSett: (antall) => kundekall(`/api/butikk/nyeste?antall=${antall || 5}`),
+  settinfo: (kode) => kundekall(`/api/butikk/sett/${encodeURIComponent(kode)}`),
+  settliste: () => kundekall("/api/butikk/settliste"),
+  produkter: (o = {}) =>
+    kundekall("/api/butikk/produkter?" + new URLSearchParams(Object.entries(o).filter(([, v]) => v !== undefined && v !== ""))),
+  frakt: () => kundekall("/api/butikk/frakt"),
+  kontakt: (felt) => kundekall("/api/kontakt", { method: "POST", body: felt }),
   kurv: (linjer) => kundekall("/api/butikk/kurv", { method: "POST", body: { linjer } }),
   kasse: (felt) => kundekall("/api/butikk/kasse", { method: "POST", body: felt }),
   rabattkode: (kode) => kundekall("/api/butikk/rabattkode", { method: "POST", body: { kode } }),

@@ -66,6 +66,8 @@ export function fjernCookie(res: Response): void {
   res.clearCookie(COOKIE);
 }
 
+export const erAdmin = (req: Request): boolean => gyldigToken(req.cookies?.[COOKIE]);
+
 export function krevAdmin(req: Request, res: Response, next: NextFunction): void {
   if (gyldigToken(req.cookies?.[COOKIE])) return next();
   res.status(401).json({ feil: "Ikke innlogget" });

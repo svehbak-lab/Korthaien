@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { api, UtloggetFeil } from "./api.js";
+import { api, kunde, UtloggetFeil } from "./api.js";
 import Ordrer from "./views/Ordrer.jsx";
 import Salgsordrer from "./views/Salgsordrer.jsx";
 import Sett from "./views/Sett.jsx";
@@ -61,7 +61,7 @@ export default function App() {
 
   useEffect(() => {
     if (!innlogget) return;
-    api.innstillinger().then((s) => setTema(s.tema || "dagens")).catch(() => setTema("dagens"));
+    kunde.foretak().then((s) => setTema(s.tema || "dagens")).catch(() => setTema("dagens"));
     const bytt = (e) => setTema(e.detail || "dagens");
     window.addEventListener("korthaien-tema", bytt);
     return () => window.removeEventListener("korthaien-tema", bytt);
@@ -192,6 +192,9 @@ const ADMINFANER = [
   { id: "rapporter", navn: "Rapporter" },
   { id: "utseende", navn: "Utseende" },
   { id: "innlogging", navn: "Innlogging" },
+  // Byttet fra Mystore: landingssiden og lagerovergangen. Kan fjernes når
+  // overgangen er gjort og alt har gått en stund.
+  { id: "overgang", navn: "Overgang" },
 ];
 
 const FORKLARING = {

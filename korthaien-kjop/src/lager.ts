@@ -73,7 +73,14 @@ export async function førBevegelser(rader: Bevegelse[]): Promise<number> {
 //
 // Gjelder butikken: lista, kortsiden, forsiden, settinformasjonen og kassen.
 // Admin sine egne sider om lagerboken leser fortsatt boken direkte.
-export const lagerkilde = (): "bok" | "mystore" => (process.env.LAGERKILDE === "bok" ? "bok" : "mystore");
+//
+// Overgangsknappen i admin setter innstillingen «lagerkilde» til «bok». Den
+// leses ved oppstart og holdes her, så butikken bytter med en gang — uten å
+// endre miljøvariabelen og deploye. LAGERKILDE=bok i miljøet virker fortsatt.
+let bokFraInnstilling = false;
+export const settBokSomLagerkilde = (på: boolean) => { bokFraInnstilling = på; };
+export const lagerkilde = (): "bok" | "mystore" =>
+  process.env.LAGERKILDE === "bok" || (bokFraInnstilling && process.env.LAGERKILDE !== "mystore-tvunget") ? "bok" : "mystore";
 
 // Én rad per bevegelse: card_id, finish, condition, antall, created_at.
 // created_at er når kortet kom inn — det «Nylig inn» sorterer på.

@@ -37,6 +37,10 @@ export type Regel = {
 
 export const REGLER = {
   søk: { navn: "søk", perMinutt: 60, perDøgn: 3000 },
+  // Det offentlige butikkvinduet: hver sidevisning er flere kall (katalog,
+  // sett, foretak), og en turnering på samme wifi deler én IP. Romslig per
+  // minutt, men døgntaket stopper en skraper som henter hele katalogen.
+  butikk: { navn: "butikk", perMinutt: 240, perDøgn: 15000 },
   bulk: { navn: "bulk", perMinutt: 15, perDøgn: 400 },
   pris: { navn: "pris", perMinutt: 90, perDøgn: 5000 },
   ordre: { navn: "ordre", perMinutt: 3, perDøgn: 20 },

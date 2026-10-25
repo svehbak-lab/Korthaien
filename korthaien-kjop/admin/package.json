@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:butikk": "vite build -c vite.butikk.config.js",
+    "dev:butikk": "vite -c vite.butikk.config.js"
   },
   "dependencies": {
     "@fontsource/atkinson-hyperlegible": "^5.3.0",

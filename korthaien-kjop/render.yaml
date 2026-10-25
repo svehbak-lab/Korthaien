@@ -92,6 +92,25 @@ services:
       - key: VITE_API_URL
         value: https://api.kortsalg.korthaien.no
 
+  # Den offentlige butikken — det som skal ligge på korthaien.no. Bygges fra
+  # admin-mappa med egen inngang (butikk.html), så admin ikke følger med.
+  # Alle stier skrives om til index.html: butikken styrer selv hva som vises.
+  # Når domenet kobles til: sett SHOP_URL og BUTIKK_ORIGIN på API-et til
+  # https://korthaien.no.
+  - type: web
+    name: korthaien-butikk
+    runtime: static
+    rootDir: korthaien-kjop/admin
+    buildCommand: npm ci && npm run build:butikk
+    staticPublishPath: ./dist-butikk
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://api.kortsalg.korthaien.no
+
   # Scryfall oppdaterer bulk-filene daglig. Kjøres nattestid.
   - type: cron
     name: korthaien-kjop-import

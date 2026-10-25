@@ -1,3 +1,6 @@
+import { overgangsstatus, gjennomførOvergang } from "./overgang.js";
+import { erAdmin } from "./auth.js";
+import { lagerkilde, settBokSomLagerkilde } from "./lager.js";
 import { leggTilØnske, fjernØnske, hentØnsker, varsleØnsker, ØnskeFeil } from "./onskeliste.js";
 import { bulkSøk } from "./bulksok.js";
 import { sjekkKode, KodeFeil, alleKoder, opprettKode, importerKoder, justerSaldo, endreKode, bevegelser as kodeBevegelser, lagKode } from "./rabattkoder.js";
@@ -76,7 +79,13 @@ app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
 // Frontend ligger på eget subdomene, så CORS må være eksplisitt.
-const TILLATT = (process.env.CORS_ORIGIN || "http://localhost:5173").split(",").map((s) => s.trim());
+// SHOP_URL er alltid med, så butikken på korthaien.no ikke trenger å legges
+// inn to steder.
+const TILLATT = [
+  ...(process.env.CORS_ORIGIN || "http://localhost:5173").split(",").map((s) => s.trim()),
+  ...(() => { try { return process.env.SHOP_URL ? [new URL(process.env.SHOP_URL).origin] : []; } catch { return []; } })(),
+  ...(process.env.BUTIKK_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean),
+];
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && TILLATT.includes(origin)) {
@@ -791,6 +800,96 @@ app.get("/api/konto/kreditt", krevKunde, fang(async (req: any, res: any) => {
 }));
 
 // ── butikk: kurv og kasse ────────────────────────────────────────────────────
+// ── den offentlige butikken ─────────────────────────────────────────────────
+// Samme data som forhåndsvisningen i admin har fått fra /api/admin/…, men
+// åpent og med søketaket. Både butikken på korthaien.no og fanen i admin
+// bruker disse, så de kan ikke vise ulike ting.
+const offentligAdresse = (a: string) =>
+  String(a || "").split(/\r?\n/).filter((l) => !/^[\s+()\d-]{8,}$/.test(l.trim())).join("\n").trim();
+
+app.get("/api/butikk/foretak", grense(REGLER.butikk), fang(async (req: any, res: any) => {
+  const s = await hentSettings();
+  res.json({
+    tema: s.tema,
+    vis_sealed: s.vis_sealed !== false,
+    tix_kreditt_ore: s.tix_kreditt_ore,
+    firmanavn: s.firmanavn,
+    org_nr: s.org_nr,
+    retur_frakt: s.retur_frakt,
+    ship_to: offentligAdresse(s.ship_to),
+    overgang_dato: s.overgang_dato || "",
+    stengt: s.stengt?.aktiv ? { aktiv: true, tittel: s.stengt.tittel || "", tekst: s.stengt.tekst || "" } : null,
+    admin: erAdmin(req),
+  });
+}));
+
+app.get("/api/butikk/katalog", grense(REGLER.butikk), fang(async (req: any, res: any) => {
+  const sett = String(req.query.sett || "").toLowerCase();
+  const tall = (v: any) => (v === undefined || v === "" ? undefined : Number(v));
+  res.json(
+    await butikkvisning({
+      sett,
+      q: req.query.q ? String(req.query.q) : undefined,
+      tekst: req.query.tekst ? String(req.query.tekst) : undefined,
+      rarity: req.query.rarity ? String(req.query.rarity) : undefined,
+      farge: req.query.farge ? String(req.query.farge) : undefined,
+      fargeEksakt: String(req.query.fargeEksakt || "") === "1",
+      type: req.query.type ? String(req.query.type) : undefined,
+      baresalg: String(req.query.baresalg || "") === "1",
+      prisFra: tall(req.query.prisFra),
+      prisTil: tall(req.query.prisTil),
+      finish: req.query.finish ? String(req.query.finish) : undefined,
+      sortering: req.query.sortering ? String(req.query.sortering) : undefined,
+      side: tall(req.query.side),
+      perSide: tall(req.query.perSide) === undefined ? undefined : Math.min(100, tall(req.query.perSide)!),
+    })
+  );
+}));
+
+app.get("/api/butikk/nyeste", grense(REGLER.butikk), fang(async (req: any, res: any) => {
+  res.json({ sett: await forsideSett(Math.min(12, Number(req.query.antall) || 5)) });
+}));
+
+app.get("/api/butikk/kort/:id", grense(REGLER.butikk), fang(async (req: any, res: any) => {
+  const d = await kortdetaljer(String(req.params.id));
+  if (!d) throw new HttpFeil(404, "Fant ikke kortet");
+  res.json(d);
+}));
+
+app.get("/api/butikk/sett/:kode", grense(REGLER.butikk), fang(async (req: any, res: any) => {
+  const info = await settinfo(String(req.params.kode));
+  if (!info) throw new HttpFeil(404, "Fant ikke settet.");
+  res.json({ info });
+}));
+
+app.get("/api/butikk/settliste", grense(REGLER.butikk), fang(async (_req: any, res: any) => {
+  const r = await db().execute(`
+    SELECT s.code, COALESCE(s.visningsnavn, s.name) AS name, s.released_at, s.card_count, s.parent_code,
+           r.enabled
+      FROM sets s JOIN set_rules r ON r.set_code = s.code
+     WHERE r.enabled = 1
+     ORDER BY name COLLATE NOCASE`);
+  res.json({ sett: r.rows });
+}));
+
+app.get("/api/butikk/produkter", grense(REGLER.butikk), fang(async (req: any, res: any) => {
+  const s = await hentSettings();
+  if (s.vis_sealed === false) return res.json({ produkter: [], antall: {} });
+  const type = String(req.query.type || "");
+  res.json({
+    produkter: await hentProdukter({
+      type: erType(type) ? type : undefined,
+      set_code: String(req.query.sett || "") || undefined,
+      barePåLager: true,
+    }),
+    antall: await antallPerType(),
+  });
+}));
+
+app.get("/api/butikk/frakt", grense(REGLER.butikk), fang(async (_req: any, res: any) => {
+  res.json({ alternativer: await hentFrakt(true) });
+}));
+
 app.get("/api/butikk/oppsett", fang(async (_req: any, res: any) => {
   const { hentFrakt } = await import("./frakt.js");
   res.json({
@@ -821,7 +920,31 @@ app.post("/api/butikk/kurv", grense(REGLER.pris), fang(async (req: any, res: any
 }));
 
 app.post("/api/butikk/kasse", grense(REGLER.kasse), kundeValgfri, fang(async (req: any, res: any) => {
+  // Under overgangen er butikken stengt for kundene. Admin kan fortsatt
+  // prøvekjøpe.
+  if ((await hentSettings()).stengt?.aktiv && !erAdmin(req)) {
+    throw new HttpFeil(503, "Butikken er stengt mens vi bytter til ny løsning. Prøv igjen litt senere.");
+  }
   res.json(await åpneKasse(req.body || {}, req.kunde || null));
+}));
+
+// ── overgangen fra Mystore ──────────────────────────────────────────────────
+// Én knapp som tømmer lagerboken og fører Mystore-beholdningen inn som
+// startbeholdning, i én transaksjon, og så bytter butikken til lagerboken.
+// GET viser hva som vil skje; POST gjør det. Nekter hvis det finnes betalte,
+// usendte salgsordrer: salgsbevegelsene deres ville forsvunnet med boken.
+app.get("/api/admin/overgang", krevAdmin, fang(async (_req: any, res: any) => {
+  res.json(await overgangsstatus());
+}));
+
+app.post("/api/admin/overgang", krevAdmin, fang(async (req: any, res: any) => {
+  if (String(req.body?.bekreft || "") !== "OVERGANG") throw new HttpFeil(400, "Skriv OVERGANG for å bekrefte.");
+  try {
+    res.json({ ok: true, ...(await gjennomførOvergang()) });
+  } catch (e: any) {
+    if (e?.status) throw new HttpFeil(e.status, e.message);
+    throw e;
+  }
 }));
 
 app.post("/api/butikk/kasse/:nr/avbryt", fang(async (req: any, res: any) => {
@@ -1595,8 +1718,14 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
     "usd_nok", "buy_pct", "min_buy_ore", "min_order_ore", "min_usd",
     "salg_trapp", "salg_faktor", "salg_avrunding", "default_conditions",
     "default_ladder", "order_expiry_days", "ship_to", "tema", "forside_sett",
-    "firmanavn", "org_nr", "retur_frakt", "toppbanner", "tix_kreditt_ore", "overgang_dato", "vis_sealed",
+    "firmanavn", "org_nr", "retur_frakt", "toppbanner", "tix_kreditt_ore", "overgang_dato", "vis_sealed", "stengt",
   ];
+  if (req.body && "stengt" in req.body) {
+    const b = req.body.stengt;
+    req.body.stengt = b
+      ? { aktiv: !!b.aktiv, tittel: String(b.tittel ?? "").trim().slice(0, 120), tekst: String(b.tekst ?? "").trim().slice(0, 600) }
+      : null;
+  }
   if (req.body && "vis_sealed" in req.body) req.body.vis_sealed = !!req.body.vis_sealed;
   if (req.body && "overgang_dato" in req.body) {
     const d = String(req.body.overgang_dato || "").trim();
@@ -1706,7 +1835,9 @@ export function stopp() {
 }
 
 migrate()
-  .then(() => {
+  .then(async () => {
+    // Har overgangen skjedd, leser butikken lagerboken.
+    settBokSomLagerkilde((await hentSettings()).lagerkilde === "bok");
     server = app.listen(PORT, () => console.log(`Korthaien Kjøp lytter på :${PORT}`));
     // Rydder reservasjoner hver time, så kvoter ikke blir stående låst.
     // unref, slik at en test som importerer serveren ikke holdes i live av

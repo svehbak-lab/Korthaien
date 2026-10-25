@@ -143,15 +143,15 @@ function ButikkSider({ onFeil }) {
   const produktantallVist = visSealed ? produktantall : {};
 
   useEffect(() => {
-    api.innstillinger().then((s) => { setTema(s.tema || "dagens"); setVisSealed(s.vis_sealed !== false); }).catch(() => setTema("dagens"));
+    kapi.foretak().then((s) => { setTema(s.tema || "dagens"); setVisSealed(s.vis_sealed !== false); }).catch(() => setTema("dagens"));
   }, []);
 
   useEffect(() => {
-    api.produkter({ bareLager: 1 }).then((r) => setProduktantall(r.antall || {})).catch(() => {});
+    kapi.produkter({ bareLager: 1 }).then((r) => setProduktantall(r.antall || {})).catch(() => {});
   }, []);
 
   useEffect(() => {
-    api.sett().then((r) => setAlle(r.sett.filter((s) => Number(s.enabled)))).catch(onFeil);
+    kapi.settliste().then((r) => setAlle(r.sett.filter((s) => Number(s.enabled)))).catch(onFeil);
   }, []);
 
   // Fakta om settet du staar i. Samme svar bestemmer om Sealed-fanen vises
@@ -163,7 +163,7 @@ function ButikkSider({ onFeil }) {
     }
     let avbrutt = false;
     setSettinfo(null);
-    api.settinfo(sett).then((r) => !avbrutt && setSettinfo(r.info)).catch(() => {});
+    kapi.settinfo(sett).then((r) => !avbrutt && setSettinfo(r.info)).catch(() => {});
     return () => {
       avbrutt = true;
     };
@@ -184,7 +184,7 @@ function ButikkSider({ onFeil }) {
   useEffect(() => {
     setLaster(true);
     const t = setTimeout(() => {
-      api.butikk({
+      kapi.katalog({
         sett: sett || "", finish, sortering, side, perSide, ...f,
         rarity: f.rarity.join(","), farge: f.farge.join(","), type: f.type.join(","),
       })
@@ -1233,7 +1233,7 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil, onLoggInn }) {
 
   useEffect(() => {
     setData(null);
-    api.butikkKort(id)
+    kapi.kort(id)
       .then((d) => {
         setData(d);
         const første = d.kort.varianter[0];
@@ -1404,7 +1404,7 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
   // huske aa bytte den naar et sett kommer inn.
   useEffect(() => {
     let avbrutt = false;
-    api
+    kapi
       .nyesteSett()
       .then((d) => !avbrutt && setNyeste(d.sett))
       .catch(() => !avbrutt && setNyeste([]));
@@ -1417,8 +1417,8 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
   // allerede, og baresalg gjør at den bare viser det du faktisk har.
   useEffect(() => {
     let avbrutt = false;
-    api
-      .butikk({ sortering: "nyeste", perSide: 12, baresalg: true })
+    kapi
+      .katalog({ sortering: "nyeste", perSide: 12, baresalg: true })
       .then((d) => !avbrutt && setKort(d.kort))
       .catch((e) => !avbrutt && onFeil(e));
     return () => {
@@ -1620,7 +1620,7 @@ function Produktliste({ type, setKode, skjulTittel, onFeil }) {
   useEffect(() => {
     let avbrutt = false;
     setProdukter(null);
-    api
+    kapi
       .produkter({ type, sett: setKode || "", bareLager: 1 })
       .then((r) => !avbrutt && setProdukter(r.produkter || []))
       .catch((e) => {
