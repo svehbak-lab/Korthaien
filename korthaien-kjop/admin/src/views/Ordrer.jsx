@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api, kroner, dato, dagerTil, CONDITIONS, CONDITION_NAVN } from "../api.js";
 import Statistikk from "./Statistikk.jsx";
 
@@ -67,6 +67,7 @@ export default function Ordrer({ onFeil, onAntall }) {
           ordre={o}
           åpen={åpen === o.id}
           onVeksle={() => setÅpen(åpen === o.id ? null : o.id)}
+          onLukk={() => setÅpen(null)}
           onEndret={() => last(true)}
           onFeil={onFeil}
         />
@@ -75,7 +76,17 @@ export default function Ordrer({ onFeil, onAntall }) {
   );
 }
 
-function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
+function Ordre({ ordre, åpen, onVeksle, onLukk, onEndret, onFeil }) {
+  const panel = useRef(null);
+  // Når ordren er gjort opp, er jobben med den ferdig: lukk den og vis
+  // overskriften, så neste ordre ligger rett under — uten å bla opp.
+  function ferdig() {
+    onLukk();
+    requestAnimationFrame(() => {
+      const el = panel.current;
+      if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }
   const s = STATUS[ordre.status] || STATUS.pending;
   const dager = dagerTil(ordre.expires_at);
   const antallKort = ordre.linjer.reduce((n, l) => n + l.qty, 0);
@@ -98,7 +109,7 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
   }
 
   return (
-    <div className="panel">
+    <div className="panel" ref={panel} style={{ scrollMarginTop: 12 }}>
       <header>
         <button className="knapp liten" onClick={onVeksle} aria-expanded={åpen}>
           {åpen ? "Skjul" : "Åpne"}
@@ -157,7 +168,7 @@ function Ordre({ ordre, åpen, onVeksle, onEndret, onFeil }) {
           <Logg ordre={ordre} />
 
           {["received", "stocked"].includes(ordre.status) && (
-            <Oppgjør ordre={ordre} onEndret={onEndret} onFeil={onFeil} />
+            <Oppgjør ordre={ordre} onEndret={onEndret} onFerdig={ferdig} onFeil={onFeil} />
           )}
 
           <div className="spred" style={{ marginTop: 16 }}>
@@ -740,7 +751,7 @@ function NyLinje({ ordre, onEndret, onFeil }) {
 // Koden lages manuelt i Mystore som et fastbeløp, og limes inn her. Først når
 // den ligger inne kan ordren gjøres opp — ellers ville den havnet i arkivet
 // uten at kunden hadde fått noe.
-function Oppgjør({ ordre, onEndret, onFeil }) {
+function Oppgjør({ ordre, onEndret, onFerdig, onFeil }) {
   const [kode, setKode] = useState(ordre.discount_code || "");
   const [notat, setNotat] = useState(ordre.credit_note || "");
   const [jobber, setJobber] = useState(false);
@@ -773,6 +784,7 @@ function Oppgjør({ ordre, onEndret, onFeil }) {
       // Mystore tellingen, og derfor må kortene være lagt inn der først.
       if (gjørOpp) await api.endreOrdre(ordre.id, { status: "stocked", varsle: false });
       onEndret();
+      if (gjørOpp) onFerdig?.();
     } catch (e) {
       onFeil(e);
     } finally {
