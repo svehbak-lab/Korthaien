@@ -2,7 +2,7 @@ import { Ønske } from "./Onske.jsx";
 import SettStabel from "./SettStabel.jsx";
 import Bulksok from "./Bulksok.jsx";
 import Tilstandsguide from "./Tilstandsguide.jsx";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { api, kroner, CONDITIONS } from "../api.js";
 import Bunn, { Kontakt, Frakt as Fraktside, Kreditt as Kredittside, OmOss, Retur, Tix, Vilkar, Personvern } from "./Bunn.jsx";
 import { LeggProduktIKurven, HandelProvider, useHandel, LeggIKurven, KurvSide, Kasse, Kvittering, LoggInn, NyttPassord, MinSide, Bekreft } from "./Handel.jsx";
@@ -1438,6 +1438,32 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil, onLoggInn }) {
 // Det kunden møter før lista: hva stedet er, et søkefelt, den andre halvparten
 // av butikken, og noen kort å se på. Ingen filtre — de hører til når man
 // allerede leter etter noe bestemt.
+// Rutenettet fylles med så mange kort det er plass til i hele rader: sju per
+// rad på en bred skjerm gir fjorten, fem gir ti. Ingen halvtom siste rad.
+function FulleRader({ kort, rader, onÅpne }) {
+  const ref = useRef(null);
+  const [kolonner, setKolonner] = useState(6);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const mål = () => {
+      const n = getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length;
+      if (n) setKolonner(n);
+    };
+    mål();
+    const ro = new ResizeObserver(mål);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const maks = Math.min(kort.length, kolonner * rader);
+  const antall = Math.max(Math.min(kolonner, kort.length), Math.floor(maks / kolonner) * kolonner);
+  return (
+    <div className="b-rute" ref={ref}>
+      {kort.slice(0, antall).map((k) => <Flis key={k.id} kort={k} onÅpne={() => onÅpne(k.id)} />)}
+    </div>
+  );
+}
+
 function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }) {
   const [kort, setKort] = useState(null);
   const [nyeste, setNyeste] = useState(null);
@@ -1467,7 +1493,7 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
   useEffect(() => {
     let avbrutt = false;
     kapi
-      .katalog({ sortering: "nyeste", perSide: 12, baresalg: true })
+      .katalog({ sortering: "nyeste", perSide: 30, baresalg: true })
       .then((d) => !avbrutt && setKort(d.kort))
       .catch((e) => !avbrutt && onFeil(e));
     return () => {
@@ -1584,11 +1610,7 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
       {kort !== null && kort.length === 0 && (
         <div className="tom">Ingen kort på lager ennå.</div>
       )}
-      {kort !== null && kort.length > 0 && (
-        <div className="b-rute">
-          {kort.map((k) => <Flis key={k.id} kort={k} onÅpne={() => onÅpne(k.id)} />)}
-        </div>
-      )}
+      {kort !== null && kort.length > 0 && <FulleRader kort={kort} rader={2} onÅpne={onÅpne} />}
 
       <div className="b-info">
         <div>
