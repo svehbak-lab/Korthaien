@@ -11,6 +11,10 @@ import { db, hentSettings } from "./db.js";
 // Oppsummeringen er bilaget i regnskapet. Derfor står det bare det et bilag
 // trenger: hvem, hvilken periode, salg med moms og salg uten moms. Momsen på
 // kortene beregnes senere etter avansemetoden, og står ikke her.
+//
+// Beløpene er pengene som kom inn (kort/Vipps). Den delen av en ordre som er
+// betalt med kreditt, er ikke med, og en ordre betalt helt med kreditt står
+// ikke i listen.
 
 export type Salgsrad = {
   dato: string; // norsk dato, ÅÅÅÅ-MM-DD
@@ -76,6 +80,7 @@ export async function salgsrapport(fra: string, til: string): Promise<Salgsrappo
     sql: `SELECT ordrenr, kunde_navn, uten_mva_ore, med_mva_ore, betalt_at
             FROM salgsordrer
            WHERE status IN ('betalt', 'pakket', 'sendt', 'kansellert') AND betalt_at >= ? AND betalt_at < ?
+             AND uten_mva_ore + med_mva_ore <> 0
            ORDER BY betalt_at, ordrenr`,
     args: [før, etter],
   });
@@ -85,7 +90,8 @@ export async function salgsrapport(fra: string, til: string): Promise<Salgsrappo
   const k = await db().execute({
     sql: `SELECT ordrenr, kunde_navn, uten_mva_ore, med_mva_ore, kansellert_at
             FROM salgsordrer
-           WHERE status = 'kansellert' AND kansellert_at >= ? AND kansellert_at < ?`,
+           WHERE status = 'kansellert' AND kansellert_at >= ? AND kansellert_at < ?
+             AND uten_mva_ore + med_mva_ore <> 0`,
     args: [før, etter],
   });
 

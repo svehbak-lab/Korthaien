@@ -783,6 +783,21 @@ app.get("/api/admin/salg/ordrer", krevAdmin, fang(async (req: any, res: any) => 
 app.get("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: any) => {
   const o = await hentSalgsordre(String(req.params.nr));
   if (!o) throw new HttpFeil(404, "Fant ikke ordren");
+  // Bilde og lagerbeholdning nå, så du kan se kunsten og ta stikkprøver av
+  // lageret mens du plukker. Bare i admin.
+  const ider = o.linjer.map((l: any) => String(l.card_id));
+  const [lagerNå, bilder] = await Promise.all([
+    beholdning(ider),
+    ider.length
+      ? db().execute({ sql: `SELECT id, image_uri FROM cards WHERE id IN (${ider.map(() => "?").join(",")})`, args: ider })
+      : Promise.resolve({ rows: [] as any[] }),
+  ]);
+  const bilde = new Map((bilder.rows as any[]).map((x) => [String(x.id), x.image_uri]));
+  o.linjer = o.linjer.map((l: any) => ({
+    ...l,
+    image_uri: bilde.get(String(l.card_id)) || null,
+    paa_lager: lagerNå.get(`${l.card_id}:${l.finish}:${l.condition}`) || 0,
+  }));
   res.json({ ordre: o });
 }));
 

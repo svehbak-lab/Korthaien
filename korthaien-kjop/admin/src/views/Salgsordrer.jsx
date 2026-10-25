@@ -96,7 +96,7 @@ export default function Salgsordrer({ onFeil, onMelding, onAntall }) {
                 <th>{fane === "apen" ? "Opprettet" : "Betalt"}</th>
                 <th>Frakt</th>
                 <th className="h">Kort</th>
-                <th className="h">Sum</th>
+                <th className="h" title="Betalt med kort/Vipps. Kreditt er ikke med.">Sum</th>
                 {fane === "apen" && <th>Status</th>}
                 {fane === "sendt" && <th>Sendt</th>}
               </tr>
@@ -109,7 +109,12 @@ export default function Salgsordrer({ onFeil, onMelding, onAntall }) {
                   <td>{tid(fane === "apen" ? o.created_at : o.betalt_at)}</td>
                   <td>{o.frakt_navn}</td>
                   <td className="h tall">{o.antall_kort}</td>
-                  <td className="h tall">{kroner(Number(o.varer_ore) + Number(o.frakt_ore))}</td>
+                  <td className="h tall">
+                    {kroner(Number(o.stripe_ore) || 0)}
+                    {Number(o.kreditt_ore) > 0 && (
+                      <div className="dempet" style={{ fontSize: 11.5 }}>+ {kroner(o.kreditt_ore)} kreditt</div>
+                    )}
+                  </td>
                   {fane === "apen" && <td>{STATUS[o.status]}</td>}
                   {fane === "sendt" && <td>{tid(o.sendt_at)}</td>}
                 </tr>
@@ -185,6 +190,14 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
   const [spor, setSpor] = useState("");
   const [notat, setNotat] = useState("");
   const [jobber, setJobber] = useState(false);
+  const [vis, setVis] = useState(null);
+
+  useEffect(() => {
+    if (!vis) return;
+    const lukk = (e) => e.key === "Escape" && setVis(null);
+    window.addEventListener("keydown", lukk);
+    return () => window.removeEventListener("keydown", lukk);
+  }, [vis]);
 
   useEffect(() => {
     api.salgsordre(nr).then((r) => {
@@ -211,6 +224,22 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
 
   return (
     <>
+      {vis && (
+        <div className="kortvisning" onClick={() => setVis(null)} role="dialog" aria-label={vis.card_name}>
+          <div onClick={(e) => e.stopPropagation()}>
+            {vis.image_uri ? (
+              <img src={vis.image_uri.replace("/normal/", "/large/")} alt={vis.card_name} />
+            ) : (
+              <div className="kortvisning-tom">Ingen bilde</div>
+            )}
+            <div className="kortvisning-tekst">
+              <b>{vis.card_name}</b>
+              <span>{vis.set_name}{vis.collector_number ? ` #${vis.collector_number}` : ""}{vis.utgave ? ` · ${vis.utgave}` : ""}{vis.finish === "foil" ? " · foil" : ""}</span>
+            </div>
+            <button type="button" className="knapp liten" onClick={() => setVis(null)}>Lukk</button>
+          </div>
+        </div>
+      )}
       <button className="knapp liten" style={{ marginBottom: 12 }} onClick={onLukk}>← Alle salgsordrer</button>
       <div className="rad-flex" style={{ alignItems: "baseline", marginBottom: 10 }}>
         <h2 style={{ margin: 0 }} className="kode">{o.ordrenr}</h2>
@@ -228,7 +257,10 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
           </header>
           <table>
             <thead>
-              <tr><th style={{ width: 30 }} /><th>Sett</th><th>Kort</th><th>#</th><th>Tilstand</th><th className="h">Antall</th><th className="h">Sum</th></tr>
+              <tr>
+                <th style={{ width: 74 }}>Antall</th><th>Kort</th><th>Sett</th><th>#</th><th>Tilstand</th>
+                <th className="h" title="Beholdningen nå, etter denne ordren">På lager</th><th className="h">Sum</th>
+              </tr>
             </thead>
             <tbody>
               {o.linjer.map((l) => {
@@ -243,19 +275,31 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                       setPlukket(ny);
                     }}
                   >
-                    <td><input type="checkbox" checked={ok} readOnly /></td>
-                    <td style={{ fontSize: 12.5 }}>
-                      {l.set_name}
-                      <div className="dempet" style={{ fontSize: 11.5 }}>{l.rarity}</div>
+                    <td>
+                      <span className="rad-flex" style={{ gap: 8 }}>
+                        <input type="checkbox" checked={ok} readOnly />
+                        <span className="tall" style={{ fontSize: 15, fontWeight: Number(l.antall) > 1 ? 800 : 500 }}>
+                          {l.antall}
+                        </span>
+                      </span>
                     </td>
                     <td>
-                      <b>{l.card_name}</b>
+                      <button
+                        type="button"
+                        className="kortnavn-knapp"
+                        title="Vis kortet"
+                        onClick={(e) => { e.stopPropagation(); setVis(l); }}
+                      >
+                        {l.card_name}
+                      </button>
                       {l.finish === "foil" && <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>foil</span>}
                       {l.utgave && <div style={{ fontSize: 12, fontWeight: 600, color: "var(--aksent, #1d4ed8)" }}>{l.utgave}</div>}
+                      <div className="dempet" style={{ fontSize: 11.5 }}>{l.rarity}</div>
                     </td>
+                    <td style={{ fontSize: 12.5 }}>{l.set_name}</td>
                     <td className="tall">{l.collector_number}</td>
                     <td>{l.condition}</td>
-                    <td className="h tall" style={{ fontWeight: Number(l.antall) > 1 ? 700 : 400 }}>{l.antall}</td>
+                    <td className="h tall">{l.paa_lager ?? "—"}</td>
                     <td className="h tall" style={{ whiteSpace: "nowrap" }}>{kroner(l.enhet_ore * l.antall)}</td>
                   </tr>
                 );
@@ -287,11 +331,20 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
             <div className="krop">
               <table>
                 <tbody>
-                  <tr><td>Kort</td><td className="h tall">{kroner(o.varer_ore)}</td></tr>
+                  <tr><td>Kort ({o.antall_kort} stk.)</td><td className="h tall">{kroner(o.varer_ore)}</td></tr>
                   <tr><td>Frakt</td><td className="h tall">{kroner(o.frakt_ore)}</td></tr>
-                  <tr><td><b>Totalt</b></td><td className="h tall"><b>{kroner(Number(o.varer_ore) + Number(o.frakt_ore))}</b></td></tr>
-                  {Number(o.kreditt_ore) > 0 && <tr><td className="dempet">Kreditt</td><td className="h tall dempet">{kroner(o.kreditt_ore)}</td></tr>}
-                  {Number(o.stripe_ore) > 0 && <tr><td className="dempet">Kort/Vipps</td><td className="h tall dempet">{kroner(o.stripe_ore)}</td></tr>}
+                  {Number(o.kreditt_ore) > 0 && (
+                    <tr><td>Kreditt</td><td className="h tall">−{kroner(o.kreditt_ore)}</td></tr>
+                  )}
+                  <tr style={{ borderTop: "2px solid var(--strek-sterk, #9aa3b2)" }}>
+                    <td>
+                      <b>Totalt</b>
+                      <div className="dempet" style={{ fontSize: 12 }}>
+                        {Number(o.stripe_ore) > 0 ? "(betalt kort/Vipps)" : "(alt betalt med kreditt)"}
+                      </div>
+                    </td>
+                    <td className="h tall" style={{ fontSize: 18 }}><b>{kroner(Number(o.stripe_ore) || 0)}</b></td>
+                  </tr>
                 </tbody>
               </table>
             </div>

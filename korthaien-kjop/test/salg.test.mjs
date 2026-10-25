@@ -150,12 +150,10 @@ test("kreditt som dekker alt: ordren er betalt, lager og kreditt bokført, linje
   assert.equal(await lager(vanlig), 8);
   assert.equal(await kreditt.saldo("selger@eksempel.no"), 30000 - 18500);
 
-  // Rapporten har salget: kort uten mva, frakt med mva.
+  // Rapporten teller penger. En ordre betalt helt med kreditt står ikke der.
   const dag = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(new Date());
   const rap = await salgsrapport(dag, dag);
-  const rad = rap.rader.find((x) => x.ordrenr === r.ordrenr);
-  assert.equal(rad.uten_mva_ore, 13000);
-  assert.equal(rad.med_mva_ore, 5500);
+  assert.equal(rap.rader.find((x) => x.ordrenr === r.ordrenr), undefined);
 });
 
 test("et kort som er holdt av i en åpen kasse, kan ikke kjøpes av en annen", async () => {
@@ -228,7 +226,8 @@ test("statistikken teller ordrer og kort denne måneden, ikke kansellerte", asyn
   const s = await salg.salgsstatistikk();
   assert.equal(s.denne.ordrer, 1);
   assert.equal(s.denne.kort, 4);
-  assert.equal(s.denne.omsetning_ore, 13000 + 5500);
+  // Betalt helt med kreditt: ingen penger inn.
+  assert.equal(s.denne.omsetning_ore, 0);
 });
 
 test("kundens ordrehistorikk har bare egne ordrer, og ikke forlatte kasser", async () => {
@@ -353,6 +352,14 @@ test("kansellering til kort: bare kortdelen går til kortet, kredittdelen tilbak
     assert.equal(Number(betalt.kreditt_ore), 5000);
     assert.equal(Number(betalt.stripe_ore), 5000);
     assert.equal(await kreditt.saldo(kari.email), 0);
+
+    // Rapporten: bare pengene (50 kr), frakten først — så alt er frakt med mva.
+    const dag = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(new Date());
+    const rad = (await salgsrapport(dag, dag)).rader.find((x) => x.ordrenr === r.ordrenr);
+    assert.equal(rad.sum_ore, 5000);
+    assert.equal(rad.med_mva_ore, 5000);
+    assert.equal(rad.uten_mva_ore, 0);
+    assert.equal((await salg.salgsstatistikk()).denne.omsetning_ore >= 5000, true);
 
     await salg.kanseller(r.ordrenr, "Angret", "kort");
     assert.equal(refusjoner.length, 1);

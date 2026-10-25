@@ -362,6 +362,16 @@ async function leggTilNyeKolonner(): Promise<void> {
 
   if (lager.size) await ryddFeilkoblinger();
 
+  // Ordrer betalt før rapportene gikk over til pengebeløpet: delvis betalt
+  // med kreditt, men ført med hele ordresummen. Engangs i praksis — etterpå
+  // er summen lik stripe_ore og raden treffes ikke igjen.
+  if ((await kolonner("salgsordrer")).has("uten_mva_ore")) {
+    await db().execute(`UPDATE salgsordrer
+      SET med_mva_ore = MIN(frakt_ore, stripe_ore), uten_mva_ore = stripe_ore - MIN(frakt_ore, stripe_ore)
+      WHERE betalt_at IS NOT NULL AND kreditt_ore > 0
+        AND uten_mva_ore + med_mva_ore = varer_ore + frakt_ore`);
+  }
+
   const ku = await kolonner("kunder");
   if (ku.size && !ku.has("epost_bekreftet_at")) {
     await db().execute("ALTER TABLE kunder ADD COLUMN epost_bekreftet_at TEXT");

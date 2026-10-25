@@ -420,8 +420,13 @@ export async function fullfør(ordreId: number, kilde: string, betalingsId?: str
   try {
     // Statusen er låsen. Kommer samme betaling to ganger samtidig, er det
     // bare én av dem som endrer raden.
+    //
+    // Rapportene teller pengene som kom inn — det kunden betalte med kort
+    // eller Vipps. Kreditten er oppgjør for kort kunden solgte deg, ikke nye
+    // penger. Frakten (med mva) regnes betalt med penger først; resten av
+    // pengebeløpet er kort (avansemetoden).
     const opp = await tx.execute({
-      sql: `UPDATE salgsordrer SET status = 'betalt', betalt_at = ?, uten_mva_ore = varer_ore, med_mva_ore = frakt_ore,
+      sql: `UPDATE salgsordrer SET status = 'betalt', betalt_at = ?, uten_mva_ore = stripe_ore - MIN(frakt_ore, stripe_ore), med_mva_ore = MIN(frakt_ore, stripe_ore),
               stripe_betaling = COALESCE(?, stripe_betaling),
               admin_notat = CASE WHEN status = 'utlopt' OR utloper_at < ?
                 THEN trim(COALESCE(admin_notat, '') || ' Betalt etter at reservasjonen var utløpt — sjekk at kortene finnes.')
@@ -794,14 +799,15 @@ async function tallForMåned(mnd: string) {
   const fra = new Date(Date.UTC(å, m - 1, 1) - 86400000).toISOString();
   const til = new Date(Date.UTC(å, m, 1) + 86400000).toISOString();
   const r = await db().execute({
-    sql: `SELECT betalt_at, varer_ore, frakt_ore, antall_kort FROM salgsordrer
+    sql: `SELECT betalt_at, stripe_ore, antall_kort FROM salgsordrer
            WHERE status IN ('betalt', 'pakket', 'sendt') AND betalt_at >= ? AND betalt_at < ?`,
     args: [fra, til],
   });
   let omsetning = 0, ordrer = 0, kort = 0;
   for (const x of r.rows as any[]) {
     if (osloMåned(String(x.betalt_at)) !== mnd) continue;
-    omsetning += Number(x.varer_ore) + Number(x.frakt_ore);
+    // Pengene som kom inn, som i rapportene. Kreditt telles ikke.
+    omsetning += Number(x.stripe_ore) || 0;
     ordrer += 1;
     kort += Number(x.antall_kort);
   }
