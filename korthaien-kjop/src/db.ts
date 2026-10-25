@@ -476,6 +476,9 @@ export type Settings = {
   // Hva en MTGO-tix gir i butikkreditt. Tix byttes online etter avtale;
   // siden i butikken viser prisen og regner ut kreditten.
   tix_kreditt_ore: number;
+  // Dagen den nye butikken tok over (ÅÅÅÅ-MM-DD). Står den, sier
+  // innloggingen at kunder fra før må velge nytt passord første gang.
+  overgang_dato: string;
 };
 
 const STANDARD: Settings = {
@@ -504,6 +507,7 @@ const STANDARD: Settings = {
   org_nr: "914503493",
   retur_frakt: "kunde",
   tix_kreditt_ore: 1000,
+  overgang_dato: "",
 };
 
 export async function hentSettings(): Promise<Settings> {

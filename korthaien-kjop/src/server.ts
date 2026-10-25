@@ -762,6 +762,7 @@ app.get("/api/butikk/oppsett", fang(async (_req: any, res: any) => {
     betaling: harStripe(),
     google: harGoogle(),
     reservasjon_min: RESERVASJON_MIN,
+    overgang_dato: (await hentSettings()).overgang_dato || "",
   });
 }));
 
@@ -1524,8 +1525,13 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
     "usd_nok", "buy_pct", "min_buy_ore", "min_order_ore", "min_usd",
     "salg_trapp", "salg_faktor", "salg_avrunding", "default_conditions",
     "default_ladder", "order_expiry_days", "ship_to", "tema", "forside_sett",
-    "firmanavn", "org_nr", "retur_frakt", "toppbanner", "tix_kreditt_ore",
+    "firmanavn", "org_nr", "retur_frakt", "toppbanner", "tix_kreditt_ore", "overgang_dato",
   ];
+  if (req.body && "overgang_dato" in req.body) {
+    const d = String(req.body.overgang_dato || "").trim();
+    if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new HttpFeil(400, "Datoen må være på formen ÅÅÅÅ-MM-DD.");
+    req.body.overgang_dato = d;
+  }
   if (req.body && "tix_kreditt_ore" in req.body) {
     const n = Math.round(Number(req.body.tix_kreditt_ore));
     if (!Number.isFinite(n) || n < 0 || n > 100000) throw new HttpFeil(400, "Ugyldig pris per tix.");

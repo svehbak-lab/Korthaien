@@ -27,7 +27,7 @@ const SPALTER = [
   {
     navn: "Min konto",
     punkter: [
-      { tekst: "Logg inn" },
+      { tekst: "Logg inn", skjerm: "konto" },
       { tekst: "Finn ordren min", url: BUYLIST },
       { tekst: "Mine salg til Korthaien", url: BUYLIST },
       { tekst: "Ønskeliste" },

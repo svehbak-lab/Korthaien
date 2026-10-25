@@ -127,7 +127,7 @@ export default function Kreditt({ onFeil }) {
 }
 
 // Én kunde: saldoen, boka, og de to måtene å endre den på.
-function Konto({ epost, onLukk, onFeil }) {
+export function Konto({ epost, onLukk, onFeil, tilbake = "← Alle kontoer", navn }) {
   const [adresse, setAdresse] = useState(epost);
   const [data, setData] = useState(null);
   const [modus, setModus] = useState("legg");
@@ -176,12 +176,14 @@ function Konto({ epost, onLukk, onFeil }) {
   return (
     <>
       <div className="rad-flex" style={{ marginBottom: 12 }}>
-        <button className="knapp liten" onClick={onLukk}>← Alle kontoer</button>
+        <button className="knapp liten" onClick={onLukk}>{tilbake}</button>
       </div>
 
       <div className="panel">
         <header>
-          <h3>{adresse || "Ny konto"}</h3>
+          <h3>
+            {navn ? <>{navn} <span className="dempet" style={{ fontWeight: 400 }}>{adresse}</span></> : adresse || "Ny kreditt"}
+          </h3>
           {data && (
             <span className="sum" style={{ marginLeft: "auto" }}>
               {kroner(data.saldo_ore)}

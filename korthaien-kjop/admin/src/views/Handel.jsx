@@ -1,3 +1,4 @@
+import { Overgangstekst } from "./Kunder.jsx";
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { kunde as kapi, kroner } from "../api.js";
 
@@ -608,6 +609,11 @@ export function LoggInn({ onInne, startmodus = "inn" }) {
   const [feil, setFeil] = useState("");
   const [melding, setMelding] = useState("");
   const [sender, setSender] = useState(false);
+  const [overgang, setOvergang] = useState("");
+
+  useEffect(() => {
+    kapi.oppsett().then((o) => setOvergang(o.overgang_dato || "")).catch(() => {});
+  }, []);
 
   async function send(e) {
     e.preventDefault();
@@ -633,8 +639,19 @@ export function LoggInn({ onInne, startmodus = "inn" }) {
 
   return (
     <div className="panel" style={{ maxWidth: 420, margin: "10px auto" }}>
-      <header><h3>{modus === "inn" ? "Logg inn" : modus === "ny" ? "Ny konto" : "Glemt passord"}</h3></header>
+      <header><h3>{modus === "inn" ? "Logg inn" : modus === "ny" ? "Ny konto" : "Velg nytt passord"}</h3></header>
       <form className="krop skjema" onSubmit={send}>
+        {overgang && modus !== "glemt" && (
+          <div className="varsel info" style={{ fontSize: 13.5 }}>
+            <Overgangstekst dato={overgang} />
+          </div>
+        )}
+        {modus === "glemt" && (
+          <p className="dempet" style={{ margin: 0, fontSize: 13.5 }}>
+            Skriv e-postadressen din, så sender vi en lenke der du velger passord. Det gjelder også
+            første gang du logger inn i den nye butikken.
+          </p>
+        )}
         {feil && <div className="varsel feil">{feil}</div>}
         {melding && <div className="varsel ok">{melding}</div>}
         {modus === "ny" && <label>Navn<input autoComplete="name" value={navn} onChange={(e) => setNavn(e.target.value)} /></label>}
@@ -669,7 +686,11 @@ export function LoggInn({ onInne, startmodus = "inn" }) {
         <div className="rad-flex" style={{ justifyContent: "space-between", marginTop: 14, fontSize: 13.5 }}>
           {modus !== "inn" && <button type="button" className="lenke" onClick={() => setModus("inn")}>Har konto? Logg inn</button>}
           {modus !== "ny" && <button type="button" className="lenke" onClick={() => setModus("ny")}>Lag ny konto</button>}
-          {modus !== "glemt" && <button type="button" className="lenke" onClick={() => setModus("glemt")}>Glemt passord?</button>}
+          {modus !== "glemt" && (
+            <button type="button" className="lenke" onClick={() => setModus("glemt")}>
+              {overgang ? "Første gang her? / Glemt passord" : "Glemt passord?"}
+            </button>
+          )}
         </div>
         {modus === "ny" && (
           <p className="dempet" style={{ fontSize: 12.5, marginBottom: 0 }}>

@@ -188,7 +188,6 @@ const ADMINFANER = [
   { id: "utsalg", navn: "Utsalg" },
   { id: "frakt", navn: "Frakt" },
   { id: "kunder", navn: "Kunder" },
-  { id: "kreditt", navn: "Kreditt" },
   { id: "rapporter", navn: "Rapporter" },
   { id: "utseende", navn: "Utseende" },
   { id: "innlogging", navn: "Innlogging" },

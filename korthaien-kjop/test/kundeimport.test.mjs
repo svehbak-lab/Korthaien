@@ -63,3 +63,14 @@ test("oversikten teller kontoene", async () => {
   assert.equal(o.tall.mystore_ikke_aktivert, 1);
   assert.equal((await konto.kundeoversikt("nordmann")).kunder.length, 1);
 });
+
+test("selgere med kreditt men uten konto står også i kundelisten, med saldo", async () => {
+  await db().execute({ sql: "INSERT INTO kreditt_bevegelser (email, ore, grunn, created_at) VALUES ('selger@eksempel.no', 25000, 'manuell', '2026-10-01T00:00:00Z')" });
+  await db().execute({ sql: "INSERT INTO kreditt_bevegelser (email, ore, grunn, created_at) VALUES ('ola@eksempel.no', 5000, 'manuell', '2026-10-01T00:00:00Z')" });
+  const o = await konto.kundeoversikt("");
+  assert.equal(o.antall, 3);
+  const selger = o.kunder.find((k) => k.email === "selger@eksempel.no");
+  assert.equal(selger.kilde, "kreditt");
+  assert.equal(Number(selger.kreditt_ore), 25000);
+  assert.equal(Number(o.kunder.find((k) => k.email === "ola@eksempel.no").kreditt_ore), 5000);
+});

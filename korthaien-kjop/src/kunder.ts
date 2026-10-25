@@ -548,6 +548,21 @@ export async function importerMystoreKunder(tekst: string): Promise<{
 }
 
 // ── oversikt i admin ────────────────────────────────────────────────────────
+// Alle med konto, pluss de som har kreditt uten konto (selgere fra
+// kjøpssiden som ikke har logget inn). Kreditten følger e-postadressen, så de
+// skal kunne finnes og få kreditt endret her.
+const ALLE = `
+  SELECT k.id, k.email, k.navn, k.kilde, k.created_at, k.sist_inne_at, k.epost_bekreftet_at,
+         k.passord_hash IS NOT NULL AS har_passord, k.google_sub IS NOT NULL AS har_google,
+         k.poststed, k.mystore_ordrer, k.mystore_ordreverdi_ore,
+         (SELECT COUNT(*) FROM salgsordrer o WHERE o.kunde_id = k.id AND o.status IN ('betalt','pakket','sendt')) AS ordrer,
+         (SELECT COALESCE(SUM(b.ore), 0) FROM kreditt_bevegelser b WHERE b.email = k.email) AS kreditt_ore
+    FROM kunder k
+  UNION ALL
+  SELECT NULL, b.email, '', 'kreditt', MIN(b.created_at), NULL, NULL, 0, 0, NULL, NULL, NULL, 0, SUM(b.ore)
+    FROM kreditt_bevegelser b
+   WHERE b.email NOT IN (SELECT email FROM kunder)
+   GROUP BY b.email`;
 export async function kundeoversikt(q: string, side = 0) {
   const s = `%${String(q || "").trim().toLowerCase()}%`;
   const per = 50;
@@ -563,18 +578,14 @@ export async function kundeoversikt(q: string, side = 0) {
              SUM(sist_inne_at >= datetime('now', '-30 days')) AS inne_30
         FROM kunder`),
     db().execute({
-      sql: `SELECT k.id, k.email, k.navn, k.kilde, k.created_at, k.sist_inne_at, k.epost_bekreftet_at,
-                   k.passord_hash IS NOT NULL AS har_passord, k.google_sub IS NOT NULL AS har_google,
-                   k.poststed, k.mystore_ordrer, k.mystore_ordreverdi_ore,
-                   (SELECT COUNT(*) FROM salgsordrer o WHERE o.kunde_id = k.id AND o.status IN ('betalt','pakket','sendt')) AS ordrer
-              FROM kunder k
-             WHERE ? = '%%' OR lower(k.email) LIKE ? OR lower(k.navn) LIKE ?
-             ORDER BY COALESCE(k.sist_inne_at, '') DESC, k.created_at DESC
+      sql: `SELECT * FROM (${ALLE}) x
+             WHERE ? = '%%' OR lower(x.email) LIKE ? OR lower(x.navn) LIKE ?
+             ORDER BY COALESCE(x.sist_inne_at, '') DESC, x.created_at DESC
              LIMIT ? OFFSET ?`,
       args: [s, s, s, per, side * per],
     }),
     db().execute({
-      sql: `SELECT COUNT(*) AS n FROM kunder k WHERE ? = '%%' OR lower(k.email) LIKE ? OR lower(k.navn) LIKE ?`,
+      sql: `SELECT COUNT(*) AS n FROM (${ALLE}) x WHERE ? = '%%' OR lower(x.email) LIKE ? OR lower(x.navn) LIKE ?`,
       args: [s, s, s],
     }),
   ]);

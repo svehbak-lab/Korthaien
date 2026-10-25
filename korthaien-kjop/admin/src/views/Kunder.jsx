@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { api, kroner, dato, importerKunder } from "../api.js";
+import { Konto } from "./Kreditt.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KUNDER
@@ -16,6 +17,9 @@ export default function Kunder({ onFeil, onMelding }) {
   const [importerer, setImporterer] = useState(false);
   const [resultat, setResultat] = useState(null);
   const fil = useRef(null);
+  // Åpen kunde: kreditten hennes, med boka og feltene for å endre den.
+  // null = lista, "" = kreditt på en ny adresse.
+  const [åpen, setÅpen] = useState(null);
 
   async function last() {
     try {
@@ -46,6 +50,18 @@ export default function Kunder({ onFeil, onMelding }) {
     } finally {
       setImporterer(false);
     }
+  }
+
+  if (åpen !== null) {
+    return (
+      <Konto
+        epost={åpen.email}
+        navn={åpen.navn}
+        tilbake="← Alle kunder"
+        onLukk={() => { setÅpen(null); last(); }}
+        onFeil={onFeil}
+      />
+    );
   }
 
   if (!data) return <p className="dempet">Henter kunder…</p>;
@@ -95,7 +111,13 @@ export default function Kunder({ onFeil, onMelding }) {
             type="search" placeholder="Søk på navn eller e-post" value={q}
             onChange={(e) => setQ(e.target.value)} style={{ marginLeft: "auto", width: 260 }}
           />
+          <button className="knapp" onClick={() => setÅpen({ email: "", navn: "" })} title="Gi kreditt til en adresse som ikke står i lista">
+            Ny kreditt
+          </button>
         </header>
+        <div className="krop dempet" style={{ fontSize: 13, paddingTop: 8, paddingBottom: 8 }}>
+          Trykk på en kunde for å se og endre kreditten. Selgere fra kjøpssiden som har kreditt men ikke konto, står også her.
+        </div>
         <table>
           <thead>
             <tr>
@@ -103,13 +125,14 @@ export default function Kunder({ onFeil, onMelding }) {
               <th>Innlogging</th>
               <th>Kunde siden</th>
               <th>Sist inne</th>
+              <th className="h">Kreditt</th>
               <th className="h">Ordrer</th>
               <th className="h" title="Fra Mystore-eksporten">Mystore</th>
             </tr>
           </thead>
           <tbody>
             {data.kunder.map((k) => (
-              <tr key={k.id}>
+              <tr key={k.id ?? k.email} style={{ cursor: "pointer" }} onClick={() => setÅpen({ email: k.email, navn: k.navn })}>
                 <td>
                   {k.navn || <span className="dempet">(uten navn)</span>}
                   <div className="dempet" style={{ fontSize: 12 }}>
@@ -120,7 +143,8 @@ export default function Kunder({ onFeil, onMelding }) {
                   <span className="rad-flex" style={{ gap: 4, flexWrap: "wrap" }}>
                     {Number(k.har_passord) ? <span className="merkelapp m-ok">passord</span> : null}
                     {Number(k.har_google) ? <span className="merkelapp m-ok">Google</span> : null}
-                    {!Number(k.har_passord) && !Number(k.har_google) && (
+                    {k.kilde === "kreditt" && <span className="merkelapp m-av" title="Har kreditt, men har ikke laget konto">ingen konto</span>}
+                    {k.kilde !== "kreditt" && !Number(k.har_passord) && !Number(k.har_google) && (
                       <span className="merkelapp m-av" title="Har ikke valgt passord eller brukt Google ennå">ikke aktivert</span>
                     )}
                     {!k.epost_bekreftet_at && (Number(k.har_passord) || Number(k.har_google))
@@ -130,8 +154,12 @@ export default function Kunder({ onFeil, onMelding }) {
                 <td>
                   {dato(k.created_at)}
                   {k.kilde === "mystore" && <div className="dempet" style={{ fontSize: 11.5 }}>fra Mystore</div>}
+                  {k.kilde === "kreditt" && <div className="dempet" style={{ fontSize: 11.5 }}>første kreditt</div>}
                 </td>
                 <td>{k.sist_inne_at ? dato(k.sist_inne_at) : <span className="dempet">—</span>}</td>
+                <td className="h tall" style={{ fontWeight: Number(k.kreditt_ore) ? 600 : 400 }}>
+                  {Number(k.kreditt_ore) ? kroner(Number(k.kreditt_ore)) : <span className="dempet">—</span>}
+                </td>
                 <td className="h tall">{Number(k.ordrer) || <span className="dempet">0</span>}</td>
                 <td className="h tall">
                   {k.mystore_ordrer != null ? (
@@ -154,6 +182,8 @@ export default function Kunder({ onFeil, onMelding }) {
           </div>
         )}
       </div>
+
+      <Overgang onFeil={onFeil} onMelding={onMelding} />
 
       <div className="panel">
         <header><h3>Importer kunder fra Mystore</h3></header>
@@ -187,5 +217,64 @@ function Tall({ merke, verdi, under }) {
       <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }} className="tall">{verdi}</div>
       {under && <div className="dempet" style={{ fontSize: 12 }}>{under}</div>}
     </div>
+  );
+}
+
+// Dagen den nye butikken tar over. Står den, viser innloggingen en melding
+// om at kunder fra før må velge passord første gang, og hvorfor.
+function Overgang({ onFeil, onMelding }) {
+  const [d, setD] = useState(null);
+  const [lagrer, setLagrer] = useState(false);
+  useEffect(() => {
+    api.innstillinger().then((s) => setD(s.overgang_dato || "")).catch(onFeil);
+  }, []);
+  async function lagre(ny) {
+    setLagrer(true);
+    try {
+      const s = await api.lagreInnstillinger({ overgang_dato: ny });
+      setD(s.overgang_dato || "");
+      onMelding(s.overgang_dato ? "Meldingen vises nå i innloggingen." : "Meldingen er skjult.");
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setLagrer(false);
+    }
+  }
+  if (d === null) return null;
+  return (
+    <div className="panel">
+      <header><h3>Melding om nytt passord</h3></header>
+      <div className="krop">
+        <p className="dempet" style={{ marginTop: 0 }}>
+          Passordene fra Mystore kan ikke flyttes — de lagres kryptert hos Mystore, og ingen kan lese dem ut.
+          Når du setter datoen den nye butikken åpnet, viser innloggingen en kort forklaring til kunder fra før.
+        </p>
+        <div className="rad-flex">
+          <label className="dempet" style={{ fontSize: 13 }}>
+            Ny butikk fra{" "}
+            <input type="date" value={d} onChange={(e) => setD(e.target.value)} />
+          </label>
+          <button className="knapp primar" disabled={lagrer} onClick={() => lagre(d)}>Lagre</button>
+          {d && <button className="knapp" disabled={lagrer} onClick={() => lagre("")}>Skjul meldingen</button>}
+        </div>
+        {d && (
+          <div className="varsel info" style={{ marginTop: 12, marginBottom: 0 }}>
+            <Overgangstekst dato={d} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function Overgangstekst({ dato: d }) {
+  const pen = new Date(`${d}T12:00:00`).toLocaleDateString("nb-NO", { day: "numeric", month: "long", year: "numeric" });
+  return (
+    <>
+      <b>Ny nettbutikk fra {pen}.</b> Har du handlet hos Korthaien før, må du velge nytt passord første
+      gang du logger inn. Passord kunne ikke flyttes fra den gamle løsningen, fordi de er kryptert og
+      ingen — heller ikke vi — kan lese dem. Bruk «Første gang her?» under med samme e-postadresse,
+      eller fortsett med Google. Navn, adresse og kreditt ligger klart.
+    </>
   );
 }
