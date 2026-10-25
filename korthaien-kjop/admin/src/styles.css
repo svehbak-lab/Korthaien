@@ -583,7 +583,8 @@ textarea { width: 100%; font-family: inherit; }
 .butikk .b-seksjon {
   display: block; text-align: left; cursor: pointer;
   background: var(--kort); border: 1px solid var(--kant);
-  border-radius: var(--runding, 10px); padding: 18px 20px;
+  /* Samme hjørner som båndet og toppbildet ved siden av. */
+  border-radius: 10px; padding: 18px 20px;
   font: inherit; color: inherit;
   transition: border-color .12s, transform .12s;
 }
@@ -714,6 +715,7 @@ textarea { width: 100%; font-family: inherit; }
 }
 .butikk[data-tema="avis"] .knapp.primar, .skall[data-tema="avis"] .knapp.primar { background: var(--blekk); border-color: var(--blekk); }
 .butikk[data-tema="avis"] .b-band,
+.butikk[data-tema="avis"] .b-seksjon,
 .butikk[data-tema="avis"] .b-banner { border-radius: 0; }
 .butikk[data-tema="avis"] .b-flis img, .butikk[data-tema="avis"] .b-gbilde img { border-radius: 2px; }
 
@@ -760,6 +762,7 @@ textarea { width: 100%; font-family: inherit; }
 .butikk[data-tema="katalog"] .knapp,
 .butikk[data-tema="katalog"] .cond-valg button,
 .butikk[data-tema="katalog"] .b-band,
+.butikk[data-tema="katalog"] .b-seksjon,
 .butikk[data-tema="katalog"] .b-banner,
 .butikk[data-tema="katalog"] .b-info div { border-radius: 0; }
 .butikk[data-tema="katalog"] .b-flis img, .butikk[data-tema="katalog"] .b-gbilde img { border-radius: 2px; }

@@ -22,6 +22,7 @@ const SPALTER = [
       { tekst: "Kontakt oss", skjerm: "kontakt" },
       { tekst: "Frakt og levering", skjerm: "frakt" },
       { tekst: "Retur og angrerett", skjerm: "retur" },
+      { tekst: "Tilstandsguide", url: BUYLIST },
     ],
   },
   {
@@ -40,7 +41,6 @@ const SPALTER = [
       { tekst: "Selg MTGO-tix", skjerm: "tix" },
       { tekst: "Bulksøk", skjerm: "bulksok" },
       { tekst: "Lim inn hele lista", url: BUYLIST },
-      { tekst: "Tilstandsguide", url: BUYLIST },
       { tekst: "Alle sett", skjerm: "sett" },
     ],
   },
