@@ -191,6 +191,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
   const [notat, setNotat] = useState("");
   const [jobber, setJobber] = useState(false);
   const [vis, setVis] = useState(null);
+  const [svev, setSvev] = useState(null);
 
   useEffect(() => {
     if (!vis) return;
@@ -224,6 +225,20 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
 
   return (
     <>
+      {svev && svev.l.image_uri && (() => {
+        // Bildet følger musa, på den siden av skjermen det er plass.
+        const B = 300, H = 418;
+        const x = svev.x + 24 + B > window.innerWidth ? svev.x - 24 - B : svev.x + 24;
+        const y = Math.max(8, Math.min(svev.y - H / 2, window.innerHeight - H - 8));
+        return (
+          <img
+            className="kortsvev"
+            src={svev.l.image_uri}
+            alt=""
+            style={{ left: x, top: y, width: B, height: H }}
+          />
+        );
+      })()}
       {vis && (
         <div className="kortvisning" onClick={() => setVis(null)} role="dialog" aria-label={vis.card_name}>
           <div onClick={(e) => e.stopPropagation()}>
@@ -259,7 +274,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
             <thead>
               <tr>
                 <th style={{ width: 74 }}>Antall</th><th>Kort</th><th>Sett</th><th>#</th><th>Tilstand</th>
-                <th className="h" title="Beholdningen nå, etter denne ordren">På lager</th><th className="h">Sum</th>
+                <th className="h" title="I hylla nå (med solgte kort som ikke er sendt). I parentes: ledig for salg.">På lager</th><th className="h">Sum</th>
               </tr>
             </thead>
             <tbody>
@@ -288,7 +303,10 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                         type="button"
                         className="kortnavn-knapp"
                         title="Vis kortet"
-                        onClick={(e) => { e.stopPropagation(); setVis(l); }}
+                        onClick={(e) => { e.stopPropagation(); setSvev(null); setVis(l); }}
+                        onMouseEnter={(e) => setSvev({ l, x: e.clientX, y: e.clientY })}
+                        onMouseMove={(e) => setSvev((v) => (v ? { ...v, x: e.clientX, y: e.clientY } : v))}
+                        onMouseLeave={() => setSvev(null)}
                       >
                         {l.card_name}
                       </button>
@@ -299,7 +317,14 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                     <td style={{ fontSize: 12.5 }}>{l.set_name}</td>
                     <td className="tall">{l.collector_number}</td>
                     <td>{l.condition}</td>
-                    <td className="h tall">{l.paa_lager ?? "—"}</td>
+                    <td className="h tall" style={{ whiteSpace: "nowrap" }}>
+                      {l.paa_lager ? (
+                        <>
+                          {l.paa_lager.hylle}
+                          <span className="dempet"> ({l.paa_lager.ledig})</span>
+                        </>
+                      ) : "—"}
+                    </td>
                     <td className="h tall" style={{ whiteSpace: "nowrap" }}>{kroner(l.enhet_ore * l.antall)}</td>
                   </tr>
                 );

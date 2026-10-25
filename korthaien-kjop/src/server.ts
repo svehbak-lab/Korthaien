@@ -44,7 +44,7 @@ import {
   brukTilbakestilling, harGoogle, googleUrl, googleKunde, lagBekreftelse, bekreftEpost,
 } from "./kunder.js";
 import {
-  SalgFeil, prisKurv, åpneKasse, avbrytKasse, stripeHendelse, hentOrdre as hentSalgsordre, offentlig, kundensOrdrer,
+  SalgFeil, prisKurv, åpneKasse, avbrytKasse, stripeHendelse, hentOrdre as hentSalgsordre, lagerForPlukk, offentlig, kundensOrdrer,
   tilhørerKunde, riktigMerke, tilgjengeligKreditt, adminOrdrer, settStatus, kanseller,
   salgsstatistikk, utløpGamle, harStripe, butikkUrl, RESERVASJON_MIN,
 } from "./salg.js";
@@ -787,7 +787,7 @@ app.get("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: any)
   // lageret mens du plukker. Bare i admin.
   const ider = o.linjer.map((l: any) => String(l.card_id));
   const [lagerNå, bilder] = await Promise.all([
-    beholdning(ider),
+    lagerForPlukk(ider),
     ider.length
       ? db().execute({ sql: `SELECT id, image_uri FROM cards WHERE id IN (${ider.map(() => "?").join(",")})`, args: ider })
       : Promise.resolve({ rows: [] as any[] }),
@@ -796,7 +796,7 @@ app.get("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: any)
   o.linjer = o.linjer.map((l: any) => ({
     ...l,
     image_uri: bilde.get(String(l.card_id)) || null,
-    paa_lager: lagerNå.get(`${l.card_id}:${l.finish}:${l.condition}`) || 0,
+    paa_lager: lagerNå.get(`${l.card_id}:${l.finish}:${l.condition}`) || { hylle: 0, ledig: 0 },
   }));
   res.json({ ordre: o });
 }));

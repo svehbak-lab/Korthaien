@@ -121,6 +121,40 @@ async function tilgjengeligFor(linjer: { card_id: string }[], utenOrdre?: number
   return kart;
 }
 
+// Til plukklisten: hvor mange som står i hylla, og hvor mange som er ledige.
+// Salg trekkes fra lageret når ordren betales, men kortene står i hylla til
+// ordren er sendt. Hylla = lageret + solgt-men-ikke-sendt. Ledig = lageret
+// minus det som holdes av i åpne kasser — det samme kassen regner med.
+export async function lagerForPlukk(ider: string[]): Promise<Map<string, { hylle: number; ledig: number }>> {
+  const unike = [...new Set(ider)];
+  const ut = new Map<string, { hylle: number; ledig: number }>();
+  if (!unike.length) return ut;
+  const ledig = await tilgjengeligFor(unike.map((card_id) => ({ card_id })));
+  const ph = unike.map(() => "?").join(",");
+  const lager = await db().execute({
+    sql: `SELECT card_id, finish, condition, SUM(antall) AS n FROM (${butikklagerSql()})
+           WHERE card_id IN (${ph}) GROUP BY card_id, finish, condition`,
+    args: unike,
+  });
+  const usendt = await db().execute({
+    sql: `SELECT l.card_id, l.finish, l.condition, SUM(l.antall) AS n
+            FROM salgsordre_linjer l JOIN salgsordrer o ON o.id = l.ordre_id
+           WHERE o.status IN ('betalt', 'pakket') AND l.card_id IN (${ph})
+           GROUP BY l.card_id, l.finish, l.condition`,
+    args: unike,
+  });
+  const hylle = new Map<string, number>();
+  for (const x of lager.rows as any[]) hylle.set(`${x.card_id}:${x.finish}:${x.condition}`, Number(x.n));
+  for (const x of usendt.rows as any[]) {
+    const k = `${x.card_id}:${x.finish}:${x.condition}`;
+    hylle.set(k, (hylle.get(k) || 0) + Math.abs(Number(x.n)));
+  }
+  for (const k of new Set([...hylle.keys(), ...ledig.keys()])) {
+    ut.set(k, { hylle: hylle.get(k) || 0, ledig: Math.max(0, ledig.get(k) || 0) });
+  }
+  return ut;
+}
+
 function rensKurv(inn: any): KurvLinje[] {
   if (!Array.isArray(inn)) throw new SalgFeil(400, "Handlekurven er tom.");
   const samlet = new Map<string, KurvLinje>();

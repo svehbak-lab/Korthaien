@@ -370,3 +370,18 @@ test("kansellering til kort: bare kortdelen går til kortet, kredittdelen tilbak
     salg._brukStripe(null);
   }
 });
+
+test("plukklisten: i hylla teller solgte kort til ordren er sendt, ledig er det som kan selges", async () => {
+  const id = await kort("aaa", "Hyllekort", "uncommon", 1000, 3);
+  const kari = await konto.loggInn("selger@eksempel.no", "passord123");
+  await kreditt.leggTil({ email: kari.email, ore: 20000, grunn: "manuell" });
+  const r = await salg.åpneKasse(
+    { ...adresse, email: "", bruk_kreditt: true, linjer: [{ card_id: id, finish: "nonfoil", condition: "NM", antall: 2 }] },
+    kari
+  );
+  let p = (await salg.lagerForPlukk([id])).get(`${id}:nonfoil:NM`);
+  assert.deepEqual(p, { hylle: 3, ledig: 1 });
+  await salg.settStatus(r.ordrenr, { status: "sendt" });
+  p = (await salg.lagerForPlukk([id])).get(`${id}:nonfoil:NM`);
+  assert.deepEqual(p, { hylle: 1, ledig: 1 });
+});

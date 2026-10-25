@@ -1059,3 +1059,7 @@ label.kreditt-boks { cursor: pointer; }
   text-underline-offset: 3px;
 }
 .kortnavn-knapp:hover, .kortnavn-knapp:focus-visible { text-decoration-color: currentColor; color: var(--aksent, #1d4ed8); }
+.kortsvev {
+  position: fixed; z-index: 40; pointer-events: none; object-fit: cover;
+  border-radius: 14px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35); background: #2a2f38;
+}
