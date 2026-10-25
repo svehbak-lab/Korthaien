@@ -407,18 +407,20 @@ function salgslinjer(linjer: any[]): string {
 }
 
 function summer(o: any): { html: string; tekst: string } {
-  const rader: [string, string][] = [
-    [`Kort (${o.antall_kort} stk.)`, kr(o.varer_ore)],
-    [`Frakt: ${o.frakt_navn}`, kr(o.frakt_ore)],
-    ["Totalt", kr(Number(o.varer_ore) + Number(o.frakt_ore))],
-  ];
+  const rabatt = Number(o.rabatt_ore) || 0;
+  const rader: [string, string][] = [[`Kort (${o.antall_kort} stk.)`, kr(o.varer_ore)]];
+  if (rabatt > 0) rader.push([`Rabatt (${o.rabattkode})`, `−${kr(rabatt)}`]);
+  rader.push([`Frakt: ${o.frakt_navn}`, kr(o.frakt_ore)]);
+  const totalRad = rader.length;
+  rader.push(["Totalt", kr(Number(o.varer_ore) - rabatt + Number(o.frakt_ore))]);
+  if (Number(o.gavekort_ore) > 0) rader.push([`Betalt med gavekort (${o.rabattkode})`, kr(o.gavekort_ore)]);
   if (Number(o.kreditt_ore) > 0) rader.push(["Betalt med kreditt", kr(o.kreditt_ore)]);
   if (Number(o.stripe_ore) > 0) rader.push(["Betalt med kort/Vipps", kr(o.stripe_ore)]);
   return {
     html: `<table style="width:100%;font-size:14px;margin:4px 0 16px">${rader
       .map(
-        ([a, b], i) => `<tr><td style="padding:3px 8px;${i === 2 ? "font-weight:700" : ""}">${trygg(a)}</td>
-        <td style="padding:3px 8px;text-align:right;${i === 2 ? "font-weight:700" : ""}">${b}</td></tr>`
+        ([a, b], i) => `<tr><td style="padding:3px 8px;${i === totalRad ? "font-weight:700" : ""}">${trygg(a)}</td>
+        <td style="padding:3px 8px;text-align:right;${i === totalRad ? "font-weight:700" : ""}">${b}</td></tr>`
       )
       .join("")}</table>`,
     tekst: rader.map(([a, b]) => `${a}: ${b}`).join("\n"),

@@ -111,8 +111,10 @@ export default function Salgsordrer({ onFeil, onMelding, onAntall }) {
                   <td className="h tall">{o.antall_kort}</td>
                   <td className="h tall">
                     {kroner(Number(o.stripe_ore) || 0)}
-                    {Number(o.kreditt_ore) > 0 && (
-                      <div className="dempet" style={{ fontSize: 11.5 }}>+ {kroner(o.kreditt_ore)} kreditt</div>
+                    {Number(o.kreditt_ore) + (Number(o.gavekort_ore) || 0) > 0 && (
+                      <div className="dempet" style={{ fontSize: 11.5 }}>
+                        + {kroner(Number(o.kreditt_ore) + (Number(o.gavekort_ore) || 0))} {Number(o.gavekort_ore) > 0 ? "kreditt/gavekort" : "kreditt"}
+                      </div>
                     )}
                   </td>
                   {fane === "apen" && <td>{STATUS[o.status]}</td>}
@@ -357,7 +359,13 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
               <table>
                 <tbody>
                   <tr><td>Kort ({o.antall_kort} stk.)</td><td className="h tall">{kroner(o.varer_ore)}</td></tr>
+                  {Number(o.rabatt_ore) > 0 && (
+                    <tr><td>Rabatt <span className="dempet">({o.rabattkode})</span></td><td className="h tall">−{kroner(o.rabatt_ore)}</td></tr>
+                  )}
                   <tr><td>Frakt</td><td className="h tall">{kroner(o.frakt_ore)}</td></tr>
+                  {Number(o.gavekort_ore) > 0 && (
+                    <tr><td>Gavekort <span className="dempet">({o.rabattkode})</span></td><td className="h tall">−{kroner(o.gavekort_ore)}</td></tr>
+                  )}
                   {Number(o.kreditt_ore) > 0 && (
                     <tr><td>Kreditt</td><td className="h tall">−{kroner(o.kreditt_ore)}</td></tr>
                   )}
@@ -365,7 +373,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                     <td>
                       <b>Totalt</b>
                       <div className="dempet" style={{ fontSize: 12 }}>
-                        {Number(o.stripe_ore) > 0 ? "(betalt kort/Vipps)" : "(alt betalt med kreditt)"}
+                        {Number(o.stripe_ore) > 0 ? "(betalt kort/Vipps)" : "(alt betalt med kreditt/gavekort)"}
                       </div>
                     </td>
                     <td className="h tall" style={{ fontSize: 18 }}><b>{kroner(Number(o.stripe_ore) || 0)}</b></td>
@@ -434,7 +442,8 @@ function Kanseller({ o, onFerdig, onFeil }) {
   const [måte, setMåte] = useState(Number(o.stripe_ore) > 0 ? "kort" : "kreditt");
   const [grunn, setGrunn] = useState("");
   const [jobber, setJobber] = useState(false);
-  const totalt = Number(o.varer_ore) + Number(o.frakt_ore);
+  const gavekort = Number(o.gavekort_ore) || 0;
+  const totalt = Number(o.kreditt_ore) + Number(o.stripe_ore);
   if (!åpen) {
     return (
       <button className="knapp fare" style={{ width: "100%" }} onClick={() => setÅpen(true)}>
@@ -446,7 +455,10 @@ function Kanseller({ o, onFerdig, onFeil }) {
     <div className="panel" style={{ borderColor: "var(--feil)" }}>
       <header><h3>Kanseller {o.ordrenr}</h3></header>
       <div className="krop skjema">
-        <p className="dempet" style={{ margin: 0, fontSize: 13 }}>Kortene legges tilbake på lager.</p>
+        <p className="dempet" style={{ margin: 0, fontSize: 13 }}>
+          Kortene legges tilbake på lager.
+          {gavekort > 0 && ` ${kroner(gavekort)} går tilbake på gavekortet ${o.rabattkode}.`}
+        </p>
         {Number(o.stripe_ore) > 0 && (
           <label className="rad-flex" style={{ gap: 8, alignItems: "flex-start" }}>
             <input type="radio" checked={måte === "kort"} onChange={() => setMåte("kort")} />

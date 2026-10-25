@@ -64,6 +64,19 @@ export async function importerKunder(fil) {
   return data;
 }
 
+export async function importerRabattkoder(tekst) {
+  const r = await fetch(`${BASE}/api/admin/rabattkoder/import`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "text/plain" },
+    body: tekst,
+  });
+  if (r.status === 401) throw new UtloggetFeil();
+  const data = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(data?.feil || `Serveren svarte ${r.status}`);
+  return data;
+}
+
 export async function lastOppBilde(fil) {
   const r = await fetch(`${BASE}/api/admin/bilder`, {
     method: "POST",
@@ -206,6 +219,11 @@ export const api = {
   endreProdukt: (id, p) => kall(`/api/admin/produkter/${id}`, { method: "PUT", body: p }),
   slåAvProdukt: (id) => kall(`/api/admin/produkter/${id}`, { method: "DELETE" }),
 
+  rabattkoder: () => kall("/api/admin/rabattkoder"),
+  nyRabattkode: (felt) => kall("/api/admin/rabattkoder", { method: "POST", body: felt }),
+  rabattkodeBevegelser: (id) => kall(`/api/admin/rabattkoder/${id}/bevegelser`),
+  justerRabattkode: (id, felt) => kall(`/api/admin/rabattkoder/${id}/saldo`, { method: "POST", body: felt }),
+  endreRabattkode: (id, felt) => kall(`/api/admin/rabattkoder/${id}`, { method: "PATCH", body: felt }),
   kunder: (q, side) => kall(`/api/admin/kunder?q=${encodeURIComponent(q || "")}&side=${side || 0}`),
   innstillinger: () => kall("/api/admin/settings"),
   lagreInnstillinger: (felt) => kall("/api/admin/settings", { method: "PUT", body: felt }),
@@ -290,6 +308,7 @@ export const kunde = {
   oppsett: () => kundekall("/api/butikk/oppsett"),
   kurv: (linjer) => kundekall("/api/butikk/kurv", { method: "POST", body: { linjer } }),
   kasse: (felt) => kundekall("/api/butikk/kasse", { method: "POST", body: felt }),
+  rabattkode: (kode) => kundekall("/api/butikk/rabattkode", { method: "POST", body: { kode } }),
   avbryt: (nr, m) => kundekall(`/api/butikk/kasse/${encodeURIComponent(nr)}/avbryt`, { method: "POST", body: { m } }),
   toppbanner: () => kundekall("/api/butikk/toppbanner"),
   kvittering: (nr, m) => kundekall(`/api/butikk/ordre/${encodeURIComponent(nr)}?m=${encodeURIComponent(m)}`),

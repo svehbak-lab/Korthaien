@@ -1,4 +1,5 @@
 import { utgaveNavn } from "./varianter.js";
+import { sjekkKode, KodeFeil } from "./rabattkoder.js";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import Stripe from "stripe";
 import { db, CONDITIONS, type Condition } from "./db.js";
@@ -231,6 +232,7 @@ export type KasseInn = {
   land?: string;
   frakt_id: number;
   bruk_kreditt?: boolean;
+  rabattkode?: string;
   notat?: string;
   vilkar?: boolean;
 };
@@ -282,19 +284,37 @@ export async function åpneKasse(
   if (feil.length) throw new SalgFeil(409, "Noen kort i handlekurven er ikke tilgjengelige lenger.", { linjer });
 
   const varer = linjer.reduce((n, l) => n + l.enhet_ore * l.antall, 0);
-  const totalt = varer + frakt.pris_ore;
+
+  // Rabattkode, uten innlogging. Prosent trekkes fra kortene; et gavekort
+  // betaler av totalen før kreditten.
+  let kode: Awaited<ReturnType<typeof sjekkKode>> | null = null;
+  if (String(inn.rabattkode || "").trim()) {
+    try {
+      kode = await sjekkKode(String(inn.rabattkode));
+    } catch (e) {
+      if (e instanceof KodeFeil) throw new SalgFeil(e.status === 404 ? 400 : 409, e.message);
+      throw e;
+    }
+  }
+  const rabatt = kode?.type === "prosent" ? Math.round((varer * kode.prosent) / 100) : 0;
+  const totalt = varer - rabatt + frakt.pris_ore;
+  let gavekort = kode?.type === "saldo" ? Math.min(kode.tilgjengelig_ore, totalt) : 0;
   let kreditt = 0;
   // Kreditten følger e-postadressen. Før adressen er bekreftet, kan den ikke
   // brukes — ellers kunne hvem som helst registrere en annens adresse og
   // handle for kreditten deres.
-  if (kunde?.bekreftet && inn.bruk_kreditt) kreditt = Math.min(await tilgjengeligKreditt(email), totalt);
-  let rest = totalt - kreditt;
-  if (rest > 0 && rest < STRIPE_MIN_ORE && kreditt > 0) {
-    // Et restbeløp Stripe ikke kan ta: bruk litt mindre kreditt, så resten
-    // blir et beløp som kan betales.
-    const juster = Math.min(kreditt, STRIPE_MIN_ORE - rest);
-    kreditt -= juster;
-    rest += juster;
+  if (kunde?.bekreftet && inn.bruk_kreditt) kreditt = Math.min(await tilgjengeligKreditt(email), totalt - gavekort);
+  let rest = totalt - gavekort - kreditt;
+  if (rest > 0 && rest < STRIPE_MIN_ORE && kreditt + gavekort > 0) {
+    // Et restbeløp Stripe ikke kan ta: bruk litt mindre kreditt (og om
+    // nødvendig gavekort), så resten blir et beløp som kan betales.
+    let mangler = STRIPE_MIN_ORE - rest;
+    const fraKreditt = Math.min(kreditt, mangler);
+    kreditt -= fraKreditt;
+    mangler -= fraKreditt;
+    const fraGavekort = Math.min(gavekort, mangler);
+    gavekort -= fraGavekort;
+    rest = totalt - gavekort - kreditt;
   }
   if (rest > 0 && rest < STRIPE_MIN_ORE) {
     throw new SalgFeil(400, "Beløpet som betales med kort eller Vipps må være minst 3 kr.");
@@ -351,16 +371,32 @@ export async function åpneKasse(
         throw new SalgFeil(409, "Kreditten din er i bruk i en annen kasse. Vent litt og prøv igjen.");
       }
     }
+    // Koden sjekkes også på nytt: to kasser med samme gavekort eller den
+    // siste plassen på en kampanjekode skal ikke begge få den.
+    if (kode) {
+      let nå2;
+      try {
+        nå2 = await sjekkKode(kode.kode, tx);
+      } catch (e) {
+        if (e instanceof KodeFeil) throw new SalgFeil(409, e.message);
+        throw e;
+      }
+      if (nå2.type === "saldo" && nå2.tilgjengelig_ore < gavekort) {
+        throw new SalgFeil(409, "Gavekortet er i bruk i en annen kasse. Vent litt og prøv igjen.");
+      }
+    }
     const o = await tx.execute({
       sql: `INSERT INTO salgsordrer
               (ordrenr, kunde_navn, email, kunde_id, telefon, adresse, postnr, poststed, land,
                frakt_id, frakt_navn, frakt_ore, varer_ore, kreditt_ore, stripe_ore,
-               antall_kort, kunde_notat, status, utloper_at, created_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'apen',?,?) RETURNING id`,
+               antall_kort, kunde_notat, status, utloper_at, created_at,
+               rabattkode, rabatt_ore, gavekort_ore)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'apen',?,?,?,?,?) RETURNING id`,
       args: [
         ordrenr, navn, email, kunde?.id ?? null, t(inn.telefon, 30) || null, adresse, postnr, poststed,
         (t(inn.land, 2) || "NO").toUpperCase(), frakt.id, frakt.navn, frakt.pris_ore, varer, kreditt, rest,
         antallKort, t(inn.notat, 1000) || null, utløper, opprettet,
+        kode?.kode ?? null, rabatt, gavekort,
       ],
     });
     ordreId = Number(o.rows[0].id);
@@ -420,7 +456,8 @@ export async function åpneKasse(
                 name: `Korthaien ordre ${ordrenr}`,
                 description:
                   `${antallKort} kort og ${frakt.navn.toLowerCase()}` +
-                  (kreditt ? ` (${(kreditt / 100).toFixed(2).replace(".", ",")} kr betalt med kreditt)` : ""),
+                  (kreditt + gavekort ? ` (${((kreditt + gavekort) / 100).toFixed(2).replace(".", ",")} kr betalt med kreditt/gavekort)` : "") +
+                  (rabatt ? `, rabatt ${(rabatt / 100).toFixed(2).replace(".", ",")} kr` : ""),
               },
             },
           },
@@ -503,6 +540,13 @@ export async function fullfør(ordreId: number, kilde: string, betalingsId?: str
       await tx.execute({
         sql: `INSERT INTO kreditt_bevegelser (email, ore, grunn, notat, order_no, created_at) VALUES (?, ?, 'kjop', ?, ?, ?)`,
         args: [o.email, -Number(o.kreditt_ore), `Brukt på ordre ${o.ordrenr}`, o.ordrenr, tid],
+      });
+    }
+    if (Number(o.gavekort_ore) > 0 && o.rabattkode) {
+      await tx.execute({
+        sql: `INSERT INTO rabattkode_bevegelser (kode_id, ore, grunn, notat, ordrenr, created_at)
+              SELECT id, ?, 'kjop', ?, ?, ? FROM rabattkoder WHERE kode = ?`,
+        args: [-Number(o.gavekort_ore), `Brukt på ordre ${o.ordrenr}`, o.ordrenr, tid, o.rabattkode],
       });
     }
     await tx.commit();
@@ -663,7 +707,7 @@ export async function kundensOrdrer(kunde: { id: number; email: string; bekrefte
   // registrere en annens adresse og lese navn, adresse og ordrene deres.
   const medEpost = !!kunde.bekreftet;
   const r = await db().execute({
-    sql: `SELECT ordrenr, status, created_at, betalt_at, sendt_at, varer_ore, frakt_ore, kreditt_ore, stripe_ore,
+    sql: `SELECT ordrenr, status, created_at, betalt_at, sendt_at, varer_ore, frakt_ore, kreditt_ore, stripe_ore, rabattkode, rabatt_ore, gavekort_ore,
                  antall_kort, frakt_navn, sporingsnr
             FROM salgsordrer
            WHERE (kunde_id = ? ${medEpost ? "OR email = ?" : ""}) AND status NOT IN ('apen', 'utlopt')
@@ -691,7 +735,7 @@ export async function adminOrdrer(status: string) {
   const st = grupper[status] || grupper.pakkes;
   const r = await db().execute({
     sql: `SELECT id, ordrenr, kunde_navn, email, status, created_at, betalt_at, pakket_at, sendt_at,
-                 varer_ore, frakt_ore, kreditt_ore, stripe_ore, antall_kort, frakt_navn, sporingsnr, utloper_at,
+                 varer_ore, frakt_ore, kreditt_ore, stripe_ore, rabattkode, rabatt_ore, gavekort_ore, antall_kort, frakt_navn, sporingsnr, utloper_at,
                  (SELECT COUNT(*) FROM salgsordre_linjer l WHERE l.ordre_id = salgsordrer.id) AS linjer
             FROM salgsordrer WHERE status IN (${st.map(() => "?").join(",")})
            ORDER BY ${status === "pakkes" ? "betalt_at ASC" : "created_at DESC"} LIMIT 500`,
@@ -787,11 +831,15 @@ export async function kanseller(ordrenr: string, grunn: string, måte: "kort" | 
       throw new SalgFeil(502, `Stripe avviste refusjonen: ${e?.message || "ukjent feil"}. Ingenting er endret.`);
     }
   }
-  const tilKreditt = tilKort ? Number(o.kreditt_ore) : Number(o.varer_ore) + Number(o.frakt_ore);
+  // Gavekortdelen går alltid tilbake til gavekortet. Resten følger valget:
+  // kortdelen til kortet og kredittdelen til kreditt, eller alt som kreditt.
+  const tilGavekort = o.rabattkode ? Number(o.gavekort_ore) || 0 : 0;
+  const tilKreditt = tilKort ? Number(o.kreditt_ore) : Number(o.kreditt_ore) + kortdel;
   const notat =
     `Kansellert: ${String(grunn || "").trim() || "uten oppgitt grunn"}.` +
     (tilKort ? ` ${(kortdel / 100).toFixed(2)} kr refundert til kort (${refusjonsId}).` : "") +
-    (tilKreditt > 0 ? ` ${(tilKreditt / 100).toFixed(2)} kr som kreditt.` : "");
+    (tilKreditt > 0 ? ` ${(tilKreditt / 100).toFixed(2)} kr som kreditt.` : "") +
+    (tilGavekort > 0 ? ` ${(tilGavekort / 100).toFixed(2)} kr tilbake på gavekortet ${o.rabattkode}.` : "");
 
   const tx = await db().transaction("write");
   try {
@@ -813,6 +861,13 @@ export async function kanseller(ordrenr: string, grunn: string, måte: "kort" | 
       await tx.execute({
         sql: `INSERT INTO kreditt_bevegelser (email, ore, grunn, notat, order_no, created_at) VALUES (?, ?, 'refusjon', ?, ?, ?)`,
         args: [o.email, tilKreditt, `Kansellert ordre ${o.ordrenr}`, o.ordrenr, tid],
+      });
+    }
+    if (tilGavekort > 0) {
+      await tx.execute({
+        sql: `INSERT INTO rabattkode_bevegelser (kode_id, ore, grunn, notat, ordrenr, created_at)
+              SELECT id, ?, 'refusjon', ?, ?, ? FROM rabattkoder WHERE kode = ?`,
+        args: [tilGavekort, `Kansellert ordre ${o.ordrenr}`, o.ordrenr, tid, o.rabattkode],
       });
     }
     await tx.commit();

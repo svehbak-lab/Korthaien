@@ -509,6 +509,11 @@ CREATE TABLE IF NOT EXISTS salgsordrer (
   -- Hvordan summen ble betalt. kreditt_ore + stripe_ore = varer + frakt.
   kreditt_ore   INTEGER NOT NULL DEFAULT 0,
   stripe_ore    INTEGER NOT NULL DEFAULT 0,
+  -- Rabattkode brukt på ordren. Prosentkoder gir rabatt_ore (trukket fra
+  -- kortene); gavekort-koder betaler gavekort_ore av totalen, som kreditt.
+  rabattkode    TEXT,
+  rabatt_ore    INTEGER NOT NULL DEFAULT 0,
+  gavekort_ore  INTEGER NOT NULL DEFAULT 0,
   stripe_session TEXT,
   -- Betalingen hos Stripe (payment_intent). Trengs for å refundere til kortet.
   stripe_betaling TEXT,
@@ -641,3 +646,31 @@ CREATE TABLE IF NOT EXISTS bilder (
   bredde     INTEGER,
   hoyde      INTEGER,
   created_at TEXT NOT NULL);
+
+-- Rabattkoder. To slags:
+--   saldo   — gavekort: et beløp som brukes ned over flere kjøp. Saldoen er
+--             summen av bevegelsene, som kreditten. Premier i turneringer,
+--             gamle koder fra Mystore.
+--   prosent — kampanje: en prosent av kortene, valgfritt med siste dag og
+--             et tak på antall bruk.
+-- Kodene er ikke knyttet til noen konto. Den som har koden, kan bruke den.
+CREATE TABLE IF NOT EXISTS rabattkoder (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  kode        TEXT NOT NULL UNIQUE,
+  type        TEXT NOT NULL CHECK (type IN ('saldo', 'prosent')),
+  prosent     INTEGER,
+  gyldig_til  TEXT,
+  maks_bruk   INTEGER,
+  aktiv       INTEGER NOT NULL DEFAULT 1,
+  merknad     TEXT,
+  created_at  TEXT NOT NULL);
+
+CREATE TABLE IF NOT EXISTS rabattkode_bevegelser (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  kode_id     INTEGER NOT NULL REFERENCES rabattkoder(id),
+  ore         INTEGER NOT NULL,
+  grunn       TEXT NOT NULL,
+  notat       TEXT,
+  ordrenr     TEXT,
+  created_at  TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS rabattkode_bevegelser_kode ON rabattkode_bevegelser(kode_id);

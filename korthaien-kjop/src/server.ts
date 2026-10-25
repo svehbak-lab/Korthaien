@@ -1,3 +1,4 @@
+import { sjekkKode, KodeFeil, alleKoder, opprettKode, importerKoder, justerSaldo, endreKode, bevegelser as kodeBevegelser, lagKode } from "./rabattkoder.js";
 import { randomBytes } from "node:crypto";
 import "dotenv/config";
 import express from "express";
@@ -766,6 +767,12 @@ app.get("/api/butikk/oppsett", fang(async (_req: any, res: any) => {
   });
 }));
 
+// Kassen sjekker en rabattkode før kunden betaler. Eget tak, så ingen kan
+// prøve seg gjennom koder i stor skala.
+app.post("/api/butikk/rabattkode", grense(REGLER.kode), fang(async (req: any, res: any) => {
+  res.json(await sjekkKode(String(req.body?.kode || "")));
+}));
+
 app.post("/api/butikk/kurv", grense(REGLER.pris), fang(async (req: any, res: any) => {
   await utløpGamle();
   res.json({ linjer: await prisKurv(req.body?.linjer || []) });
@@ -1508,6 +1515,27 @@ app.post("/api/admin/kreditt", krevAdmin, fang(async (req: any, res: any) => {
   }
 }));
 
+// ── rabattkoder ─────────────────────────────────────────────────────────────
+app.get("/api/admin/rabattkoder", krevAdmin, fang(async (_req: any, res: any) => {
+  res.json({ koder: await alleKoder(), forslag: lagKode() });
+}));
+app.post("/api/admin/rabattkoder", krevAdmin, fang(async (req: any, res: any) => {
+  res.json({ kode: await opprettKode(req.body || {}) });
+}));
+app.post("/api/admin/rabattkoder/import", krevAdmin, express.text({ type: "*/*", limit: "1mb" }), fang(async (req: any, res: any) => {
+  res.json(await importerKoder(String(req.body || "")));
+}));
+app.get("/api/admin/rabattkoder/:id/bevegelser", krevAdmin, fang(async (req: any, res: any) => {
+  res.json({ bevegelser: await kodeBevegelser(Number(req.params.id)) });
+}));
+app.post("/api/admin/rabattkoder/:id/saldo", krevAdmin, fang(async (req: any, res: any) => {
+  res.json({ kode: await justerSaldo(Number(req.params.id), req.body || {}) });
+}));
+app.patch("/api/admin/rabattkoder/:id", krevAdmin, fang(async (req: any, res: any) => {
+  await endreKode(Number(req.params.id), req.body || {});
+  res.json({ ok: true });
+}));
+
 app.get("/api/admin/kunder", krevAdmin, fang(async (req: any, res: any) => {
   res.json(await kundeoversikt(String(req.query.q || ""), Math.max(0, Number(req.query.side) || 0)));
 }));
@@ -1616,7 +1644,7 @@ app.use((feil: any, _req: any, res: any, _next: any) => {
   if (feil instanceof HttpFeil) {
     return res.status(feil.status).json({ feil: feil.message, ...(feil.data || {}) });
   }
-  if (feil instanceof SalgFeil || feil instanceof KontoFeil) {
+  if (feil instanceof SalgFeil || feil instanceof KontoFeil || feil instanceof KodeFeil) {
     return res.status(feil.status).json({ feil: feil.message, ...((feil as any).data || {}) });
   }
   console.error(feil);

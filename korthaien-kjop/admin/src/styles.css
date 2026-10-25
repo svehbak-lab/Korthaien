@@ -1144,3 +1144,5 @@ label.kreditt-boks { cursor: pointer; }
 /* ── kunder i admin ──────────────────────────────────────────────────────── */
 .kunde-tall { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 16px; }
 .kunde-tallboks { padding: 12px 14px; margin: 0; }
+
+.rabattkode { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--strek); }

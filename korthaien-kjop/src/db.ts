@@ -354,6 +354,7 @@ async function leggTilNyeKolonner(): Promise<void> {
       ["stripe_session", "TEXT"], ["stripe_betaling", "TEXT"], ["utloper_at", "TEXT"], ["antall_kort", "INTEGER NOT NULL DEFAULT 0"],
       ["pakket_at", "TEXT"], ["sendt_at", "TEXT"], ["kansellert_at", "TEXT"], ["sporingsnr", "TEXT"],
       ["kunde_notat", "TEXT"], ["admin_notat", "TEXT"],
+      ["rabattkode", "TEXT"], ["rabatt_ore", "INTEGER NOT NULL DEFAULT 0"], ["gavekort_ore", "INTEGER NOT NULL DEFAULT 0"],
     ];
     for (const [navn, type] of nye) {
       if (!so.has(navn)) await db().execute(`ALTER TABLE salgsordrer ADD COLUMN ${navn} ${type}`);

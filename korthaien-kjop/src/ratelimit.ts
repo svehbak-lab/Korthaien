@@ -47,6 +47,9 @@ export const REGLER = {
   // Å åpne kassen holder av kort. Taket hindrer at noen tømmer butikken for
   // tilgjengelige kort ved å åpne kasser i en løkke.
   kasse: { navn: "kasse", perMinutt: 6, perDøgn: 60 },
+  // Rabattkoder i kassen. En kunde prøver én eller to; den som prøver
+  // hundre, gjetter.
+  kode: { navn: "kode", perMinutt: 10, perDøgn: 60 },
 } as const;
 
 const MINUTT = 60_000;

@@ -262,6 +262,11 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
   const [a, setA] = useState(tomAdresse);
   const [frakt, setFrakt] = useState(null);
   const [brukKreditt, setBrukKreditt] = useState(true);
+  // Rabattkoden: det kunden skriver, og det serveren sa om den.
+  const [kodeFelt, setKodeFelt] = useState("");
+  const [kode, setKode] = useState(null);
+  const [kodeFeil, setKodeFeil] = useState("");
+  const [sjekker, setSjekker] = useState(false);
   const [husk, setHusk] = useState(true);
   const [notat, setNotat] = useState("");
   const [vilkår, setVilkår] = useState(false);
@@ -312,11 +317,35 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
   const varer = priset.reduce((n, l) => n + l.enhet_ore * l.antall, 0);
   const totalt = varer + (valgtFrakt?.pris_ore || 0);
   const harKreditt = !!(h.kunde?.bekreftet && h.kreditt_ore > 0);
-  let kreditt = harKreditt && brukKreditt ? Math.min(h.kreditt_ore, totalt) : 0;
-  // Samme regel som serveren: Stripe tar ikke beløp under 3 kr, så da
-  // brukes litt mindre kreditt og resten betales med kort.
-  if (kreditt > 0 && totalt - kreditt > 0 && totalt - kreditt < 300) kreditt -= Math.min(kreditt, 300 - (totalt - kreditt));
-  const åBetale = totalt - kreditt;
+  // Samme rekkefølge som serveren: prosent av kortene, så gavekort, så
+  // kreditt, og resten med kort. Stripe tar ikke beløp under 3 kr, så da
+  // brukes litt mindre kreditt (og om nødvendig gavekort).
+  const rabatt = kode?.type === "prosent" ? Math.round((varer * kode.prosent) / 100) : 0;
+  const sum = totalt - rabatt;
+  let gavekort = kode?.type === "saldo" ? Math.min(kode.tilgjengelig_ore, sum) : 0;
+  let kreditt = harKreditt && brukKreditt ? Math.min(h.kreditt_ore, sum - gavekort) : 0;
+  let rest = sum - gavekort - kreditt;
+  if (rest > 0 && rest < 300 && kreditt + gavekort > 0) {
+    let mangler = 300 - rest;
+    const k1 = Math.min(kreditt, mangler); kreditt -= k1; mangler -= k1;
+    gavekort -= Math.min(gavekort, mangler);
+    rest = sum - gavekort - kreditt;
+  }
+  const åBetale = rest;
+
+  async function brukKode(e) {
+    e?.preventDefault?.();
+    if (!kodeFelt.trim()) return;
+    setSjekker(true);
+    setKodeFeil("");
+    try {
+      setKode(await kapi.rabattkode(kodeFelt.trim()));
+    } catch (err) {
+      setKode(null);
+      setKodeFeil(err.message);
+    }
+    setSjekker(false);
+  }
   const problemer = priset.some((l) => l.feil);
   const felt = (navn) => ({ value: a[navn], onChange: (e) => setA({ ...a, [navn]: e.target.value }) });
 
@@ -334,6 +363,7 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
         linjer: h.linjer.map(({ card_id, finish, condition, antall }) => ({ card_id, finish, condition, antall })),
         frakt_id: frakt,
         bruk_kreditt: harKreditt && brukKreditt,
+        rabattkode: kode?.kode || "",
         notat,
         vilkar: vilkår,
       });
@@ -453,6 +483,9 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
             <table>
               <tbody>
                 <tr><td>Kort ({priset.reduce((n, l) => n + l.antall, 0)})</td><td className="h tall">{kroner(varer)}</td></tr>
+                {rabatt > 0 && (
+                  <tr><td>Rabatt {kode.prosent} % <span className="dempet">({kode.kode})</span></td><td className="h tall">−{kroner(rabatt)}</td></tr>
+                )}
                 <tr>
                   <td>
                     Frakt
@@ -462,6 +495,9 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
                   </td>
                   <td className="h tall">{valgtFrakt ? kroner(valgtFrakt.pris_ore) : "—"}</td>
                 </tr>
+                {gavekort > 0 && (
+                  <tr><td>Gavekort <span className="dempet">({kode.kode})</span></td><td className="h tall">−{kroner(gavekort)}</td></tr>
+                )}
                 {kreditt > 0 && (
                   <tr><td>Kreditt</td><td className="h tall">−{kroner(kreditt)}</td></tr>
                 )}
@@ -471,6 +507,38 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
                 </tr>
               </tbody>
             </table>
+            <div className="rabattkode">
+              {kode ? (
+                <div className="rad-flex" style={{ gap: 8 }}>
+                  <span className="merkelapp m-ok">{kode.kode}</span>
+                  <span style={{ fontSize: 13 }}>
+                    {kode.type === "prosent"
+                      ? `${kode.prosent} % rabatt på kortene`
+                      : `Gavekort, ${kroner(kode.tilgjengelig_ore)} tilgjengelig`}
+                  </span>
+                  <button type="button" className="lenke" style={{ marginLeft: "auto", fontSize: 13 }} onClick={() => { setKode(null); setKodeFelt(""); }}>
+                    Fjern
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="rad-flex" style={{ gap: 6 }}>
+                    <input
+                      value={kodeFelt}
+                      onChange={(e) => setKodeFelt(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") brukKode(e); }}
+                      placeholder="Rabattkode eller gavekort"
+                      aria-label="Rabattkode"
+                      style={{ flex: 1, minWidth: 0, textTransform: "uppercase" }}
+                    />
+                    <button type="button" className="knapp" disabled={sjekker || !kodeFelt.trim()} onClick={brukKode}>
+                      {sjekker ? "…" : "Bruk"}
+                    </button>
+                  </div>
+                  {kodeFeil && <div style={{ color: "var(--feil)", fontSize: 12.5, marginTop: 4 }}>{kodeFeil}</div>}
+                </>
+              )}
+            </div>
             <label className="rad-flex" style={{ gap: 8, margin: "12px 0", fontSize: 13.5, alignItems: "flex-start" }}>
               <input type="checkbox" checked={vilkår} onChange={(e) => setVilkår(e.target.checked)} />
               <span>
@@ -483,7 +551,7 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
               style={{ width: "100%" }}
               disabled={sender || problemer || !frakt || !vilkår || (åBetale > 0 && !oppsett.betaling)}
             >
-              {sender ? "Et øyeblikk…" : åBetale > 0 ? `Til betaling — ${kroner(åBetale)}` : "Fullfør med kreditt"}
+              {sender ? "Et øyeblikk…" : åBetale > 0 ? `Til betaling — ${kroner(åBetale)}` : gavekort > 0 && !kreditt ? "Fullfør med gavekort" : "Fullfør med kreditt"}
             </button>
             {åBetale > 0 && !oppsett.betaling && (
               <p className="dempet" style={{ fontSize: 12.5 }}>Kortbetaling er ikke slått på ennå.</p>
@@ -579,7 +647,13 @@ function OrdreLinjer({ o }) {
               <td className="h tall">{kroner(l.enhet_ore * l.antall)}</td>
             </tr>
           ))}
+          {Number(o.rabatt_ore) > 0 && (
+            <tr><td colSpan={3}>Rabatt ({o.rabattkode})</td><td className="h tall">−{kroner(o.rabatt_ore)}</td></tr>
+          )}
           <tr><td colSpan={3}>Frakt: {o.frakt_navn}</td><td className="h tall">{kroner(o.frakt_ore)}</td></tr>
+          {Number(o.gavekort_ore) > 0 && (
+            <tr><td colSpan={3}>Betalt med gavekort ({o.rabattkode})</td><td className="h tall">{kroner(o.gavekort_ore)}</td></tr>
+          )}
           {Number(o.kreditt_ore) > 0 && (
             <tr><td colSpan={3}>Betalt med kreditt</td><td className="h tall">{kroner(o.kreditt_ore)}</td></tr>
           )}
@@ -588,7 +662,7 @@ function OrdreLinjer({ o }) {
           )}
           <tr>
             <td colSpan={3}><b>Totalt</b></td>
-            <td className="h tall"><b>{kroner(Number(o.varer_ore) + Number(o.frakt_ore))}</b></td>
+            <td className="h tall"><b>{kroner(Number(o.varer_ore) - (Number(o.rabatt_ore) || 0) + Number(o.frakt_ore))}</b></td>
           </tr>
         </tbody>
       </table>
