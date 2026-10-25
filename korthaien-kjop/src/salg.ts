@@ -99,6 +99,9 @@ export function riktigMerke(ordrenr: string, merke: string): boolean {
 // Lageret kassen selger fra: kortene, og sealed/komplette sett som linjer med
 // card_id «p:<produkt-id>». Produktenes antall trekkes ned når ordren betales,
 // så kolonnen er beholdningen etter salg — som kortenes bok.
+// Et fraktalternativ der kunden henter selv («Henting på Løren»).
+export const erHenting = (navn: unknown) => /\bhent/i.test(String(navn || ""));
+
 export const erProdukt = (id: unknown) => /^p:\d+$/.test(String(id || ""));
 const SALGSLAGER = () => `${butikklagerSql()}
   UNION ALL
@@ -310,11 +313,14 @@ export async function åpneKasse(
   const poststed = t(inn.poststed, 80);
   if (!navn) throw new SalgFeil(400, "Fyll inn navn.");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new SalgFeil(400, "Fyll inn en gyldig e-postadresse.");
-  if (!adresse || !postnr || !poststed) throw new SalgFeil(400, "Fyll inn adresse, postnummer og poststed.");
   if (!inn.vilkar) throw new SalgFeil(400, "Du må godta kjøpsvilkårene.");
 
   const frakt = (await hentFrakt(true)).find((f) => f.id === Number(inn.frakt_id));
   if (!frakt) throw new SalgFeil(400, "Velg en fraktmåte.");
+  // Henter kunden selv, trengs ingen leveringsadresse.
+  if (!erHenting(frakt.navn) && (!adresse || !postnr || !poststed)) {
+    throw new SalgFeil(400, "Fyll inn adresse, postnummer og poststed.");
+  }
 
   // Første prising, utenfor transaksjonen: for å kunne gi kunden en god
   // feilmelding med alle linjene som ikke går.

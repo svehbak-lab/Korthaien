@@ -13,6 +13,12 @@ import { api, kroner } from "../api.js";
 
 const BUYLIST = "https://kortsalg.korthaien.no";
 
+// Adressen fra innstillingene uten telefonnummer. Loven krever adresse og
+// e-post på sidene kunden ser, ikke telefon — og adressefeltet har nummeret
+// fordi selgere trenger det på pakken.
+const utenTelefon = (a) =>
+  String(a || "").split(/\r?\n/).filter((l) => !/^[\s+()\d-]{8,}$/.test(l.trim())).join("\n").trim();
+
 // hvor: en intern skjerm, eller en adresse ut. Mangler begge, er punktet
 // ikke bygget ennå.
 const SPALTER = [
@@ -290,7 +296,7 @@ export function Retur() {
   if (!s) return <p className="dempet">Henter…</p>;
 
   const kundenBetaler = (s.retur_frakt || "kunde") === "kunde";
-  const adresse = (s.ship_to || "").trim();
+  const adresse = utenTelefon(s.ship_to);
   const orgnr = (s.org_nr || "").replace(/\s/g, "");
   const pentOrgnr = orgnr.length === 9
     ? `${orgnr.slice(0, 3)} ${orgnr.slice(3, 6)} ${orgnr.slice(6)}`
@@ -570,7 +576,7 @@ function useForetak() {
   return {
     navn: s.firmanavn || "Korthaien",
     orgnr: orgnr.length === 9 ? `${orgnr.slice(0, 3)} ${orgnr.slice(3, 6)} ${orgnr.slice(6)}` : orgnr,
-    adresse: (s.ship_to || "").trim(),
+    adresse: utenTelefon(s.ship_to),
     kundenBetalerRetur: (s.retur_frakt || "kunde") === "kunde",
   };
 }

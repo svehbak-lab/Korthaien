@@ -343,6 +343,8 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
   if (!oppsett || !priset) return <p className="dempet">Henter kassen…</p>;
 
   const valgtFrakt = oppsett.frakt.find((f) => f.id === frakt);
+  // Henter kunden selv, er adressen valgfri.
+  const henter = /\bhent/i.test(valgtFrakt?.navn || "");
   const varer = priset.reduce((n, l) => n + l.enhet_ore * l.antall, 0);
   const totalt = varer + (valgtFrakt?.pris_ore || 0);
   const harKreditt = !!(h.kunde?.bekreftet && h.kreditt_ore > 0);
@@ -427,10 +429,10 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
                 <input required type="email" autoComplete="email" {...felt("email")} disabled={!!h.kunde} />
               </label>
               <label>Telefon<input type="tel" autoComplete="tel" {...felt("telefon")} /></label>
-              <label>Adresse<input required autoComplete="street-address" {...felt("adresse")} /></label>
+              <label>Adresse<input required={!henter} autoComplete="street-address" {...felt("adresse")} /></label>
               <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 10 }}>
-                <label>Postnr.<input required autoComplete="postal-code" {...felt("postnr")} /></label>
-                <label>Poststed<input required autoComplete="address-level2" {...felt("poststed")} /></label>
+                <label>Postnr.<input required={!henter} autoComplete="postal-code" {...felt("postnr")} /></label>
+                <label>Poststed<input required={!henter} autoComplete="address-level2" {...felt("poststed")} /></label>
               </div>
               {h.kunde && (
                 <label className="rad-flex" style={{ gap: 8 }}>
@@ -450,7 +452,9 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
                   <span style={{ flex: 1 }}>
                     <b>{f.navn}</b> — {kroner(f.pris_ore)}
                     <div className="dempet" style={{ fontSize: 12.5 }}>
-                      {f.forsikret_ore === null ? "Uten sporing og forsikring" : `Sporing, forsikret inntil ${kroner(f.forsikret_ore)}`}
+                      {/\bhent/i.test(f.navn)
+                        ? "Du henter selv — vi sender e-post når ordren er klar"
+                        : f.forsikret_ore === null ? "Uten sporing og forsikring" : `Sporing, forsikret inntil ${kroner(f.forsikret_ore)}`}
                       {f.beskrivelse ? ` · ${f.beskrivelse}` : ""}
                     </div>
                   </span>

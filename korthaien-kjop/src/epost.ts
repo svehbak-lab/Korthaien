@@ -501,20 +501,26 @@ export async function varsleSendt(ordreId: number): Promise<Utfall> {
   const r = await db().execute({ sql: "SELECT * FROM salgsordrer WHERE id = ?", args: [ordreId] });
   const o: any = r.rows[0];
   if (!o) return { sendt: false, grunn: "fant ikke ordren" };
+  const henting = /\bhent/i.test(String(o.frakt_navn || ""));
   const spor = o.sporingsnr
     ? `<p>Sporingsnummer: <b>${trygg(o.sporingsnr)}</b>. Du kan følge pakken på
        <a href="https://sporing.posten.no/sporing/${encodeURIComponent(o.sporingsnr)}">posten.no</a>.</p>`
     : "";
   return send({
     til: String(o.email),
-    emne: `Ordre ${o.ordrenr} er sendt — Korthaien`,
+    emne: henting ? `Ordre ${o.ordrenr} er klar til henting — Korthaien` : `Ordre ${o.ordrenr} er sendt — Korthaien`,
     html: RAMME(
-      `<h2 style="font-size:20px;margin:0 0 6px">Pakken er på vei</h2>
+      henting
+        ? `<h2 style="font-size:20px;margin:0 0 6px">Klar til henting</h2>
+       <p>Ordre <b>${trygg(o.ordrenr)}</b> er pakket og klar til å hentes. Svar på denne e-posten for å avtale tidspunkt.</p>`
+        : `<h2 style="font-size:20px;margin:0 0 6px">Pakken er på vei</h2>
        <p>Ordre <b>${trygg(o.ordrenr)}</b> er levert til posten med ${trygg(String(o.frakt_navn || "").toLowerCase())}.</p>
        ${spor}`,
-      "Ordren er sendt"
+      henting ? "Klar til henting" : "Ordren er sendt"
     ),
-    tekst: `Ordre ${o.ordrenr} er sendt med ${o.frakt_navn}.${o.sporingsnr ? ` Sporingsnummer: ${o.sporingsnr}.` : ""}`,
+    tekst: henting
+      ? `Ordre ${o.ordrenr} er klar til henting. Svar på e-posten for å avtale tidspunkt.`
+      : `Ordre ${o.ordrenr} er sendt med ${o.frakt_navn}.${o.sporingsnr ? ` Sporingsnummer: ${o.sporingsnr}.` : ""}`,
   });
 }
 
