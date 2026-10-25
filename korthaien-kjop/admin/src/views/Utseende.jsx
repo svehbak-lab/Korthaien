@@ -62,6 +62,7 @@ export default function Utseende({ onFeil, onMelding }) {
     setJobber(true);
     try {
       await api.lagreInnstillinger({ tema: id });
+      window.dispatchEvent(new CustomEvent("korthaien-tema", { detail: id }));
       onMelding("Temaet er byttet. Åpne Butikk for å se det.");
     } catch (e) {
       setValgt(forrige);

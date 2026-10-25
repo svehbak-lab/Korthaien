@@ -229,7 +229,7 @@ textarea { width: 100%; font-family: inherit; }
    ikke admins blå. Alt er avgrenset til .butikk, så resten av admin står
    urørt. Når visningen flyttes ut, følger stilen med.
    ───────────────────────────────────────────────────────────────────────── */
-.butikk {
+.butikk, .skall {
   --dyp: #04302c;
   --sjo: #0c6259;
   --sjo-svak: #e8f2f0;
@@ -355,6 +355,30 @@ textarea { width: 100%; font-family: inherit; }
    grønn og ikke oransje; ellers kjemper de to om det samme blikket, og da
    vinner ingen av dem.
    ───────────────────────────────────────────────────────────────────────── */
+
+.skall {
+  --topp1: #0b3f38;
+  --topp2: #15594e;
+  --oransje: #ffa94d;
+  --oransje-tekst: #181818;
+  --topp-tekst: #fff;
+  --topp2-tekst: #eaf4f1;
+  --logo-finne: #8fd4c0;
+  --skrift: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --skrift-navn: var(--skrift);
+  --skrift-tall: var(--skrift);
+  --logo-font: 700 19px/1.2 var(--skrift);
+  --logo-sperre: -0.015em;
+  --nav-font: 600 14px/1.2 var(--skrift);
+  --selg-font: 700 13.5px/1.2 var(--skrift);
+  --tall-font: 700 10px/1.4 var(--skrift-tall);
+  --sok-kant: none;
+  --sok-bg: #0f5248;
+  --sok-tekst: #fff;
+  --runding: 6px;
+  --pille: 999px;
+  --fiber: none;
+}
 
 .butikk {
   --topp1: #0b3f38;
@@ -646,7 +670,7 @@ textarea { width: 100%; font-family: inherit; }
    Gammel avis: avispapir, tung antikva i tittelen, doble streker, og rødt
    bare til det ene som skal ropes ut. Ingen runde hjørner og ingen skygger —
    trykksverte kaster ikke skygge. */
-.butikk[data-tema="avis"] {
+.butikk[data-tema="avis"], .skall[data-tema="avis"] {
   --papir: #f1eee4; --flate: #fbf9f3; --strek: #d6cebc; --strek-sterk: #a89f8d;
   /* Dempet mørket fra #6d6457 (5,0:1) til 7,2:1 — fortsatt grå trykksverte,
      tydelig lysere enn brødteksten. */
@@ -688,7 +712,7 @@ textarea { width: 100%; font-family: inherit; }
 .butikk[data-tema="avis"] .cond-valg button[aria-pressed="true"] {
   background: var(--blekk); color: var(--flate); border-color: var(--blekk);
 }
-.butikk[data-tema="avis"] .knapp.primar { background: var(--blekk); border-color: var(--blekk); }
+.butikk[data-tema="avis"] .knapp.primar, .skall[data-tema="avis"] .knapp.primar { background: var(--blekk); border-color: var(--blekk); }
 .butikk[data-tema="avis"] .b-band,
 .butikk[data-tema="avis"] .b-banner { border-radius: 0; }
 .butikk[data-tema="avis"] .b-flis img, .butikk[data-tema="avis"] .b-gbilde img { border-radius: 2px; }
@@ -697,7 +721,7 @@ textarea { width: 100%; font-family: inherit; }
    En varefortegnelse. Monospace på alt som er tall og koder, så sifrene står
    rett under hverandre nedover lista — øyet lærer hvor tallene er og slutter
    å lete. Ingen runde hjørner, ingen skygger, ingen pynt. */
-.butikk[data-tema="katalog"] {
+.butikk[data-tema="katalog"], .skall[data-tema="katalog"] {
   --papir: #edf0f1; --flate: #ffffff; --strek: #c8d1d5; --strek-sterk: #9db0b6;
   --blekk: #12161a; --dempet: #62717a;
   --dyp: #0f5f6b; --sjo: #0f5f6b; --sjo-svak: #e3eff1; --brass: #12161a;
@@ -747,7 +771,7 @@ textarea { width: 100%; font-family: inherit; }
    bremsen som skiller dette fra fantasy-kitsch.
    Fiberen er feTurbulence, ikke et bilde: den veier ingenting, kan ikke bli
    uskarp, og gjentas uten søm. */
-.butikk[data-tema="pergament"] {
+.butikk[data-tema="pergament"], .skall[data-tema="pergament"] {
   /* Papiret er lysnet litt (fra #efe4cd), så fiberen har rom til å synes
      uten å spise kontrasten. */
   --papir: #f4ead6; --flate: #fbf6ea; --strek: #d9c9a9; --strek-sterk: #bda987;
@@ -787,7 +811,7 @@ textarea { width: 100%; font-family: inherit; }
 .butikk[data-tema="pergament"] .pris-stor { font-family: var(--skrift-tall); font-weight: 600; font-variant-numeric: tabular-nums; }
 .butikk[data-tema="pergament"] .pris-stor { font-size: 26px; }
 .butikk[data-tema="pergament"] .b-band { background: var(--dyp); }
-.butikk[data-tema="pergament"] .knapp.primar { background: var(--sjo); border-color: var(--sjo); }
+.butikk[data-tema="pergament"] .knapp.primar, .skall[data-tema="pergament"] .knapp.primar { background: var(--sjo); border-color: var(--sjo); }
 .butikk[data-tema="pergament"] .b-flis img,
 .butikk[data-tema="pergament"] .b-gbilde img { box-shadow: 0 2px 10px rgb(22 32 58 / 18%); }
 
@@ -812,7 +836,7 @@ textarea { width: 100%; font-family: inherit; }
    Ingen opasitet på tekst: gjennomsiktighet er det som stilltiende spiser
    kontrasten. */
 
-.butikk[data-tema="lesesal"] {
+.butikk[data-tema="lesesal"], .skall[data-tema="lesesal"] {
   --papir: #f3eee4; --flate: #fffcf6; --strek: #ddd3c2; --strek-sterk: #b5a68e;
   --blekk: #1b1612; --dempet: #544c44;
   --dyp: #1f1a15; --sjo: #225077; --sjo-svak: #e7eef5; --brass: #8c2d1c;
@@ -837,7 +861,7 @@ textarea { width: 100%; font-family: inherit; }
 
 /* Card Kingdom i temperament — mørkeblå topp, oransje til salg — men med
    AAA-kontrast og en navneskrift tegnet for å være entydig. */
-.butikk[data-tema="signal"] {
+.butikk[data-tema="signal"], .skall[data-tema="signal"] {
   --papir: #edf1f6; --flate: #ffffff; --strek: #d3dbe6; --strek-sterk: #a3b1c4;
   --blekk: #0b1424; --dempet: #454f61;
   --dyp: #0b2a5c; --sjo: #1445a3; --sjo-svak: #e3eaf8; --brass: #0d5a39;
@@ -1063,3 +1087,40 @@ label.kreditt-boks { cursor: pointer; }
   position: fixed; z-index: 40; pointer-events: none; object-fit: cover;
   border-radius: 14px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35); background: #2a2f38;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ADMIN I BUTIKKENS TEMA
+   ─────────────────────────────────────────────────────────────────────────────
+   Admin bruker temaet som er valgt under Utseende: samme papir, blekk,
+   skrift og aksent som butikken. Venstremenyen er butikkens topp, lagt på
+   siden. Temaene setter bare variabler (se TEMAER over), så hvert nytt tema
+   gjelder admin av seg selv.
+   ───────────────────────────────────────────────────────────────────────── */
+.skall { background: var(--papir); color: var(--blekk); font-family: var(--skrift); }
+.skall input, .skall select, .skall textarea, .skall button { font-family: inherit; }
+.skall .tittel, .skall h1, .skall h2 { font-family: var(--skrift-navn); }
+.skall .tall, .skall .kode { font-family: var(--skrift-tall); }
+.skall .kode { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+.skall .rail { background: var(--topp1); color: var(--topp-tekst); border-right: 1px solid var(--strek); }
+.skall .merke b { font: var(--logo-font); font-size: 19px; letter-spacing: var(--logo-sperre); color: var(--topp-tekst); }
+.skall .merke span { color: var(--topp-tekst); opacity: 0.75; }
+.skall .rail nav button { color: var(--topp-tekst); font: var(--nav-font); font-weight: 500; }
+.skall .rail nav button:hover { background: color-mix(in srgb, var(--topp-tekst) 10%, transparent); }
+.skall .rail nav button[aria-current="true"] {
+  background: color-mix(in srgb, var(--topp-tekst) 16%, transparent);
+  color: var(--topp-tekst); font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--oransje);
+}
+.skall .rail nav .antall,
+.skall .rail nav button[aria-current="true"] .antall { background: var(--oransje); color: var(--oransje-tekst); font-weight: 700; }
+.skall .rail .bunn { color: var(--topp-tekst); }
+
+.skall .panel { background: var(--flate); border-color: var(--strek); border-radius: var(--runding); }
+.skall .knapp { border-radius: var(--runding); }
+.skall .knapp.primar { background: var(--dyp); border-color: var(--dyp); color: #fff; }
+.skall .knapp.primar:hover:not(:disabled) { background: var(--sjo); border-color: var(--sjo); }
+.skall .faner button[aria-selected="true"] { border-bottom-color: var(--sjo); }
+.skall input[type="checkbox"], .skall input[type="radio"] { accent-color: var(--sjo); }
+.skall input:focus, .skall select:focus, .skall textarea:focus { border-color: var(--sjo); }
+.skall :focus-visible { outline-color: var(--sjo); }

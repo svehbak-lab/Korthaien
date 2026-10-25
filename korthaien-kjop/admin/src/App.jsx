@@ -51,10 +51,21 @@ export default function App() {
   const [antallOrdrer, setAntallOrdrer] = useState(null);
   const [antallUkoblede, setAntallUkoblede] = useState(null);
   const [adminfane, setAdminfane] = useState("innkjop");
+  // Admin bruker butikkens tema. Byttes det under Utseende, sier den fra med
+  // en hendelse, så admin skifter med en gang.
+  const [tema, setTema] = useState(null);
 
   useEffect(() => {
     api.meg().then(() => setInnlogget(true)).catch(() => setInnlogget(false));
   }, []);
+
+  useEffect(() => {
+    if (!innlogget) return;
+    api.innstillinger().then((s) => setTema(s.tema || "dagens")).catch(() => setTema("dagens"));
+    const bytt = (e) => setTema(e.detail || "dagens");
+    window.addEventListener("korthaien-tema", bytt);
+    return () => window.removeEventListener("korthaien-tema", bytt);
+  }, [innlogget]);
 
   function håndterFeil(e) {
     if (e instanceof UtloggetFeil) {
@@ -74,7 +85,7 @@ export default function App() {
   if (!innlogget) return <Innlogging onInn={() => setInnlogget(true)} />;
 
   return (
-    <div className="skall">
+    <div className="skall" data-tema={tema || "dagens"}>
       <aside className="rail">
         <div className="merke">
           <b>Korthaien Kjøp</b>
