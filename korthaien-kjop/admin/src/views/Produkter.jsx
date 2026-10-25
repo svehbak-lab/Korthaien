@@ -155,7 +155,7 @@ export default function Produkter({ onFeil, onMelding }) {
                   <div className="dempet" style={{ fontSize: 12, marginBottom: 3 }}>Antall kort</div>
                   <input
                     type="text" inputMode="numeric" value={ny.antall_kort} placeholder="auto"
-                    title="La stå tomt for å regne ut av settet. Fyll inn hvis tallet blir feil."
+                    title="La stå tomt — da brukes grunnsettet fra Lagerrapport. Fyll inn bare for å overstyre."
                     onChange={(e) => setNy({ ...ny, antall_kort: e.target.value.replace(/\D/g, "") })}
                     style={{ width: 70, textAlign: "right" }}
                   />
@@ -267,7 +267,7 @@ export default function Produkter({ onFeil, onMelding }) {
                                 <span className="dempet">Antall kort</span>
                                 <input
                                   type="text" inputMode="numeric" value={redigerer.antall_kort ?? ""} placeholder={redigerer.set_antall ? String(redigerer.set_antall) : "auto"}
-                                  title="La stå tomt for å regne ut av settet."
+                                  title="La stå tomt — da brukes grunnsettet fra Lagerrapport."
                                   onChange={(e) => setRedigerer({ ...redigerer, antall_kort: e.target.value.replace(/\D/g, "") })}
                                   style={{ width: 58, display: "block" }}
                                 />

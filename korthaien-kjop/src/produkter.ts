@@ -81,19 +81,23 @@ export async function hentProdukter(
   if (opts.barePåLager) hvor.push("p.antall > 0");
 
   const r = await db().execute({
-    sql: `SELECT p.*, COALESCE(s.visningsnavn, s.name) AS set_navn, s.printed_size, s.card_count
+    sql: `SELECT p.*, COALESCE(s.visningsnavn, s.name) AS set_navn, s.printed_size, s.card_count, r.grunnsett_til
             FROM produkter p LEFT JOIN sets s ON s.code = p.set_code
+            LEFT JOIN set_rules r ON r.set_code = p.set_code
            ${hvor.length ? "WHERE " + hvor.join(" AND ") : ""}
            ORDER BY p.sortering, p.navn`,
     args,
   });
-  const koder = [...new Set((r.rows as any[]).filter((x) => x.set_code && !x.printed_size).map((x) => String(x.set_code)))];
+  const koder = [...new Set((r.rows as any[]).filter((x) => x.set_code && !x.printed_size && !x.grunnsett_til).map((x) => String(x.set_code)))];
   const utregnet = await settStørrelser(koder);
   return (r.rows as any[]).map((x) =>
     rad({
       ...x,
       set_antall:
+        // Rekkefølgen: tallet på produktet, grunnsettet du har satt under
+        // Lagerrapport, Scryfalls printed_size, og til slutt utregnet.
         (Number(x.antall_kort) || 0) ||
+        (Number(x.grunnsett_til) || 0) ||
         (Number(x.printed_size) || 0) ||
         utregnet.get(String(x.set_code)) ||
         (Number(x.card_count) || null),

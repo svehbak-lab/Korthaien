@@ -129,6 +129,7 @@ export async function settinfo(kode: string): Promise<Settinfo | null> {
     offisielt_navn: String(rad.name),
     utgitt: rad.released_at ? String(rad.released_at) : null,
     kort_i_settet:
+      Number((await db().execute({ sql: "SELECT grunnsett_til FROM set_rules WHERE set_code = ?", args: [String(rad.code)] })).rows[0]?.grunnsett_til || 0) ||
       Number(rad.printed_size || 0) ||
       (await settStørrelser([String(rad.code)])).get(String(rad.code)) ||
       Number(rad.card_count || 0),
