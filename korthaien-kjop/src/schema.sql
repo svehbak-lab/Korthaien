@@ -686,3 +686,20 @@ CREATE TABLE IF NOT EXISTS rabattkode_bevegelser (
   ordrenr     TEXT,
   created_at  TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS rabattkode_bevegelser_kode ON rabattkode_bevegelser(kode_id);
+
+-- Ønskeliste: kunden vil ha beskjed når et kort er på lager. card_id er ''
+-- for «hvilken som helst utgave» (oracle_id avgjør), ellers én bestemt
+-- utgave. finish: 'alle', 'foil' eller 'nonfoil'. varslet_at settes når
+-- e-posten er sendt, og nullstilles når kortet er utsolgt igjen — slik får
+-- kunden ny beskjed neste gang det kommer inn.
+CREATE TABLE IF NOT EXISTS onskeliste (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  kunde_id    INTEGER NOT NULL REFERENCES kunder(id) ON DELETE CASCADE,
+  oracle_id   TEXT NOT NULL,
+  card_id     TEXT NOT NULL DEFAULT '',
+  finish      TEXT NOT NULL DEFAULT 'alle',
+  navn        TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  varslet_at  TEXT,
+  UNIQUE (kunde_id, oracle_id, card_id, finish));
+CREATE INDEX IF NOT EXISTS onskeliste_kunde ON onskeliste(kunde_id);

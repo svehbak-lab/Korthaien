@@ -1191,3 +1191,10 @@ label.kreditt-boks { cursor: pointer; }
 .butikk .b-omtabell th { text-align: left; font-weight: 600; font-size: inherit; color: var(--dempet); padding: 7px 28px 7px 0; vertical-align: top; white-space: nowrap; border: 0; }
 .butikk .b-omtabell td { padding: 7px 0; border: 0; }
 .butikk .b-omtabell tr + tr th, .butikk .b-omtabell tr + tr td { border-top: 1px solid var(--strek); }
+
+/* ── ønskeliste på kortsiden ─────────────────────────────────────────────── */
+.onske-valg { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--strek); display: flex; flex-direction: column; gap: 4px; font-size: 13px; text-align: left; }
+.onske-valg label { display: flex; gap: 6px; align-items: center; }
+/* Produktbilder (bokser, displayer) har ikke kortets form. Hele bildet skal
+   synes i ruten, ikke beskjæres. */
+.butikk .b-flis img.produktbilde { object-fit: contain; background: var(--flate); border: 1px solid var(--strek); padding: 6px; }

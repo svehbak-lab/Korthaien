@@ -1,3 +1,4 @@
+import { Ønske } from "./Onske.jsx";
 import SettStabel from "./SettStabel.jsx";
 import Bulksok from "./Bulksok.jsx";
 import { useState, useEffect, useMemo } from "react";
@@ -73,8 +74,9 @@ function lesLenke() {
     nyttpassord: p.get("nyttpassord"),
     innlogging: p.get("innlogging"),
     bekreft: p.get("bekreft"),
+    kort: p.get("kort"),
   };
-  if (ut.kasse || ut.nyttpassord || ut.innlogging || ut.bekreft) {
+  if (ut.kasse || ut.nyttpassord || ut.innlogging || ut.bekreft || ut.kort) {
     window.history.replaceState(null, "", window.location.pathname);
   }
   return ut;
@@ -98,7 +100,9 @@ function ButikkSider({ onFeil }) {
   const [perSide, setPerSide] = useState(25);
   const [side, setSide] = useState(1);
   const [f, setF] = useState(TOMT);
-  const [åpentKort, setÅpentKort] = useState(null);
+  // ?kort=<id> fra e-posten om ønskelista åpner kortet direkte.
+  const [åpentKort, setÅpentKort] = useState(() => lenke.kort || null);
+  const [minSideFane, setMinSideFane] = useState("ordrer");
   // Forsiden først. Lista er fortsatt det arbeidsredskapet den alltid har
   // vært — den er ett klikk unna, og søket herfra lander rett i den.
   const [skjerm, setSkjerm] = useState(() =>
@@ -245,7 +249,19 @@ function ButikkSider({ onFeil }) {
       />
       <div className="b-innhold">{innhold}</div>
       {/* Bunnen staar paa hver skjerm, som toppen. */}
-      <Bunn onSkjerm={(id) => { setÅpentKort(null); setSkjerm(id); }} />
+      <Bunn
+        onSkjerm={(id) => {
+          setÅpentKort(null);
+          // Snarveier fra bunnen rett til en fane på «Min side».
+          if (id === "onskeliste" || id === "minekjop") {
+            setMinSideFane(id === "onskeliste" ? "onskeliste" : "ordrer");
+            setSkjerm("konto");
+          } else {
+            if (id === "konto") setMinSideFane("ordrer");
+            setSkjerm(id);
+          }
+        }}
+      />
     </div>
   );
 
@@ -257,6 +273,7 @@ function ButikkSider({ onFeil }) {
         onÅpne={setÅpentKort}
         onSett={(kode) => { setSett(kode); setÅpentKort(null); setSkjerm("liste"); }}
         onFeil={onFeil}
+        onLoggInn={() => { setEtterInnlogging(null); setÅpentKort(null); setSkjerm("konto"); }}
       />
     );
   }
@@ -319,8 +336,9 @@ function ButikkSider({ onFeil }) {
         </>
       );
     }
-    return skall(<MinSide onUt={() => setSkjerm("forside")} />);
+    return skall(<MinSide startfane={minSideFane} onUt={() => setSkjerm("forside")} />);
   }
+
 
   if (skjerm === "kontakt") return skall(<Kontakt onFeil={onFeil} />);
   if (skjerm === "frakt") return skall(<Fraktside onFeil={onFeil} />);
@@ -1204,7 +1222,7 @@ function Galleriflis({ kort, onÅpne, onSett }) {
 // Alt om ett trykk, og de andre utgavene av samme kort. «Samme kort» er
 // Scryfalls oracle_id, ikke navnet — den holder også når navnet er skrevet
 // ulikt mellom utgivelser.
-function Kortside({ id, onLukk, onÅpne, onSett, onFeil }) {
+function Kortside({ id, onLukk, onÅpne, onSett, onFeil, onLoggInn }) {
   const [data, setData] = useState(null);
   const [finish, setFinish] = useState("nonfoil");
   const [valgt, setValgt] = useState(null);
@@ -1319,6 +1337,7 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil }) {
                 )}
               </>
             )}
+            <Ønske kort={k} onLoggInn={onLoggInn} />
           </div>
         </div>
       </div>
@@ -1717,7 +1736,7 @@ function Produktflis({ produkt: p }) {
   return (
     <div className="b-flis b-flis-stille">
       {p.bilde_url ? (
-        <img src={p.bilde_url} alt={p.navn} loading="lazy" />
+        <img className="produktbilde" src={p.bilde_url} alt={p.navn} loading="lazy" />
       ) : p.type === "komplettsett" && p.set_code ? (
         <SettStabel setCode={p.set_code} setNavn={p.set_navn} antall={p.set_antall} foil={p.foil} />
       ) : (

@@ -1,3 +1,4 @@
+import { Ønskeliste } from "./Onske.jsx";
 import SettStabel from "./SettStabel.jsx";
 import { Overgangstekst } from "./Kunder.jsx";
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
@@ -878,13 +879,15 @@ export function NyttPassord({ token, onFerdig }) {
 // ── min side ────────────────────────────────────────────────────────────────
 const SIDEFANER = [
   { id: "ordrer", navn: "Ordrer" },
+  { id: "onskeliste", navn: "Ønskeliste" },
   { id: "kreditt", navn: "Kreditt" },
   { id: "profil", navn: "Profil" },
 ];
 
-export function MinSide({ onUt }) {
+export function MinSide({ onUt, startfane = "ordrer" }) {
   const h = useHandel();
-  const [fane, setFane] = useState("ordrer");
+  const [fane, setFane] = useState(startfane);
+  useEffect(() => setFane(startfane), [startfane]);
   const [åpen, setÅpen] = useState(null);
 
   return (
@@ -913,6 +916,7 @@ export function MinSide({ onUt }) {
         ))}
       </div>
       {fane === "ordrer" && (åpen ? <KundeOrdre nr={åpen} onLukk={() => setÅpen(null)} /> : <KundeOrdrer onÅpne={setÅpen} />)}
+      {fane === "onskeliste" && <Ønskeliste />}
       {fane === "kreditt" && <KundeKreditt />}
       {fane === "profil" && <Profil />}
     </>

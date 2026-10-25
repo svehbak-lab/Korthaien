@@ -1,3 +1,4 @@
+import { leggTilØnske, fjernØnske, hentØnsker, varsleØnsker, ØnskeFeil } from "./onskeliste.js";
 import { bulkSøk } from "./bulksok.js";
 import { sjekkKode, KodeFeil, alleKoder, opprettKode, importerKoder, justerSaldo, endreKode, bevegelser as kodeBevegelser, lagKode } from "./rabattkoder.js";
 import { randomBytes } from "node:crypto";
@@ -759,6 +760,16 @@ app.get("/api/konto/google/tilbake", async (req: any, res: any) => {
     tilbake("innlogging=feil");
   }
 });
+
+app.get("/api/konto/onskeliste", krevKunde, fang(async (req: any, res: any) => {
+  res.json({ onsker: await hentØnsker(req.kunde.id) });
+}));
+app.post("/api/konto/onskeliste", krevKunde, fang(async (req: any, res: any) => {
+  res.json({ onsker: await leggTilØnske(req.kunde.id, req.body || {}) });
+}));
+app.delete("/api/konto/onskeliste/:id", krevKunde, fang(async (req: any, res: any) => {
+  res.json({ onsker: await fjernØnske(req.kunde.id, Number(req.params.id)) });
+}));
 
 app.get("/api/konto/ordrer", krevKunde, fang(async (req: any, res: any) => {
   res.json({ ordrer: await kundensOrdrer(req.kunde) });
@@ -1676,7 +1687,7 @@ app.use((feil: any, _req: any, res: any, _next: any) => {
   if (feil instanceof HttpFeil) {
     return res.status(feil.status).json({ feil: feil.message, ...(feil.data || {}) });
   }
-  if (feil instanceof SalgFeil || feil instanceof KontoFeil || feil instanceof KodeFeil) {
+  if (feil instanceof SalgFeil || feil instanceof KontoFeil || feil instanceof KodeFeil || feil instanceof ØnskeFeil) {
     return res.status(feil.status).json({ feil: feil.message, ...((feil as any).data || {}) });
   }
   console.error(feil);
@@ -1706,6 +1717,13 @@ migrate()
     // butikken kort tid etter at kvarteret er ute.
     const kasseTimer = setInterval(() => utløpGamle(true).catch(console.error), 60_000);
     kasseTimer.unref?.();
+    // Ønskelista: beskjed til kunder når kort de venter på, er på lager.
+    // Lageret endres av nattsynken og av kanselleringer, så hver halvtime
+    // holder. Ikke når det kjøres tester.
+    if (!process.env.DATABASE_URL?.startsWith("file:/tmp")) {
+      const ønskeTimer = setInterval(() => varsleØnsker().catch(console.error), 30 * 60_000);
+      ønskeTimer.unref?.();
+    }
   })
   .catch((e) => {
     console.error("Klarte ikke migrere databasen:", e);

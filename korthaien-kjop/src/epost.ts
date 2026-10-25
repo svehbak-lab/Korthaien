@@ -533,3 +533,22 @@ export async function sendBekreftEpost(email: string, lenke: string): Promise<Ut
     tekst: `Bekreft e-postadressen din her (virker i et døgn): ${lenke}\n\nLagde du ikke en konto, kan du se bort fra e-posten.`,
   });
 }
+
+// Ønskelista: kortene kunden ventet på, er på lager.
+export async function sendØnskelisteVarsel(email: string, kort: { navn: string; url: string; finish: string }[]): Promise<Utfall> {
+  const linjer = kort
+    .map((k) => `<li style="margin:4px 0"><a href="${trygg(k.url)}">${trygg(k.navn)}</a>${k.finish === "foil" ? " (foil)" : k.finish === "nonfoil" ? " (ikke foil)" : ""}</li>`)
+    .join("");
+  return send({
+    til: email,
+    emne: kort.length === 1 ? `${kort[0].navn} er på lager — Korthaien` : `${kort.length} kort fra ønskelista er på lager — Korthaien`,
+    html: RAMME(
+      `<h2 style="font-size:20px;margin:0 0 6px">Nå er det inne</h2>
+       <p>${kort.length === 1 ? "Kortet" : "Kortene"} du ba om beskjed for, er på lager hos Korthaien:</p>
+       <ul style="padding-left:18px">${linjer}</ul>
+       <p style="font-size:13px;color:#7a746c">Det er førstemann til mølla. Du kan fjerne kort fra ønskelista under «Min side».</p>`,
+      "Ønskeliste"
+    ),
+    tekst: `På lager hos Korthaien:\n${kort.map((k) => `- ${k.navn}: ${k.url}`).join("\n")}`,
+  });
+}

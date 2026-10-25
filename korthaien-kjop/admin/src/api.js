@@ -304,6 +304,9 @@ export const kunde = {
   sendBekreftelse: () => kundekall("/api/konto/send-bekreftelse", { method: "POST" }),
   googleUrl: () => `${BASE}/api/konto/google`,
   ordrer: () => kundekall("/api/konto/ordrer"),
+  onskeliste: () => kundekall("/api/konto/onskeliste"),
+  leggOnske: (felt) => kundekall("/api/konto/onskeliste", { method: "POST", body: felt }),
+  fjernOnske: (id) => kundekall(`/api/konto/onskeliste/${id}`, { method: "DELETE" }),
   ordre: (nr) => kundekall(`/api/konto/ordrer/${encodeURIComponent(nr)}`),
   kreditt: () => kundekall("/api/konto/kreditt"),
 
