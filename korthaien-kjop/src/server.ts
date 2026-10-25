@@ -1,3 +1,4 @@
+import { harVipps } from "./vipps.js";
 import { overgangsstatus, gjennomførOvergang } from "./overgang.js";
 import { erAdmin } from "./auth.js";
 import { lagerkilde, settBokSomLagerkilde } from "./lager.js";
@@ -52,7 +53,7 @@ import {
 import {
   SalgFeil, prisKurv, åpneKasse, avbrytKasse, stripeHendelse, hentOrdre as hentSalgsordre, lagerForPlukk, offentlig, kundensOrdrer,
   tilhørerKunde, riktigMerke, tilgjengeligKreditt, adminOrdrer, settStatus, kanseller,
-  salgsstatistikk, utløpGamle, harStripe, butikkUrl, RESERVASJON_MIN,
+  salgsstatistikk, utløpGamle, harStripe, oppdaterVippsOrdre, butikkUrl, RESERVASJON_MIN,
 } from "./salg.js";
 import { bevegelser as kredittBevegelser } from "./kreditt.js";
 import { sendTilbakestilling, sendBekreftEpost } from "./epost.js";
@@ -895,6 +896,7 @@ app.get("/api/butikk/oppsett", fang(async (_req: any, res: any) => {
   res.json({
     frakt: await hentFrakt(true),
     betaling: harStripe(),
+    vipps: harVipps(),
     google: harGoogle(),
     reservasjon_min: RESERVASJON_MIN,
     overgang_dato: (await hentSettings()).overgang_dato || "",
@@ -957,6 +959,8 @@ app.post("/api/butikk/kasse/:nr/avbryt", fang(async (req: any, res: any) => {
 app.get("/api/butikk/ordre/:nr", fang(async (req: any, res: any) => {
   const nr = String(req.params.nr);
   if (!riktigMerke(nr, String(req.query.m || ""))) throw new HttpFeil(404, "Fant ikke ordren");
+  // Vipps sier ikke fra selv. Kommer kunden tilbake fra Vipps, spør vi.
+  await oppdaterVippsOrdre(nr);
   const o = await hentSalgsordre(nr);
   if (!o) throw new HttpFeil(404, "Fant ikke ordren");
   res.json({ ordre: offentlig(o) });

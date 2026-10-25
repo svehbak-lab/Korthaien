@@ -2,6 +2,7 @@ import { utgaveNavn } from "./varianter.js";
 import { sjekkKode, KodeFeil } from "./rabattkoder.js";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import Stripe from "stripe";
+import { harVipps, lagVippsBetaling, hentVippsBetaling, trekkVipps, refunderVipps, avbrytVipps } from "./vipps.js";
 import { db, CONDITIONS, type Condition } from "./db.js";
 import { hentSalgsOppsett, salgsprisØre, hentManuellSalg } from "./salgspris.js";
 import { hentManuellePriser } from "./pricing.js";
@@ -70,7 +71,8 @@ export function _brukStripe(k: any) { klient = k; }
 // Vipps hos Stripe er i lukket forhåndsvisning. Når kontoen har fått
 // tilgang, slås den på med STRIPE_VIPPS=1. Forhåndsvisningen krever et
 // eget versjonsflagg på kallene som tar Vipps.
-const vipps = () => process.env.STRIPE_VIPPS === "1";
+// Vipps gjennom Stripe brukes bare når egen Vipps-avtale ikke er satt opp.
+const vipps = () => process.env.STRIPE_VIPPS === "1" && !harVipps();
 export const butikkUrl = () =>
   (process.env.SHOP_URL || process.env.ADMIN_URL || "https://admin.kortsalg.korthaien.no").replace(/\/$/, "");
 
@@ -278,6 +280,8 @@ export type KasseInn = {
   rabattkode?: string;
   notat?: string;
   vilkar?: boolean;
+  // «kort» går til Stripe, «vipps» til Korthaiens egen Vipps-avtale.
+  betaling?: "kort" | "vipps";
 };
 
 // S-15000, S-15001 … Fortløpende fra nummerserien.
@@ -476,12 +480,38 @@ export async function åpneKasse(
   const merke = kvitteringsmerke(ordrenr);
   // Dekker kreditten alt, finnes det ingenting å betale. Ordren er betalt.
   if (rest === 0) {
+    await db().execute({ sql: "UPDATE salgsordrer SET betalingsmate = 'kreditt' WHERE id = ?", args: [ordreId] });
     await fullfør(ordreId, "kreditt");
     return { ordrenr, url: null, betalt: true, merke };
   }
 
+  const tilbake = `${butikkUrl()}/?kasse=ok&ordre=${encodeURIComponent(ordrenr)}&m=${merke}`;
+  const beskrivelse =
+    `${antallKort} kort og ${frakt.navn.toLowerCase()}` +
+    (kreditt + gavekort ? ` (${((kreditt + gavekort) / 100).toFixed(2).replace(".", ",")} kr betalt med kreditt/gavekort)` : "") +
+    (rabatt ? `, rabatt ${(rabatt / 100).toFixed(2).replace(".", ",")} kr` : "");
+
+  // Vipps med egen avtale. Kunden sendes til Vipps og kommer tilbake til
+  // samme kvitteringslenke som fra Stripe; statusen hentes derfra.
+  if (inn.betaling === "vipps" && harVipps()) {
+    try {
+      const v = await lagVippsBetaling({
+        ordrenr, ore: rest, returUrl: tilbake, telefon: inn.telefon,
+        beskrivelse: `Korthaien ordre ${ordrenr}: ${beskrivelse}`,
+      });
+      await db().execute({
+        sql: "UPDATE salgsordrer SET betalingsmate = 'vipps', vipps_ref = ? WHERE id = ?",
+        args: [v.reference, ordreId],
+      });
+      return { ordrenr, url: v.redirectUrl, betalt: false, merke };
+    } catch (e: any) {
+      await db().execute({ sql: "UPDATE salgsordrer SET status = 'utlopt' WHERE id = ? AND status = 'apen'", args: [ordreId] });
+      console.error("Vipps feilet:", e?.message);
+      throw new SalgFeil(502, "Vipps-betalingen kunne ikke startes. Prøv igjen, eller betal med kort.");
+    }
+  }
+
   try {
-    const tilbake = `${butikkUrl()}/?kasse=ok&ordre=${encodeURIComponent(ordrenr)}&m=${merke}`;
     const avbrutt = `${butikkUrl()}/?kasse=avbrutt&ordre=${encodeURIComponent(ordrenr)}&m=${merke}`;
     const lagSesjon = (medVipps: boolean) => stripe().checkout.sessions.create(
       {
@@ -517,10 +547,7 @@ export async function åpneKasse(
               unit_amount: rest,
               product_data: {
                 name: `Korthaien ordre ${ordrenr}`,
-                description:
-                  `${antallKort} kort og ${frakt.navn.toLowerCase()}` +
-                  (kreditt + gavekort ? ` (${((kreditt + gavekort) / 100).toFixed(2).replace(".", ",")} kr betalt med kreditt/gavekort)` : "") +
-                  (rabatt ? `, rabatt ${(rabatt / 100).toFixed(2).replace(".", ",")} kr` : ""),
+                description: beskrivelse,
               },
             },
           },
@@ -545,7 +572,7 @@ export async function åpneKasse(
       console.warn(`Vipps avvist av Stripe, bruker bare kort: ${e?.message || e}`);
       sesjon = await lagSesjon(false);
     }
-    await db().execute({ sql: "UPDATE salgsordrer SET stripe_session = ? WHERE id = ?", args: [sesjon.id, ordreId] });
+    await db().execute({ sql: "UPDATE salgsordrer SET stripe_session = ?, betalingsmate = 'kort' WHERE id = ?", args: [sesjon.id, ordreId] });
     return { ordrenr, url: sesjon.url, betalt: false, merke };
   } catch (e: any) {
     // Uten betalingsside er reservasjonen verdiløs. Frigi den med en gang.
@@ -657,13 +684,34 @@ let sistSjekket = 0;
 export async function utløpGamle(tvungen = false): Promise<number> {
   if (!tvungen && Date.now() - sistSjekket < 20_000) return 0;
   sistSjekket = Date.now();
+  const tid = nå();
+  // Åpne Vipps-kasser sjekkes hver gang, ikke bare når de går ut: Vipps
+  // sier ikke fra selv, og kunden kan ha lukket nettleseren etter å ha
+  // godkjent.
   const r = await db().execute({
-    sql: "SELECT id, ordrenr, stripe_session FROM salgsordrer WHERE status = 'apen' AND utloper_at <= ?",
-    args: [nå()],
+    sql: `SELECT id, ordrenr, stripe_session, vipps_ref, stripe_ore, utloper_at FROM salgsordrer
+           WHERE status = 'apen' AND (utloper_at <= ? OR vipps_ref IS NOT NULL)`,
+    args: [tid],
   });
   let n = 0;
   for (const o of r.rows as any[]) {
-    if (o.stripe_session && harStripe()) {
+    const utløpt = String(o.utloper_at) <= tid;
+    if (o.vipps_ref) {
+      if (!harVipps()) continue;
+      try {
+        const st = await sjekkVipps(o);
+        if (st !== "venter" || !utløpt) continue;
+        // Gått ut uten svar: lukk betalingen hos Vipps først, så kunden ikke
+        // kan godkjenne kort som ikke lenger er holdt av.
+        await avbrytVipps(String(o.vipps_ref)).catch(() => {});
+        if ((await sjekkVipps(o)) === "betalt") continue;
+      } catch (e: any) {
+        console.error(`Kunne ikke sjekke Vipps for ${o.ordrenr}:`, e?.message);
+        continue;
+      }
+    } else if (!utløpt) {
+      continue;
+    } else if (o.stripe_session && harStripe()) {
       try {
         const s = await stripe().checkout.sessions.retrieve(String(o.stripe_session));
         if (s.status === "complete" && s.payment_status === "paid") {
@@ -694,12 +742,20 @@ export async function utløpGamle(tvungen = false): Promise<number> {
 export async function avbrytKasse(ordrenr: string, merke: string): Promise<void> {
   if (!riktigMerke(ordrenr, merke)) throw new SalgFeil(403, "Ugyldig lenke.");
   const r = await db().execute({
-    sql: "SELECT id, stripe_session FROM salgsordrer WHERE ordrenr = ? AND status = 'apen'",
+    sql: "SELECT id, ordrenr, stripe_session, vipps_ref, stripe_ore FROM salgsordrer WHERE ordrenr = ? AND status = 'apen'",
     args: [ordrenr],
   });
   const o: any = r.rows[0];
   if (!o) return;
-  if (o.stripe_session && harStripe()) {
+  if (o.vipps_ref && harVipps()) {
+    try {
+      if ((await sjekkVipps(o)) !== "venter") return;
+      await avbrytVipps(String(o.vipps_ref)).catch(() => {});
+      if ((await sjekkVipps(o)) === "betalt") return;
+    } catch {
+      return;
+    }
+  } else if (o.stripe_session && harStripe()) {
     try {
       const s = await stripe().checkout.sessions.retrieve(String(o.stripe_session));
       if (s.status === "complete") return; // betalt likevel; webhooken tar resten
@@ -709,6 +765,51 @@ export async function avbrytKasse(ordrenr: string, merke: string): Promise<void>
     }
   }
   await db().execute({ sql: "UPDATE salgsordrer SET status = 'utlopt' WHERE id = ? AND status = 'apen'", args: [o.id] });
+}
+
+// ── Vipps-status ────────────────────────────────────────────────────────────
+// Henter betalingen hos Vipps og gjør det statusen tilsier: godkjent →
+// trekk beløpet og fullfør ordren; avbrutt eller utløpt → frigi kortene.
+export async function sjekkVipps(o: { id: any; ordrenr: any; vipps_ref: any; stripe_ore: any }): Promise<"betalt" | "avbrutt" | "venter"> {
+  const ref = String(o.vipps_ref);
+  const b = await hentVippsBetaling(ref);
+  const beløp = Number(o.stripe_ore);
+  const trukket = Number(b.aggregate?.capturedAmount?.value || 0);
+  if (b.state === "AUTHORIZED" || trukket > 0) {
+    if (Number(b.amount?.value) !== beløp || String(b.amount?.currency).toUpperCase() !== "NOK") {
+      console.error(`Vipps-beløpet for ${o.ordrenr} stemmer ikke: ${b.amount?.value} mot ${beløp}.`);
+      await db().execute({
+        sql: `UPDATE salgsordrer SET admin_notat = trim(COALESCE(admin_notat, '') || ' Vipps-beløpet stemmer ikke med ordren — sjekk i Vipps-portalen.') WHERE id = ? AND COALESCE(admin_notat, '') NOT LIKE '%Vipps-beløpet%'`,
+        args: [o.id],
+      });
+      return "venter";
+    }
+    if (trukket < beløp) await trekkVipps(ref, beløp - trukket);
+    await fullfør(Number(o.id), "vipps");
+    return "betalt";
+  }
+  if (b.state === "ABORTED" || b.state === "EXPIRED" || b.state === "TERMINATED") {
+    await db().execute({ sql: "UPDATE salgsordrer SET status = 'utlopt' WHERE id = ? AND status = 'apen'", args: [o.id] });
+    return "avbrutt";
+  }
+  return "venter";
+}
+
+// Kvitteringen spør om en åpen Vipps-ordre: sjekk hos Vipps med en gang,
+// så kunden ikke venter på neste runde.
+export async function oppdaterVippsOrdre(ordrenr: string): Promise<void> {
+  if (!harVipps()) return;
+  const r = await db().execute({
+    sql: "SELECT id, ordrenr, vipps_ref, stripe_ore FROM salgsordrer WHERE ordrenr = ? AND status = 'apen' AND vipps_ref IS NOT NULL",
+    args: [ordrenr],
+  });
+  const o: any = r.rows[0];
+  if (!o) return;
+  try {
+    await sjekkVipps(o);
+  } catch (e: any) {
+    console.error(`Vipps-status for ${ordrenr} feilet:`, e?.message);
+  }
 }
 
 // ── webhook ─────────────────────────────────────────────────────────────────
@@ -900,8 +1001,17 @@ export async function kanseller(ordrenr: string, grunn: string, måte: "kort" | 
   const tid = nå();
   const kortdel = Number(o.stripe_ore);
   const tilKort = måte === "kort" && kortdel > 0;
+  const erVipps = o.betalingsmate === "vipps";
   let refusjonsId: string | null = null;
-  if (tilKort) {
+  if (tilKort && erVipps) {
+    if (!o.vipps_ref) throw new SalgFeil(400, "Fant ikke Vipps-betalingen for denne ordren. Refunder i Vipps-portalen, eller velg kreditt.");
+    try {
+      await refunderVipps(String(o.vipps_ref), kortdel);
+      refusjonsId = String(o.vipps_ref);
+    } catch (e: any) {
+      throw new SalgFeil(502, `Vipps avviste refusjonen: ${e?.message || "ukjent feil"}. Ingenting er endret.`);
+    }
+  } else if (tilKort) {
     if (!o.stripe_betaling) {
       throw new SalgFeil(400, "Fant ikke betalingen hos Stripe for denne ordren. Refunder i Stripe, eller velg kreditt.");
     }
@@ -921,7 +1031,7 @@ export async function kanseller(ordrenr: string, grunn: string, måte: "kort" | 
   const tilKreditt = tilKort ? Number(o.kreditt_ore) : Number(o.kreditt_ore) + kortdel;
   const notat =
     `Kansellert: ${String(grunn || "").trim() || "uten oppgitt grunn"}.` +
-    (tilKort ? ` ${(kortdel / 100).toFixed(2)} kr refundert til kort (${refusjonsId}).` : "") +
+    (tilKort ? ` ${(kortdel / 100).toFixed(2)} kr refundert til ${erVipps ? "Vipps" : "kort"} (${refusjonsId}).` : "") +
     (tilKreditt > 0 ? ` ${(tilKreditt / 100).toFixed(2)} kr som kreditt.` : "") +
     (tilGavekort > 0 ? ` ${(tilGavekort / 100).toFixed(2)} kr tilbake på gavekortet ${o.rabattkode}.` : "");
 

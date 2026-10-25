@@ -525,6 +525,11 @@ CREATE TABLE IF NOT EXISTS salgsordrer (
   stripe_session TEXT,
   -- Betalingen hos Stripe (payment_intent). Trengs for å refundere til kortet.
   stripe_betaling TEXT,
+  -- 'kort' (Stripe), 'vipps' (egen Vipps-avtale) eller 'kreditt' (ingenting
+  -- å betale). stripe_ore er pengedelen uansett hvor den ble betalt.
+  betalingsmate TEXT,
+  -- Referansen hos Vipps (korthaien-S-15001). Trengs for status og refusjon.
+  vipps_ref     TEXT,
   utloper_at    TEXT,
   antall_kort   INTEGER NOT NULL DEFAULT 0,
   pakket_at     TEXT,

@@ -291,6 +291,7 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
   const [a, setA] = useState(tomAdresse);
   const [frakt, setFrakt] = useState(null);
   const [brukKreditt, setBrukKreditt] = useState(true);
+  const [betaling, setBetaling] = useState("kort");
   // Rabattkoden: det kunden skriver, og det serveren sa om den.
   const [kodeFelt, setKodeFelt] = useState("");
   const [kode, setKode] = useState(null);
@@ -341,6 +342,7 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
     );
   }
   if (!oppsett || !priset) return <p className="dempet">Henter kassen…</p>;
+  const medVipps = !!oppsett.vipps && betaling === "vipps";
 
   const valgtFrakt = oppsett.frakt.find((f) => f.id === frakt);
   // Henter kunden selv, er adressen valgfri.
@@ -397,6 +399,7 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
         rabattkode: kode?.kode || "",
         notat,
         vilkar: vilkår,
+        betaling: oppsett.vipps && betaling === "vipps" ? "vipps" : "kort",
       });
       if (r.url) {
         window.location.assign(r.url);
@@ -572,6 +575,18 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
                 </>
               )}
             </div>
+            {åBetale > 0 && oppsett.vipps && (
+              <div className="betalingsvalg" role="radiogroup" aria-label="Betalingsmåte">
+                <label className={betaling === "kort" ? "valgt" : ""}>
+                  <input type="radio" name="betaling" checked={betaling === "kort"} onChange={() => setBetaling("kort")} />
+                  Kort
+                </label>
+                <label className={`vipps${betaling === "vipps" ? " valgt" : ""}`}>
+                  <input type="radio" name="betaling" checked={betaling === "vipps"} onChange={() => setBetaling("vipps")} />
+                  Vipps
+                </label>
+              </div>
+            )}
             <label className="rad-flex" style={{ gap: 8, margin: "12px 0", fontSize: 13.5, alignItems: "flex-start" }}>
               <input type="checkbox" checked={vilkår} onChange={(e) => setVilkår(e.target.checked)} />
               <span>
@@ -581,18 +596,18 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
             </label>
             <button
               type="submit"
-              className="knapp primar"
+              className={`knapp primar${medVipps ? " vipps-knapp" : ""}`}
               style={{ width: "100%" }}
-              disabled={sender || problemer || !frakt || !vilkår || (åBetale > 0 && !oppsett.betaling)}
+              disabled={sender || problemer || !frakt || !vilkår || (åBetale > 0 && !(medVipps || oppsett.betaling))}
             >
-              {sender ? "Et øyeblikk…" : åBetale > 0 ? `Til betaling — ${kroner(åBetale)}` : gavekort > 0 && !kreditt ? "Fullfør med gavekort" : "Fullfør med kreditt"}
+              {sender ? "Et øyeblikk…" : åBetale > 0 ? `${medVipps ? "Betal med Vipps" : "Til betaling"} — ${kroner(åBetale)}` : gavekort > 0 && !kreditt ? "Fullfør med gavekort" : "Fullfør med kreditt"}
             </button>
-            {åBetale > 0 && !oppsett.betaling && (
+            {åBetale > 0 && !medVipps && !oppsett.betaling && (
               <p className="dempet" style={{ fontSize: 12.5 }}>Kortbetaling er ikke slått på ennå.</p>
             )}
             <p className="dempet" style={{ fontSize: 12, margin: "10px 0 0" }}>
-              Kortene holdes av i {oppsett.reservasjon_min} minutter mens du betaler. Du betaler med kort eller Vipps
-              på Stripes sikre betalingsside.
+              Kortene holdes av i {oppsett.reservasjon_min} minutter mens du betaler.{" "}
+              {medVipps ? "Du sendes til Vipps og godkjenner i appen." : "Du betaler på Stripes sikre betalingsside."}
             </p>
           </div>
         </div>

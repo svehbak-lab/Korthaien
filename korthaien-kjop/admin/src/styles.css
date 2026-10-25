@@ -1236,3 +1236,14 @@ label.kreditt-boks { cursor: pointer; }
   background: #ffe8a3; color: #3d2e00; text-align: center; font-weight: 600;
   padding: 6px 12px; font-size: 13px;
 }
+
+/* ── betalingsmåte i kassen ──────────────────────────────────────────────── */
+.betalingsvalg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 4px; }
+.betalingsvalg label {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border: 1px solid var(--strek-sterk); border-radius: var(--runding, 6px); padding: 10px;
+  font-weight: 600; cursor: pointer; background: var(--flate);
+}
+.betalingsvalg label.valgt { border-color: var(--dyp, var(--aksent)); box-shadow: 0 0 0 1px var(--dyp, var(--aksent)); }
+.betalingsvalg label.vipps.valgt { border-color: #ff5b24; box-shadow: 0 0 0 1px #ff5b24; color: #ff5b24; }
+.butikk .knapp.primar.vipps-knapp, .knapp.primar.vipps-knapp { background: #ff5b24; border-color: #ff5b24; color: #fff; }

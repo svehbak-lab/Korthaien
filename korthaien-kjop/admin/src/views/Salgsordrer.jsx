@@ -373,7 +373,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                     <td>
                       <b>Totalt</b>
                       <div className="dempet" style={{ fontSize: 12 }}>
-                        {Number(o.stripe_ore) > 0 ? "(betalt kort/Vipps)" : "(alt betalt med kreditt/gavekort)"}
+                        {Number(o.stripe_ore) > 0 ? (o.betalingsmate === "vipps" ? "(betalt med Vipps)" : o.betalingsmate === "kort" ? "(betalt med kort)" : "(betalt kort/Vipps)") : "(alt betalt med kreditt/gavekort)"}
                       </div>
                     </td>
                     <td className="h tall" style={{ fontSize: 18 }}><b>{kroner(Number(o.stripe_ore) || 0)}</b></td>
@@ -463,7 +463,7 @@ function Kanseller({ o, onFerdig, onFeil }) {
           <label className="rad-flex" style={{ gap: 8, alignItems: "flex-start" }}>
             <input type="radio" checked={måte === "kort"} onChange={() => setMåte("kort")} />
             <span>
-              {kroner(o.stripe_ore)} tilbake til kortet/Vipps
+              {kroner(o.stripe_ore)} tilbake til {o.betalingsmate === "vipps" ? "Vipps" : o.betalingsmate === "kort" ? "kortet" : "kortet/Vipps"}
               {Number(o.kreditt_ore) > 0 ? `, ${kroner(o.kreditt_ore)} som kreditt` : ""}
               <div className="dempet" style={{ fontSize: 12 }}>Samme vei som kunden betalte.</div>
             </span>

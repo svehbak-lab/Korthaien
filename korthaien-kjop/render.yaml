@@ -62,6 +62,19 @@ services:
       # Settes til 1 når Stripe har gitt kontoen tilgang til Vipps.
       - key: STRIPE_VIPPS
         sync: false
+      # Vipps med egen avtale (ePayment API). Nøklene fra portal.vippsmobilepay.com
+      # → Utvikler → API-keys. Er alle fire satt, får kassen et Vipps-valg, og
+      # Vipps gjennom Stripe slås av. VIPPS_TEST=1 bruker testmiljøet.
+      - key: VIPPS_CLIENT_ID
+        sync: false
+      - key: VIPPS_CLIENT_SECRET
+        sync: false
+      - key: VIPPS_SUBSCRIPTION_KEY
+        sync: false
+      - key: VIPPS_MSN
+        sync: false
+      - key: VIPPS_TEST
+        sync: false
       # Google-innlogging. Knappen vises først når begge er satt.
       - key: GOOGLE_CLIENT_ID
         sync: false
