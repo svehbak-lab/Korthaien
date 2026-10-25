@@ -369,9 +369,7 @@ export function Retur() {
 
         <h3 style={{ fontSize: 15, marginBottom: 4 }}>Hvis vi blir uenige</h3>
         <p>
-          Si det til oss først — det meste løser seg der. Kommer vi ikke til
-          enighet, kan du ta saken til Forbrukerrådet, som megler, og videre
-          til Forbrukerklageutvalget.
+          Si det til oss først — det meste løser seg.
         </p>
 
         <h3 style={{ fontSize: 15, marginBottom: 4 }}>Selgeren</h3>
@@ -690,9 +688,10 @@ export function Vilkar({ onSkjerm }) {
 
         <H>13. Uenighet</H>
         <p style={{ marginBottom: 0 }}>
-          Ta kontakt med oss først — det meste løser seg der. Kommer vi ikke til enighet, kan du klage til
-          Forbrukerrådet, som megler, og saken kan gå videre til Forbrukerklageutvalget. Du kan også bruke EU-kommisjonens
-          klageportal for nettkjøp.
+          Ta kontakt med oss først — det meste løser seg. Kommer vi ikke til enighet, kan du klage til{" "}
+          <a href="https://www.forbrukerradet.no" target="_blank" rel="noopener">Forbrukerrådet</a>, som megler, og saken
+          kan gå videre til{" "}
+          <a href="https://www.forbrukerklageutvalget.no" target="_blank" rel="noopener">Forbrukerklageutvalget</a>.
         </p>
       </div>
     </div>
