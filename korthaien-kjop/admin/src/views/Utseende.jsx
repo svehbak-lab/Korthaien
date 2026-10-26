@@ -42,6 +42,21 @@ const TEMAER = [
     navn: "Signal",
     om: "Mørkeblå topp og oransje salg, som Card Kingdom, men strammere. Atkinson Hyperlegible i kortnavnene. All tekst minst 7:1.",
   },
+  {
+    id: "juletre",
+    navn: "Jul: Juletre",
+    om: "Granskog, julerødt og gull på kremhvitt. Gullstripe under menyen, Fraunces i navnene, priser i gull. Det klassiske.",
+  },
+  {
+    id: "julenatt",
+    navn: "Jul: Julenatt",
+    om: "Midnattsblått med snø i toppen, rødt til «Selg dine kort» og prisene. Kjølig og rolig, lett å lese.",
+  },
+  {
+    id: "pepperkake",
+    navn: "Jul: Pepperkake",
+    om: "Pepperkakebrunt og melisglasur, polkagrisstripe under menyen og stiplet søkefelt. Varmt og lekent.",
+  },
 ];
 
 export default function Utseende({ onFeil, onMelding }) {
