@@ -31,6 +31,9 @@ const SIDER = [
   // Midlertidig: forhåndsvisning av butikken. Flyttes ut når salgssiden bygges.
   { id: "butikk", navn: "Butikk" },
   { id: "lagerrapport", navn: "Lagerrapport" },
+  // Tilbake i menyen: Mystore-kategorier uten sett (for eksempel egne
+  // token-kategorier) må kunne kobles for hånd før overgangen.
+  { id: "kobling", navn: "Kobling" },
   { id: "kupp", navn: "Kupp" },
   // Het Innstillinger. Admin sier bedre hva det er: ett sted for alt du
   // styrer selv. Fanene gjoer at det kan vokse uten aa bli en lang liste.

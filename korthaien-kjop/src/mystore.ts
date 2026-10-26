@@ -140,10 +140,11 @@ async function hentKategorier(logg: (s: string) => void): Promise<Kategori[]> {
 
 // Klatrer oppover i treet til vi finner en kategori som heter det samme som et
 // sett i katalogen. En raritetskategori arver dermed settet fra grenen sin.
-function knyttTilSett(
+export function knyttTilSett(
   kategorier: Kategori[],
   indeks: ReturnType<typeof byggIndeks>,
-  overstyringer: Map<string, string | null>
+  overstyringer: Map<string, string | null>,
+  tokenSett: Map<string, string> = new Map()
 ) {
   const etterId = new Map(kategorier.map((k) => [k.id, k]));
   const resultat = new Map<string, { set_code: string | null; regel?: string }>();
@@ -154,7 +155,13 @@ function knyttTilSett(
   const slåOpp = (navn: string) => {
     const n = normaliser(navn);
     if (!buffer.has(n)) {
-      const t = finnSett(navn, indeks);
+      let t: { code: string; regel: string } | null = finnSett(navn, indeks);
+      // «… Tokens»: finn hovedsettet uten ordet, og ta token-settet dets.
+      if (/\btokens?\s*$/i.test(navn)) {
+        const hoved = finnSett(navn.replace(/\btokens?\s*$/i, "").trim(), indeks);
+        const tok = hoved ? tokenSett.get(hoved.code) : undefined;
+        if (tok) t = { code: tok, regel: "token-sett" };
+      }
       buffer.set(n, t ? { code: t.code, regel: t.regel } : null);
     }
     return buffer.get(n)!;
@@ -235,7 +242,14 @@ export async function synkMystore(
     );
   }
 
-  const settRader = await db().execute("SELECT code, name FROM sets");
+  const settRader = await db().execute("SELECT code, name, parent_code, set_type FROM sets");
+  // Token-settet til hvert hovedsett: «Strixhaven: School of Mages Tokens»
+  // i Mystore skal havne på Scryfalls token-sett for Strixhaven, uansett
+  // hva Scryfall kaller det.
+  const tokenSett = new Map<string, string>();
+  for (const s of settRader.rows as any[]) {
+    if (String(s.set_type || "") === "token" && s.parent_code) tokenSett.set(String(s.parent_code), String(s.code));
+  }
   const indeks = byggIndeks(
     settRader.rows.map((s: any) => ({ code: String(s.code), name: String(s.name) }))
   );
@@ -254,7 +268,7 @@ export async function synkMystore(
 
   logg("Henter kategorier fra Mystore…");
   const kategorier = await hentKategorier(logg);
-  const kobling = knyttTilSett(kategorier, indeks, overstyringer);
+  const kobling = knyttTilSett(kategorier, indeks, overstyringer, tokenSett);
   // mystore_stock har én rad per kort og trykk. Lander to produkter på samme
   // rad, vant før det siste synken kom over — uten et ord, og med både lager
   // og pris. Et kunstkort til fire kroner tok plassen til et kort til flere
@@ -287,6 +301,9 @@ export async function synkMystore(
   // og å hente dem ville kostet tusenvis av kall til ingen nytte.
   const aktive = await db().execute("SELECT set_code FROM set_rules WHERE enabled = 1");
   const aktiveSett = new Set(aktive.rows.map((r: any) => String(r.set_code)));
+  // Tokens kjøpes sjelden inn, men selges. Token-settet hentes derfor når
+  // hovedsettet er slått på, selv om token-settet selv står av.
+  for (const [hoved, tok] of tokenSett) if (aktiveSett.has(hoved)) aktiveSett.add(tok);
 
   // Produktene ligger i løvnodene — raritetskategoriene nederst i treet.
   const harBarn = new Set(kategorier.filter((k) => k.forelder).map((k) => k.forelder!));

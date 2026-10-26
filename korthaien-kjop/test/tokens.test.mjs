@@ -133,3 +133,11 @@ test("søk på «token» finner tokens, også sammen med navnet", async () => {
   const b = await butikkvisning({ sett: "", q: "Dragon Token", baresalg: true });
   assert.ok(b.kort.some((k) => k.id === "drage"));
 });
+
+test("tokens vises som «Navn Token» i butikken", async () => {
+  const { butikkvisning, tokenNavn } = await import("../src/salgspris.ts");
+  const a = await butikkvisning({ sett: "", q: "Dragon Token", baresalg: true });
+  assert.equal(a.kort.find((k) => k.id === "drage").name, "Dragon Token");
+  assert.equal(tokenNavn("Wrenn and Six Emblem", 1), "Wrenn and Six Emblem");
+  assert.equal(tokenNavn("Lightning Bolt", 0), "Lightning Bolt");
+});

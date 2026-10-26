@@ -547,7 +547,7 @@ export async function butikkvisning(opts: ButikkFilter) {
       if (!tilstander.length) continue;
       varianter.push({ finish, manuell, tilstander, påLager });
     }
-    if (varianter.length) ut.push({ ...k, varianter });
+    if (varianter.length) ut.push({ ...k, name: tokenNavn(k.name, k.er_token), varianter });
   }
 
   // Prisintervallet kan først anvendes når prisene er regnet ut, og de finnes
@@ -598,6 +598,7 @@ export async function kortdetaljer(cardId: string) {
   });
   const kort: any = r.rows[0];
   if (!kort || Number(kort.er_serialized)) return null;
+  kort.name = tokenNavn(kort.name, kort.er_token);
 
   // Andre utgaver: samme oracle_id, men ikke samme trykk. Faller tilbake på
   // navnet for kort der oracle_id mangler.
@@ -697,4 +698,12 @@ export async function utenPrisPåLager(): Promise<
     });
   }
   return ut.sort((a, b) => a.set_name.localeCompare(b.set_name) || a.name.localeCompare(b.name));
+}
+
+// Scryfall kaller tokenet «Treasure». Folk kaller det «Treasure Token», og
+// det er det de leter etter og kjenner igjen i lista.
+export function tokenNavn(navn: unknown, erToken: unknown): string {
+  const n = String(navn ?? "");
+  if (!Number(erToken)) return n;
+  return /\b(token|emblem)\b/i.test(n) ? n : `${n} Token`;
 }

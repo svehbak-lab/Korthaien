@@ -2,6 +2,7 @@ import { utgaveNavn } from "./varianter.js";
 import { sjekkKode, KodeFeil } from "./rabattkoder.js";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import Stripe from "stripe";
+import { tokenNavn } from "./salgspris.js";
 import { harVipps, lagVippsBetaling, hentVippsBetaling, trekkVipps, refunderVipps, avbrytVipps } from "./vipps.js";
 import { db, CONDITIONS, type Condition } from "./db.js";
 import { hentSalgsOppsett, salgsprisØre, hentManuellSalg } from "./salgspris.js";
@@ -192,7 +193,7 @@ export async function prisKurv(inn: any, utenOrdre?: number): Promise<PrisetLinj
   if (!linjer.length) return [];
   const ider = [...new Set(linjer.map((l) => l.card_id))];
   const r = await db().execute({
-    sql: `SELECT c.id, c.name, c.set_code, c.collector_number, c.rarity, c.usd, c.usd_foil, c.image_uri,
+    sql: `SELECT c.id, c.name, c.er_token, c.set_code, c.collector_number, c.rarity, c.usd, c.usd_foil, c.image_uri,
                  COALESCE(s.visningsnavn, s.name) AS set_name
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
            WHERE c.id IN (${ider.map(() => "?").join(",")}) AND c.er_serialized = 0`,
@@ -250,7 +251,7 @@ export async function prisKurv(inn: any, utenOrdre?: number): Promise<PrisetLinj
       ...l,
       enhet_ore: enhet,
       tilgjengelig,
-      card_name: String(k.name),
+      card_name: tokenNavn(k.name, k.er_token),
       set_code: String(k.set_code),
       set_name: String(k.set_name || k.set_code),
       collector_number: k.collector_number ?? null,
