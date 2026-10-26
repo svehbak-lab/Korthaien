@@ -1122,7 +1122,7 @@ app.get("/api/admin/lager", krevAdmin, fang(async (req: any, res: any) => {
               SELECT card_id, finish, condition, SUM(antall) AS n
                 FROM lager_bevegelser GROUP BY card_id, finish, condition
             ) b ON b.card_id = c.id
-           ${sett ? "WHERE c.set_code = ?" : ""}
+           WHERE c.er_serialized = 0 ${sett ? "AND c.set_code = ?" : ""}
            ORDER BY ${sett ? "CAST(c.collector_number AS INTEGER), c.collector_number" : "c.name, c.released_at DESC, c.set_code, CAST(c.collector_number AS INTEGER)"}`,
     args: [sett || `%${q}%`],
   });
@@ -1341,7 +1341,7 @@ app.get("/api/admin/cards", krevAdmin, fang(async (req: any, res: any) => {
                    WHERE l.card_id = c.id AND l.finish='nonfoil' AND ${HOLDER_KVOTE}) AS res_nonfoil,
                  (SELECT COALESCE(SUM(l.qty),0) FROM order_lines l JOIN orders o ON o.id = l.order_id
                    WHERE l.card_id = c.id AND l.finish='foil' AND ${HOLDER_KVOTE}) AS res_foil
-            FROM cards c WHERE c.set_code = ?
+            FROM cards c WHERE c.set_code = ? AND c.er_serialized = 0
            ORDER BY CAST(c.collector_number AS INTEGER), c.name`,
     args: [set],
   });

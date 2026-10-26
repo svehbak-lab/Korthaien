@@ -56,7 +56,7 @@ export async function forsideSett(antall = 5): Promise<ForsideSett[]> {
                                    CAST(c.collector_number AS INTEGER)
                         ) AS nr
                    FROM cards c JOIN lager l ON l.card_id = c.id
-                  WHERE c.er_token = 0
+                  WHERE c.er_token = 0 AND c.er_serialized = 0
                     AND c.image_uri IS NOT NULL
                     AND c.set_code IN (${plass})
                )
@@ -89,7 +89,7 @@ async function settene(n: number) {
               FROM (${PÅ_LAGER_SQL()}) l
               JOIN cards c ON c.id = l.card_id
               LEFT JOIN sets s ON s.code = c.set_code
-             WHERE c.er_token = 0 AND c.set_code IN (${plass})
+             WHERE c.er_token = 0 AND c.er_serialized = 0 AND c.set_code IN (${plass})
              GROUP BY c.set_code`,
       args: valgt,
     });
@@ -113,7 +113,7 @@ async function settene(n: number) {
             FROM (${PÅ_LAGER_SQL()}) l
             JOIN cards c ON c.id = l.card_id
             LEFT JOIN sets s ON s.code = c.set_code
-           WHERE c.er_token = 0
+           WHERE c.er_token = 0 AND c.er_serialized = 0
            GROUP BY c.set_code
            ORDER BY utgitt DESC NULLS LAST
            LIMIT ?`,

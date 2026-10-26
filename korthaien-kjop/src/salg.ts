@@ -195,7 +195,7 @@ export async function prisKurv(inn: any, utenOrdre?: number): Promise<PrisetLinj
     sql: `SELECT c.id, c.name, c.set_code, c.collector_number, c.rarity, c.usd, c.usd_foil, c.image_uri,
                  COALESCE(s.visningsnavn, s.name) AS set_name
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
-           WHERE c.id IN (${ider.map(() => "?").join(",")})`,
+           WHERE c.id IN (${ider.map(() => "?").join(",")}) AND c.er_serialized = 0`,
     args: ider,
   });
   const kort = new Map((r.rows as any[]).map((k) => [String(k.id), k]));

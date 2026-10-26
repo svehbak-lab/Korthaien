@@ -79,7 +79,7 @@ export async function bulkSøk(tekst: string, kunFoil = false): Promise<{ treff:
                    c.usd, c.usd_foil, c.image_uri, c.variant, c.er_scroll, c.er_display,
                    COALESCE(s.visningsnavn, s.name) AS set_name
               FROM cards c LEFT JOIN sets s ON s.code = c.set_code
-             WHERE c.er_token = 0 AND (c.name_norm IN (${ph}) OR c.front_norm IN (${ph}))`,
+             WHERE c.er_token = 0 AND c.er_serialized = 0 AND (c.name_norm IN (${ph}) OR c.front_norm IN (${ph}))`,
       args: [...del, ...del],
     });
     kort.push(...r.rows);

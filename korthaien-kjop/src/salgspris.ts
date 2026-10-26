@@ -329,7 +329,9 @@ export async function butikkvisning(opts: ButikkFilter) {
   // Tokens selges som andre kort. I et sett vises også tokens fra
   // token-settet som hører til (Phyrexia: All Will Be One Tokens under
   // Phyrexia: All Will Be One).
-  const hvor: string[] = opts.utenTokens ? ["c.er_token = 0"] : ["1 = 1"];
+  // Serienummererte utgaver selges ikke her — de er enkelteksemplarer med
+  // egen pris, og vises derfor heller ikke.
+  const hvor: string[] = opts.utenTokens ? ["c.er_token = 0", "c.er_serialized = 0"] : ["c.er_serialized = 0"];
   const args: any[] = [];
   if (opts.sett) {
     hvor.push(`(c.set_code = ? OR c.set_code IN (SELECT code FROM sets WHERE parent_code = ? AND set_type = 'token'))`);
@@ -595,7 +597,7 @@ export async function kortdetaljer(cardId: string) {
     args: [cardId],
   });
   const kort: any = r.rows[0];
-  if (!kort) return null;
+  if (!kort || Number(kort.er_serialized)) return null;
 
   // Andre utgaver: samme oracle_id, men ikke samme trykk. Faller tilbake på
   // navnet for kort der oracle_id mangler.
@@ -606,6 +608,7 @@ export async function kortdetaljer(cardId: string) {
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
            WHERE c.id <> ?
              AND c.er_token = ${Number(kort.er_token) ? 1 : 0}
+             AND c.er_serialized = 0
              AND (${kort.oracle_id ? "c.oracle_id = ?" : "c.name_norm = ?"})
            ORDER BY s.released_at DESC
            LIMIT 40`,
