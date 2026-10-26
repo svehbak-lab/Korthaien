@@ -227,13 +227,22 @@ function Ordre({ ordre, åpen, onVeksle, onLukk, onEndret, onFeil }) {
 // betalt — og den er den aldri.
 function Frigi({ ordre, onEndret, onFeil }) {
   const [jobber, setJobber] = useState(false);
+  // Før overgangen viser butikken Mystore-beholdningen. Da må kortene legges
+  // inn i Mystore som før; knappen her slipper bare kvoten.
+  const [fraMystore, setFraMystore] = useState(false);
+  useEffect(() => {
+    api.overgang().then((s) => setFraMystore(s.lagerkilde !== "bok")).catch(() => {});
+  }, []);
 
   async function frigi() {
     if (
       !confirm(
         `Legge kortene fra ${ordre.order_no} inn i beholdningen?\n\n` +
-          "Kortene føres inn med antallet og tilstanden du satte ved kontroll, " +
-          "og kvoten slippes samtidig. Gjør det når kortene faktisk står i hylla."
+          (fraMystore
+            ? "Butikken viser fortsatt beholdningen i Mystore fram til overgangen. Legg kortene inn i Mystore som før — " +
+              "denne knappen slipper bare kvoten, og kortene vises i butikken etter neste lagersynk."
+            : "Kortene føres inn med antallet og tilstanden du satte ved kontroll, " +
+              "og kvoten slippes samtidig. Gjør det når kortene faktisk står i hylla.")
       )
     )
       return;
@@ -249,9 +258,16 @@ function Frigi({ ordre, onEndret, onFeil }) {
   }
 
   return (
-    <button className="knapp primar" disabled={jobber} onClick={frigi}>
-      {jobber ? "Legger inn…" : "Legg inn i beholdningen"}
-    </button>
+    <>
+      <button className="knapp primar" disabled={jobber} onClick={frigi}>
+        {jobber ? "Legger inn…" : "Legg inn i beholdningen"}
+      </button>
+      {fraMystore && (
+        <span className="dempet" style={{ fontSize: 12, marginLeft: 8 }}>
+          Fram til overgangen: legg kortene inn i Mystore også.
+        </span>
+      )}
+    </>
   );
 }
 
