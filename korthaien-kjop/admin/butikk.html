@@ -4,8 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Korthaien — Magic: The Gathering-kort, sealed og komplette sett." />
-    <!-- Fjernes når butikken flyttes til korthaien.no. -->
-    <meta name="robots" content="noindex, nofollow" />
+    <!-- Testadressen på Render skal ikke i søkemotorene; korthaien.no skal. -->
+    <script>
+      if (!/(^|\.)korthaien\.no$/.test(location.hostname)) {
+        var m = document.createElement("meta"); m.name = "robots"; m.content = "noindex, nofollow"; document.head.appendChild(m);
+      }
+    </script>
     <title>Korthaien</title>
   </head>
   <body>
