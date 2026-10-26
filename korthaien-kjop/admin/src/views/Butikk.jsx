@@ -130,6 +130,17 @@ function ButikkSider({ onFeil }) {
   const [sortering, setSortering] = useState("pris_ned");
   const [perSide, setPerSide] = useState(25);
   const [side, setSide] = useState(1);
+  // Trykker man på et settnavn, vil man se settet — ikke søket man kom fra.
+  // Filtrene nullstilles (bare kort på lager, som ellers), og fanen går
+  // tilbake til «Alle treff».
+  const velgSett = (kode) => {
+    setF(TOMT);
+    setFane("alle");
+    setSett(kode);
+    setÅpentKort(null);
+    setSkjerm("liste");
+    window.scrollTo(0, 0);
+  };
   const [f, setF] = useState(TOMT);
   // ?kort=<id> fra e-posten om ønskelista åpner kortet direkte.
   const [åpentKort, setÅpentKort] = useState(() => lenke.kort || null);
@@ -312,7 +323,7 @@ function ButikkSider({ onFeil }) {
         id={åpentKort}
         onLukk={() => { setÅpentKort(null); setSkjerm("liste"); }}
         onÅpne={setÅpentKort}
-        onSett={(kode) => { setSett(kode); setÅpentKort(null); setSkjerm("liste"); }}
+        onSett={velgSett}
         onFeil={onFeil}
         onLoggInn={() => { setEtterInnlogging(null); setÅpentKort(null); setSkjerm("konto"); }}
       />
@@ -326,7 +337,7 @@ function ButikkSider({ onFeil }) {
         onProdukt={(t) => setSkjerm(t)}
         onButikk={() => setSkjerm("liste")}
         onÅpne={setÅpentKort}
-        onSett={(kode) => { setSett(kode); setSkjerm("liste"); }}
+        onSett={velgSett}
         onFeil={onFeil}
       />
     );
@@ -397,7 +408,7 @@ function ButikkSider({ onFeil }) {
 
   if (skjerm === "sett") {
     return skall(
-      <AlleSett sett={alle} onVelg={(kode) => { setSett(kode); setSkjerm("liste"); }} />
+      <AlleSett sett={alle} onVelg={velgSett} />
     );
   }
 
@@ -607,7 +618,7 @@ function ButikkSider({ onFeil }) {
               {fane === "sealed" && (
                 <Produktliste setKode={sett} skjulTittel onFeil={onFeil} />
               )}
-              {fane === "om" && <OmSettet info={settinfo} onSett={setSett} />}
+              {fane === "om" && <OmSettet info={settinfo} onSett={velgSett} />}
 
               {KORTFANER.some((x) => x.id === fane) && laster && <p className="dempet">Henter…</p>}
 
@@ -625,7 +636,7 @@ function ButikkSider({ onFeil }) {
                           key={k.id}
                           kort={k}
                           onÅpne={() => setÅpentKort(k.id)}
-                          onSett={() => setSett(k.set_code)}
+                          onSett={() => velgSett(k.set_code)}
                         />
                       ))}
                     </div>
@@ -635,7 +646,7 @@ function ButikkSider({ onFeil }) {
                         key={k.id}
                         kort={k}
                         onÅpne={() => setÅpentKort(k.id)}
-                        onSett={() => setSett(k.set_code)}
+                        onSett={() => velgSett(k.set_code)}
                       />
                     ))
                   ) : (
@@ -644,7 +655,7 @@ function ButikkSider({ onFeil }) {
                         key={k.id}
                         kort={k}
                         onÅpne={() => setÅpentKort(k.id)}
-                        onSett={() => setSett(k.set_code)}
+                        onSett={() => velgSett(k.set_code)}
                       />
                     ))
                   )}
