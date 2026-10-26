@@ -796,8 +796,12 @@ function Topp({ onHjem, onSøk, onAlleSett, produkter, onProdukt, onKonto, onKur
           )}
           {/* Tix ved siden av, med omriss i stedet for fylt farge: lett å
               finne, men «Selg dine kort» er fortsatt det som roper høyest. */}
-          <button className="b-selg-tix" onClick={onTix}>Selg MTGO-tix</button>
-          <a className="b-selg" href="https://kortsalg.korthaien.no">Selg dine kort</a>
+          {/* De to salgsknappene holdes sammen og til høyre. Blir linja for
+              smal, går de ned på en egen rad — fortsatt til høyre. */}
+          <span className="b-selgknapper">
+            <button className="b-selg-tix" onClick={onTix}>Selg MTGO-tix</button>
+            <a className="b-selg" href="https://kortsalg.korthaien.no">Selg dine kort</a>
+          </span>
         </div>
       </div>
     </div>

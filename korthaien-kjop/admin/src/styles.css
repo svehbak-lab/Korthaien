@@ -544,6 +544,7 @@ textarea { width: 100%; font-family: inherit; }
 @media (max-width: 860px) {
   .butikk { margin: -16px -16px -16px; padding: 16px; }
   .butikk .b-skall-topp { margin: -16px -16px 0; }
+  .butikk .b-bunn { margin: 44px -16px -16px; }
   .butikk .b-midt { padding: 0 16px; flex-wrap: wrap; gap: 10px 14px; }
   .butikk .b-linje1 .b-midt { padding-top: 10px; padding-bottom: 10px; }
   /* Søket får hele bredden på egen linje. Klemt inn mellom logo og kurver
@@ -1226,7 +1227,7 @@ label.kreditt-boks { cursor: pointer; }
 /* ── butikken som egen side (ikke inni admin) ────────────────────────────── */
 .butikk-alene { padding: 22px 26px 60px; }
 .butikk-alene .b-innhold { max-width: 1180px; margin: 0 auto; }
-@media (max-width: 640px) {
+@media (max-width: 860px) {
   .butikk-alene { padding: 22px 16px 60px; }
   .butikk-alene .butikk { margin: -22px -16px -60px; padding: 22px 16px 60px; }
   .butikk-alene .butikk .b-skall-topp { margin: -22px -16px 0; }
@@ -1493,3 +1494,11 @@ label.kreditt-boks { cursor: pointer; }
 }
 .butikk[data-tema="nissejul"] .pris, .butikk[data-tema="nissejul"] .pris-stor { color: #b3122a; }
 .butikk[data-tema="nissejul"] :is(.lenke, .b-gnavn) { font-family: var(--skrift-navn); }
+
+/* Salgsknappene i menylinja: én enhet, alltid til høyre. */
+.butikk .b-linje2 .b-midt { flex-wrap: wrap; row-gap: 6px; }
+.butikk .b-selgknapper { margin-left: auto; display: flex; gap: 8px; align-items: center; flex: none; }
+.butikk .b-selgknapper .b-selg-tix, .butikk .b-selgknapper .b-selg { margin-left: 0; }
+@media (max-width: 560px) {
+  .butikk .b-linje2 .b-midt { padding-top: 6px; padding-bottom: 6px; gap: 14px; }
+}
