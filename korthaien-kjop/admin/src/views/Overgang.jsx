@@ -279,7 +279,13 @@ function Rekkefolge() {
           <li>Send eller kanseller åpne salgsordrer her.</li>
           <li>Kjør full lagersynk og vent til den er ferdig — se «Sist synket».</li>
           <li>Gjør overgangen.</li>
+          <li>Importer rabattkodene (gavekortene) fra Mystore med saldoen slik den står nå — Admin → Rabattkoder → Importer.</li>
+          <li>Sett SHOP_URL og BUTIKK_ORIGIN til https://korthaien.no på API-tjenesten i Render.</li>
           <li>Pek korthaien.no til den nye butikken, og sjekk den mens du er innlogget i admin.</li>
+          <li>
+            Prøv hele flyten: send inn en kjøpsordre innlogget, gjør den opp (kreditten skal komme på kontoen),
+            legg kortene inn i beholdningen (de skal dukke opp i butikken), og handle med kreditten.
+          </li>
           <li>Åpne butikken.</li>
           <li>Slå av Mystore-synken (cron-jobben i Render).</li>
         </ol>
