@@ -1,4 +1,32 @@
-import { db, normaliser, ryddFeilkoblinger } from "./db.js";
+import { db as rådb, normaliser, ryddFeilkoblinger } from "./db.js";
+
+// ── databasen, med nye forsøk ────────────────────────────────────────────────
+// Synken gjør titusener av kall mot Turso. Ett brudd i nettet («fetch
+// failed», «other side closed») felte tidligere hele synken halvveis. Alt
+// synken skriver er upsert eller sletting, og lesingene er bare lesinger, så
+// et kall som feilet på nettverket kan trygt gjøres på nytt.
+const NETTFEIL = /fetch failed|other side closed|ECONNRESET|ETIMEDOUT|UND_ERR|socket hang up|EAI_AGAIN|network/i;
+export const erNettfeil = (e: any) =>
+  NETTFEIL.test(String(e?.message || "")) || NETTFEIL.test(String(e?.cause?.message || e?.cause?.code || ""));
+async function medForsøk<T>(f: () => Promise<T>): Promise<T> {
+  for (let forsøk = 0; ; forsøk++) {
+    try {
+      return await f();
+    } catch (e: any) {
+      if (forsøk >= 5 || !erNettfeil(e)) throw e;
+      const vent = Math.min(20000, 1000 * 2 ** forsøk);
+      console.log(`  Nettverksfeil mot databasen (${e?.cause?.message || e?.message}) — prøver igjen om ${vent / 1000} s`);
+      await new Promise((r) => setTimeout(r, vent));
+    }
+  }
+}
+const db = () => {
+  const d = rådb();
+  return {
+    execute: (q: any) => medForsøk(() => d.execute(q)),
+    batch: (q: any, modus?: any) => medForsøk(() => d.batch(q, modus)),
+  };
+};
 import { byggIndeks, finnSett } from "./settnavn.js";
 import { gjettSett } from "./gjett.js";
 import { variantFraNavn, skillUtNummer, skillUtBokstav, nummerFraParentes, oppgirBehandling, erDisplayProdukt, erScrollProdukt } from "./varianter.js";

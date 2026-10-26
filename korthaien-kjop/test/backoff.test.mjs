@@ -64,3 +64,11 @@ test("lager leses fra quantity_physical, ikke quantity", async () => {
 });
 
 process.on("exit", () => { globalThis.fetch = ekte; });
+
+test("synken kjenner igjen nettverksfeil mot databasen", async () => {
+  const { erNettfeil } = await import("../src/mystore.ts");
+  const e = new TypeError("fetch failed");
+  e.cause = { message: "other side closed", code: "UND_ERR_SOCKET" };
+  assert.equal(erNettfeil(e), true);
+  assert.equal(erNettfeil(new Error("SQLITE_CONSTRAINT: UNIQUE constraint failed")), false);
+});
