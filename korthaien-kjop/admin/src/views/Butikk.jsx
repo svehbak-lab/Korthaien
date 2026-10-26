@@ -738,6 +738,10 @@ function Topp({ onHjem, onSøk, onAlleSett, produkter, onProdukt, onKonto, onKur
             onSubmit={(e) => {
               e.preventDefault();
               onSøk(q.trim());
+              // Søket flyttes over i feltet i søyla; toppfeltet tømmes, så
+              // et nytt søk ikke starter med det gamle.
+              setQ("");
+              e.currentTarget.querySelector("input")?.blur();
             }}
           >
             <input
