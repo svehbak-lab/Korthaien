@@ -284,6 +284,17 @@ export function KurvSide({ onKasse, onHandleVidere, melding }) {
 // ── kassen ──────────────────────────────────────────────────────────────────
 const tomAdresse = { navn: "", email: "", telefon: "", adresse: "", postnr: "", poststed: "", land: "NO" };
 
+// Vipps sitt knappebibliotek, lastet én gang og bare når Vipps er slått på.
+let vippsLastet = false;
+function lastVippsKnapp() {
+  if (vippsLastet || typeof document === "undefined") return;
+  vippsLastet = true;
+  const sc = document.createElement("script");
+  sc.src = "https://cdn.vippsmobilepay.com/js/button/button.js";
+  sc.async = true;
+  document.head.appendChild(sc);
+}
+
 export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
   const h = useHandel();
   const [oppsett, setOppsett] = useState(null);
@@ -292,6 +303,15 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
   const [frakt, setFrakt] = useState(null);
   const [brukKreditt, setBrukKreditt] = useState(true);
   const [betaling, setBetaling] = useState("kort");
+  // Vipps-knappen tegnes av Vipps sitt skript. Lastes det ikke (nett, blokkering),
+  // brukes vår egen knapp — kunden skal aldri stå uten noe å trykke på.
+  const [vippsKlar, setVippsKlar] = useState(() => typeof customElements !== "undefined" && !!customElements.get("vipps-mobilepay-button"));
+  useEffect(() => {
+    if (vippsKlar || typeof customElements === "undefined") return;
+    let av = false;
+    customElements.whenDefined("vipps-mobilepay-button").then(() => !av && setVippsKlar(true));
+    return () => { av = true; };
+  }, []);
   // Rabattkoden: det kunden skriver, og det serveren sa om den.
   const [kodeFelt, setKodeFelt] = useState("");
   const [kode, setKode] = useState(null);
@@ -372,6 +392,7 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
     );
   }
   const medVipps = !!oppsett.vipps && betaling === "vipps";
+  if (oppsett.vipps) lastVippsKnapp();
 
   const valgtFrakt = oppsett.frakt.find((f) => f.id === frakt);
   // Henter kunden selv, er adressen valgfri.
@@ -652,6 +673,21 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
                 <a href="?side=retur" target="_blank" rel="noopener">angrerett</a>.
               </span>
             </label>
+            {/* Vipps sin egen, godkjente knapp når Vipps er valgt og alt er
+                klart. Vipps krever at knappen brukes uendret; den tegnes av
+                deres skript. Ellers vår egen knapp. */}
+            {medVipps && vippsKlar && åBetale > 0 && !sender && !problemer && frakt && vilkår ? (
+              <div
+                className="vipps-offisiell"
+                role="button"
+                tabIndex={0}
+                aria-label={`Betal med Vipps — ${kroner(åBetale)}`}
+                onClick={(e) => e.currentTarget.closest("form")?.requestSubmit()}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.closest("form")?.requestSubmit(); } }}
+              >
+                <vipps-mobilepay-button brand="vipps" language="no" variant="primary" rounded="true" verb="pay" stretched="true" />
+              </div>
+            ) : (
             <button
               type="submit"
               className={`knapp primar${medVipps ? " vipps-knapp" : ""}`}
@@ -660,6 +696,7 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
             >
               {sender ? "Et øyeblikk…" : åBetale > 0 ? `${medVipps ? "Betal med Vipps" : "Til betaling"} — ${kroner(åBetale)}` : gavekort > 0 && !kreditt ? "Fullfør med gavekort" : "Fullfør med kreditt"}
             </button>
+            )}
             {åBetale > 0 && !medVipps && !oppsett.betaling && (
               <p className="dempet" style={{ fontSize: 12.5 }}>Kortbetaling er ikke slått på ennå.</p>
             )}
