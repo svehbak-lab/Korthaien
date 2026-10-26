@@ -88,8 +88,9 @@ export async function søk(opts: {
   const s = await hentSettings();
   const regler = await hentAlleSetRules(s);
   const args: any[] = [];
-  // Tokens ligger i katalogen fordi de selges, men de kjøpes aldri inn.
-  const hvor: string[] = ["c.er_token = 0", "c.er_serialized = 0"];
+  // Tokens kjøpes inn som andre kort, når token-settet er slått på og
+  // prisen møter kriteriene. Serienummererte holdes utenfor.
+  const hvor: string[] = ["c.er_serialized = 0"];
 
   if (opts.q) {
     // Kunden skriver «Bonecrusher Giant», Scryfall kaller det
@@ -140,7 +141,7 @@ export async function tilbudFor(nøkler: { card_id: string }[]): Promise<Tilbud[
                  c.collector_number, c.rarity, c.image_uri, c.usd, c.usd_foil,
                  c.has_foil, c.has_nonfoil, c.er_token, c.er_serialized, c.released_at
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
-           WHERE c.er_token = 0 AND c.er_serialized = 0 AND c.id IN (${ider.map(() => "?").join(",")})`,
+           WHERE c.er_serialized = 0 AND c.id IN (${ider.map(() => "?").join(",")})`,
     args: ider,
   });
   return byggTilbud(r.rows.map(radTilKandidat), regler, s);

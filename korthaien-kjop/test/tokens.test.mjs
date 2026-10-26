@@ -5,6 +5,7 @@ import { rmSync } from "node:fs";
 const DB = `/tmp/token-${process.pid}.db`;
 rmSync(DB, { force: true });
 process.env.DATABASE_URL = `file:${DB}`;
+process.env.LAGERKILDE = "bok";
 
 const { db, migrate, normaliser, settSetting } = await import("../src/db.ts");
 const { skrivBolk } = await import("../src/import-scryfall.ts");
@@ -21,7 +22,7 @@ await db().execute(
   "INSERT INTO sets (code,name,released_at,card_count,parent_code) VALUES ('bfz','Battle for Zendikar','2015-10-02',274,NULL)"
 );
 await db().execute(
-  "INSERT INTO sets (code,name,released_at,card_count,parent_code) VALUES ('tbfz','Battle for Zendikar Tokens','2015-10-02',18,'bfz')"
+  "INSERT INTO sets (code,name,released_at,card_count,parent_code,set_type) VALUES ('tbfz','Battle for Zendikar Tokens','2015-10-02',18,'bfz','token')"
 );
 for (const kode of ["bfz", "tbfz"]) {
   await db().execute({
@@ -40,7 +41,7 @@ await skrivBolk([
     image_uris: { normal: "https://cards.scryfall.io/normal/drage.jpg" },
   },
   {
-    // Et token med pris hos Scryfall skal likevel ikke kunne kjøpes inn.
+    // Et token med pris hos Scryfall kjøpes inn som andre kort.
     id: "engel", oracle_id: "o-engel", name: "Angel", set: "tbfz",
     collector_number: "3", rarity: "common", finishes: ["nonfoil"],
     released_at: "2015-10-02", prices: { usd: "1.50", usd_foil: null },
@@ -62,9 +63,13 @@ test("tokens merkes ved import", async () => {
   assert.equal(kart.ekte, 0);
 });
 
-test("tokens tilbys ikke på kjøpssiden, selv med pris", async () => {
-  assert.deepEqual(await søk({ q: "Angel" }), []);
-  assert.deepEqual(await søk({ q: "Dragon" }), []);
+test("tokens med pris tilbys på kjøpssiden når token-settet er slått på", async () => {
+  const engel = await søk({ q: "Angel" });
+  assert.equal(engel.length, 1);
+  assert.ok(engel[0].conditions[0].ore > 0);
+  // Uten pris er det ingenting å by — som for andre kort.
+  const drage = await søk({ q: "Dragon" });
+  assert.ok(drage.every((t) => t.conditions.every((c) => !c.ore)));
 });
 
 test("vanlige kort i samme sett er upåvirket", async () => {
@@ -73,12 +78,20 @@ test("vanlige kort i samme sett er upåvirket", async () => {
   assert.ok(t[0].conditions[0].ore > 0);
 });
 
-test("et token kan ikke bestilles rett mot API-et heller", async () => {
+test("et token med pris kan bestilles; et uten pris kan ikke", async () => {
+  const o = await lagOrdre({
+    customer_name: "Kari",
+    email: "kari@example.com",
+    vilkar_godtatt: true,
+    linjer: [{ card_id: "engel", finish: "nonfoil", condition: "NM", qty: 1 }],
+  });
+  assert.ok(o.order_no);
   await assert.rejects(
     lagOrdre({
       customer_name: "Kari",
       email: "kari@example.com",
-      linjer: [{ card_id: "engel", finish: "nonfoil", condition: "NM", qty: 1 }],
+      vilkar_godtatt: true,
+      linjer: [{ card_id: "drage", finish: "nonfoil", condition: "NM", qty: 1 }],
     }),
     /Ingen av kortene/
   );
@@ -89,4 +102,16 @@ test("men tokens kan ligge på lager, siden de selges", async () => {
     { card_id: "drage", finish: "nonfoil", condition: "NM", antall: 25, grunn: "manuell" },
   ]);
   assert.equal(await beholdningFor("drage", "nonfoil", "NM"), 25);
+});
+
+test("butikken viser tokens på lager, også under hovedsettet, men ikke på forsiden", async () => {
+  const { butikkvisning } = await import("../src/salgspris.ts");
+  const { settManuellSalg } = await import("../src/salgspris.ts");
+  await settManuellSalg("drage", "nonfoil", 500);
+  const alle = await butikkvisning({ sett: "", q: "Dragon", baresalg: true });
+  assert.ok(alle.kort.some((k) => k.id === "drage"));
+  const iSettet = await butikkvisning({ sett: "bfz", baresalg: true });
+  assert.ok(iSettet.kort.some((k) => k.id === "drage"));
+  const forsiden = await butikkvisning({ sett: "", baresalg: true, utenTokens: true });
+  assert.ok(!forsiden.kort.some((k) => k.id === "drage"));
 });

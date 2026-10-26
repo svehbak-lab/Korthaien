@@ -520,6 +520,7 @@ app.get("/api/admin/butikk", krevAdmin, fang(async (req: any, res: any) => {
       sortering: req.query.sortering ? String(req.query.sortering) : undefined,
       side: tall(req.query.side),
       perSide: tall(req.query.perSide),
+      utenTokens: String(req.query.utenTokens || "") === "1",
     })
   );
 }));
@@ -892,6 +893,7 @@ app.get("/api/butikk/katalog", grense(REGLER.butikk), fang(async (req: any, res:
       sortering: req.query.sortering ? String(req.query.sortering) : undefined,
       side: tall(req.query.side),
       perSide: tall(req.query.perSide) === undefined ? undefined : Math.min(100, tall(req.query.perSide)!),
+      utenTokens: String(req.query.utenTokens || "") === "1",
     })
   );
 }));

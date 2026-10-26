@@ -421,10 +421,9 @@ async function prisVedMottak(
   const vanlig = prisØre(kort, finish, condition, regel, s, manuell, egne);
   if (vanlig > 0) return { ore: vanlig, standard: false };
 
-  // Tokens og serienummererte kort holdes utenfor med vilje. De har ingen
-  // pålitelig markedspris, og skal prises for hånd om de i det hele tatt
-  // skal kjøpes.
-  if (Number(kort.er_token) || Number(kort.er_serialized)) return { ore: 0, standard: false };
+  // Serienummererte kort holdes utenfor med vilje. De har ingen pålitelig
+  // markedspris. Tokens prises som andre kort.
+  if (Number(kort.er_serialized)) return { ore: 0, standard: false };
 
   const usd = manuell && manuell > 0 ? manuell : prisenFor(kort, finish);
   if (!usd || usd <= 0) return { ore: 0, standard: false };

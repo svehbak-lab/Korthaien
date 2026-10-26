@@ -310,7 +310,7 @@ const VELG = `SELECT c.id AS card_id, c.name, c.set_code, COALESCE(s.visningsnav
                      c.collector_number, c.rarity, c.image_uri, c.usd, c.usd_foil,
                      c.has_foil, c.has_nonfoil, c.er_token, c.er_serialized, c.released_at
                 FROM cards c LEFT JOIN sets s ON s.code = c.set_code
-               WHERE c.er_token = 0 AND c.er_serialized = 0`;
+               WHERE c.er_serialized = 0`;
 
 export async function finnKandidater(
   navn: string,

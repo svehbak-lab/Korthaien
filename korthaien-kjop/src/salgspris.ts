@@ -318,17 +318,22 @@ export type ButikkFilter = {
   sortering?: string;
   side?: number;
   perSide?: number;
+  // Forsiden: «Nylig inn» skal vise kort, ikke tokens.
+  utenTokens?: boolean;
 };
 
 export async function butikkvisning(opts: ButikkFilter) {
   const opp = await hentSalgsOppsett();
   const { beholdning } = await import("./lager.js");
 
-  const hvor: string[] = ["c.er_token = 0"];
+  // Tokens selges som andre kort. I et sett vises også tokens fra
+  // token-settet som hører til (Phyrexia: All Will Be One Tokens under
+  // Phyrexia: All Will Be One).
+  const hvor: string[] = opts.utenTokens ? ["c.er_token = 0"] : ["1 = 1"];
   const args: any[] = [];
   if (opts.sett) {
-    hvor.push("c.set_code = ?");
-    args.push(opts.sett.toLowerCase());
+    hvor.push(`(c.set_code = ? OR c.set_code IN (SELECT code FROM sets WHERE parent_code = ? AND set_type = 'token'))`);
+    args.push(opts.sett.toLowerCase(), opts.sett.toLowerCase());
   }
   // Finish-kravet legges på lenger ned, ikke her. Fanetallene skal telles
   // uten det — ellers telles fanene inni hverandre, og «Enkeltkort» viser
@@ -592,7 +597,7 @@ export async function kortdetaljer(cardId: string) {
                  COALESCE(s.visningsnavn, s.name) AS set_name, s.released_at
             FROM cards c LEFT JOIN sets s ON s.code = c.set_code
            WHERE c.id <> ?
-             AND c.er_token = 0
+             AND c.er_token = ${Number(kort.er_token) ? 1 : 0}
              AND (${kort.oracle_id ? "c.oracle_id = ?" : "c.name_norm = ?"})
            ORDER BY s.released_at DESC
            LIMIT 40`,

@@ -63,9 +63,10 @@ export function prisØre(
   // Hvilke tilstander som godtas avgjøres her, ikke bare i grensesnittet.
   // Ellers kunne en ordre sendt rett mot API-et be om en tilstand du ikke
   // tar imot, og få pris på den fordi trappen tilfeldigvis har en sats.
-  // Tokens selges, men kjøpes aldri inn. Sjekken ligger her og ikke i søket,
-  // så den også gjelder en ordre sendt rett mot API-et.
-  if (kort.er_token || kort.er_serialized) return 0;
+  // Serienummererte kort kjøpes ikke inn. Sjekken ligger her og ikke i
+  // søket, så den også gjelder en ordre sendt rett mot API-et. Tokens kjøpes
+  // inn som andre kort.
+  if (kort.er_serialized) return 0;
 
   const godtatt = egneConditions?.length ? egneConditions : regel.conditions;
   if (godtatt && !godtatt.includes(condition)) return 0;

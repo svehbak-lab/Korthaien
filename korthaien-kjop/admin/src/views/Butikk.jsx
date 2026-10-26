@@ -1493,7 +1493,7 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
   useEffect(() => {
     let avbrutt = false;
     kapi
-      .katalog({ sortering: "nyeste", perSide: 30, baresalg: true })
+      .katalog({ sortering: "nyeste", perSide: 30, baresalg: true, utenTokens: true })
       .then((d) => !avbrutt && setKort(d.kort))
       .catch((e) => !avbrutt && onFeil(e));
     return () => {
