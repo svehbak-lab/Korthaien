@@ -629,6 +629,14 @@ export function Kasse({ onTilbake, onKvittering, onLoggInn }) {
               <div className="betalingsvalg" role="radiogroup" aria-label="Betalingsmåte">
                 <label className={betaling === "kort" ? "valgt" : ""}>
                   <input type="radio" name="betaling" checked={betaling === "kort"} onChange={() => setBetaling("kort")} />
+                  {/* Et nøytralt betalingskort, tegnet her — ikke Visa- eller
+                      Mastercard-merket. Kort, Apple Pay og Google Pay ligger
+                      alle bak dette valget hos Stripe. */}
+                  <svg className="betalingsikon" viewBox="0 0 32 22" aria-hidden="true">
+                    <rect x="1" y="1" width="30" height="20" rx="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                    <rect x="1" y="5.5" width="30" height="3.5" fill="currentColor" />
+                    <rect x="5" y="14" width="8" height="2.4" rx="1" fill="currentColor" opacity=".55" />
+                  </svg>
                   Kort
                 </label>
                 <label className={`vipps${betaling === "vipps" ? " valgt" : ""}`}>

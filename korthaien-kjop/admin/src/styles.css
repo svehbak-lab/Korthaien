@@ -1502,3 +1502,4 @@ label.kreditt-boks { cursor: pointer; }
 @media (max-width: 560px) {
   .butikk .b-linje2 .b-midt { padding-top: 6px; padding-bottom: 6px; gap: 14px; }
 }
+.betalingsvalg .betalingsikon { width: 26px; height: 18px; flex: none; }
