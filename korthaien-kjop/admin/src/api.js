@@ -163,6 +163,7 @@ export const api = {
   lagreSalgspriser: (intervaller) =>
     kall("/api/admin/salgspriser", { method: "PUT", body: { intervaller } }),
   salgsprisSett: (sett) => kall(`/api/admin/salgspriser/${encodeURIComponent(sett)}`),
+  utenPris: () => kall("/api/admin/lager/uten-pris"),
   settSalgspris: (id, finish, nm_ore) =>
     kall(`/api/admin/salgspris/${id}`, { method: "PUT", body: { finish, nm_ore } }),
   lager: (sett, q = "") => kall(`/api/admin/lager?sett=${encodeURIComponent(sett || "")}&q=${encodeURIComponent(q)}`),

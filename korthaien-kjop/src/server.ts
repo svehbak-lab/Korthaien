@@ -15,7 +15,7 @@ import { sendBekreftelse, varsleMeg, varsleStatus, sendOppgjør, sendKontakt } f
 import { bokførOrdre, reverserOrdre, beholdning, historikk, settBeholdning, avvikMotMystore } from "./lager.js";
 import {
   hentIntervaller, lagreIntervaller, finnHull, salgsprisForSett, settManuellSalg,
-  butikkvisning, kortdetaljer,
+  butikkvisning, kortdetaljer, utenPrisPåLager,
 } from "./salgspris.js";
 import { hentFrakt, leggTilFrakt, endreFrakt, slåAvFrakt } from "./frakt.js";
 import {
@@ -588,6 +588,12 @@ app.get("/api/admin/butikk/kort/:id", krevAdmin, fang(async (req: any, res: any)
   const d = await kortdetaljer(String(req.params.id));
   if (!d) throw new HttpFeil(404, "Fant ikke kortet");
   res.json(d);
+}));
+
+// Kort som ligger på lager, men ikke har noen pris og derfor ikke vises i
+// butikken.
+app.get("/api/admin/lager/uten-pris", krevAdmin, fang(async (_req: any, res: any) => {
+  res.json({ kort: await utenPrisPåLager() });
 }));
 
 app.put("/api/admin/salgspris/:cardId", krevAdmin, fang(async (req: any, res: any) => {

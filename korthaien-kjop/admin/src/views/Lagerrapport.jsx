@@ -126,6 +126,8 @@ export default function Lagerrapport({ onFeil }) {
         )}
       </div>
 
+      <UtenPris onFeil={onFeil} />
+
       {/* Under totalen, over settlista: først hva du har, så hvor det går. */}
       {/* Står det noe her, har et produkt fått beholdning uten å være koblet.
           Normalt er tallet null og linjen usynlig. */}
@@ -303,5 +305,88 @@ function GrunnsettFelt({ verdi, onLagre }) {
       }}
       onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
     />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PÅ LAGER, MEN UTEN PRIS
+// ─────────────────────────────────────────────────────────────────────────────
+// Kort i hylla som ikke har noen pris: Scryfall har ingen markedspris, ingen
+// intervall treffer, og ingen manuell pris er satt. De vises ikke i butikken.
+// Sett en NM-pris her, så regnes de andre tilstandene ut av trappen.
+function UtenPris({ onFeil }) {
+  const [kort, setKort] = useState(null);
+  const [åpen, setÅpen] = useState(false);
+  const [pris, setPris] = useState({});
+  const [lagret, setLagret] = useState({});
+  useEffect(() => {
+    api.utenPris().then((r) => setKort(r.kort || [])).catch(() => setKort([]));
+  }, []);
+  if (!kort || !kort.length) return null;
+  const stk = kort.reduce((n, k) => n + k.antall, 0);
+
+  async function lagre(k) {
+    const nøkkel = `${k.card_id}:${k.finish}`;
+    const ore = Math.round((parseFloat(String(pris[nøkkel] || "").replace(",", ".")) || 0) * 100);
+    if (!(ore > 0)) return;
+    try {
+      await api.settSalgspris(k.card_id, k.finish, ore);
+      setLagret((x) => ({ ...x, [nøkkel]: true }));
+    } catch (e) {
+      onFeil(e);
+    }
+  }
+
+  return (
+    <div className="panel" style={{ marginBottom: 16, borderColor: "var(--advarsel)" }}>
+      <div className="krop rad-flex">
+        <span>
+          <b>{kort.length} {kort.length === 1 ? "kort" : "kort"} på lager har ingen pris</b>{" "}
+          <span className="dempet">({stk} stk.) — de vises ikke i butikken før de får en pris.</span>
+        </span>
+        <button className="knapp liten" style={{ marginLeft: "auto" }} onClick={() => setÅpen((v) => !v)}>
+          {åpen ? "Skjul" : "Vis kortene"}
+        </button>
+      </div>
+      {åpen && (
+        <>
+          <p className="dempet" style={{ margin: "0 16px 8px", fontSize: 13 }}>
+            Scryfall har ingen markedspris for disse, og du har ikke satt noen pris selv. Skriv inn NM-prisen i kroner —
+            de andre tilstandene regnes ut av trappen din. Kortet dukker opp i butikken med en gang.
+          </p>
+          <table>
+            <thead>
+              <tr><th>Kort</th><th>Sett</th><th>Finish</th><th className="h">Antall</th><th className="h">NM-pris (kr)</th></tr>
+            </thead>
+            <tbody>
+              {kort.map((k) => {
+                const nøkkel = `${k.card_id}:${k.finish}`;
+                return (
+                  <tr key={nøkkel}>
+                    <td>{k.name}{k.er_token && <span className="dempet"> · token</span>}</td>
+                    <td className="dempet">{k.set_name}{k.collector_number ? ` #${k.collector_number}` : ""}</td>
+                    <td>{k.finish === "foil" ? "Foil" : "Vanlig"}</td>
+                    <td className="h tall">{k.antall}</td>
+                    <td className="h">
+                      {lagret[nøkkel] ? (
+                        <span style={{ color: "var(--ok)" }}>Lagret ✓</span>
+                      ) : (
+                        <input
+                          type="text" inputMode="decimal" style={{ width: 80, textAlign: "right" }}
+                          value={pris[nøkkel] || ""} placeholder="f.eks. 10"
+                          onChange={(e) => setPris((x) => ({ ...x, [nøkkel]: e.target.value }))}
+                          onBlur={() => lagre(k)}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
   );
 }

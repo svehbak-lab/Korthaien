@@ -613,16 +613,8 @@ function ButikkSider({ onFeil }) {
 
               {KORTFANER.some((x) => x.id === fane) && !laster && data && (
                 <>
-                  <p className="dempet">
-                    {data.utenPris > 0 && (
-                      <>
-                        {" "}
-                        {data.utenPris} av kortene på denne siden har ingen pris —
-                        verken fra Scryfall, intervallene eller manuelt. De ville ikke
-                        vært til salgs.
-                      </>
-                    )}
-                  </p>
+                  {/* Kort uten pris vises ikke. Listen over dem ligger under
+                      Lagerrapport, ikke her der kundene ser det. */}
 
                   {/* Samme kort, tre tettheter. Galleriet er ett rutenett og
                       ikke en rekke paneler, så det må stå for seg. */}

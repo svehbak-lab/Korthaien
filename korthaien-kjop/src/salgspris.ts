@@ -641,3 +641,49 @@ export async function kortdetaljer(cardId: string) {
       .sort((a, b) => (b.nm ?? -1) - (a.nm ?? -1)),
   };
 }
+
+// ── kort på lager uten pris ──────────────────────────────────────────────────
+// Et kort uten pris vises ikke i butikken: Scryfall har ingen markedspris,
+// ingen intervall treffer, og ingen manuell pris er satt. Ligger det i hylla,
+// er det et kort du ikke får solgt før det får en pris — derfor listen.
+export async function utenPrisPåLager(): Promise<
+  { card_id: string; finish: string; antall: number; name: string; set_code: string; set_name: string; collector_number: string | null; rarity: string | null; er_token: boolean }[]
+> {
+  const lager = await db().execute(
+    `SELECT card_id, finish, SUM(antall) AS n FROM (${butikklagerSql()}) GROUP BY card_id, finish HAVING SUM(antall) > 0`
+  );
+  const rader = lager.rows as any[];
+  if (!rader.length) return [];
+  const ider = [...new Set(rader.map((x) => String(x.card_id)))];
+  const kort = new Map<string, any>();
+  for (let i = 0; i < ider.length; i += 400) {
+    const del = ider.slice(i, i + 400);
+    const r = await db().execute({
+      sql: `SELECT c.id, c.name, c.set_code, c.collector_number, c.rarity, c.usd, c.usd_foil, c.er_token,
+                   COALESCE(s.visningsnavn, s.name) AS set_name
+              FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+             WHERE c.id IN (${del.map(() => "?").join(",")})`,
+      args: del,
+    });
+    for (const x of r.rows as any[]) kort.set(String(x.id), x);
+  }
+  const [opp, manuellSalg, manuellUsd] = await Promise.all([
+    hentSalgsOppsett(),
+    hentManuellSalg(ider),
+    hentManuellePriser(ider),
+  ]);
+  const ut = [];
+  for (const x of rader) {
+    const k = kort.get(String(x.card_id));
+    if (!k) continue;
+    const nøkkel = `${x.card_id}:${x.finish}`;
+    const pris = salgsprisØre(k, String(x.finish), "NM", opp, manuellSalg.get(nøkkel) ?? null, manuellUsd.get(nøkkel) ?? null);
+    if (pris > 0) continue;
+    ut.push({
+      card_id: String(x.card_id), finish: String(x.finish), antall: Number(x.n),
+      name: String(k.name), set_code: String(k.set_code), set_name: String(k.set_name || k.set_code),
+      collector_number: k.collector_number ?? null, rarity: k.rarity ?? null, er_token: !!Number(k.er_token),
+    });
+  }
+  return ut.sort((a, b) => a.set_name.localeCompare(b.set_name) || a.name.localeCompare(b.name));
+}

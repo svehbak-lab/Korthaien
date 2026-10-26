@@ -115,3 +115,13 @@ test("butikken viser tokens på lager, også under hovedsettet, men ikke på for
   const forsiden = await butikkvisning({ sett: "", baresalg: true, utenTokens: true });
   assert.ok(!forsiden.kort.some((k) => k.id === "drage"));
 });
+
+test("kort på lager uten pris listes, og forsvinner når de får pris", async () => {
+  const { utenPrisPåLager, settManuellSalg } = await import("../src/salgspris.ts");
+  await settManuellSalg("drage", "nonfoil", null);
+  let liste = await utenPrisPåLager();
+  assert.ok(liste.some((k) => k.card_id === "drage" && k.antall === 25 && k.er_token));
+  await settManuellSalg("drage", "nonfoil", 500);
+  liste = await utenPrisPåLager();
+  assert.ok(!liste.some((k) => k.card_id === "drage"));
+});
