@@ -280,6 +280,8 @@ function Rekkefolge() {
           <li>Kjør full lagersynk og vent til den er ferdig — se «Sist synket».</li>
           <li>Gjør overgangen.</li>
           <li>Importer rabattkodene (gavekortene) fra Mystore med saldoen slik den står nå — Admin → Rabattkoder → Importer.</li>
+          <li>Eksporter kundelista fra Mystore på nytt og importer den (Admin → Kunder → Importer), så kunder som har kommet til siden sist er med. Kunder som finnes fra før blir ikke overskrevet.</li>
+          <li>Ta en full eksport av ordrene fra Mystore og legg den i arkivet — bokføringsloven krever fem år.</li>
           <li>Sett SHOP_URL og BUTIKK_ORIGIN til https://korthaien.no på API-tjenesten i Render.</li>
           <li>Pek korthaien.no til den nye butikken, og sjekk den mens du er innlogget i admin.</li>
           <li>
