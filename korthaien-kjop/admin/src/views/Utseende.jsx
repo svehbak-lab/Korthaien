@@ -57,6 +57,11 @@ const TEMAER = [
     navn: "Jul: Pepperkake",
     om: "Pepperkakebrunt og melisglasur, polkagrisstripe under menyen og stiplet søkefelt. Varmt og lekent.",
   },
+  {
+    id: "nissejul",
+    navn: "Jul: Nissejul",
+    om: "Det mest julete: julerød topp og grønn meny med gullkant, juletrær som vannmerke i bakgrunnen, og små nisser ved logoen, overskriftene, «Selg dine kort» og i bunnen.",
+  },
 ];
 
 export default function Utseende({ onFeil, onMelding }) {
