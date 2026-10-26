@@ -125,3 +125,11 @@ test("kort på lager uten pris listes, og forsvinner når de får pris", async (
   liste = await utenPrisPåLager();
   assert.ok(!liste.some((k) => k.card_id === "drage"));
 });
+
+test("søk på «token» finner tokens, også sammen med navnet", async () => {
+  const { butikkvisning } = await import("../src/salgspris.ts");
+  const a = await butikkvisning({ sett: "", q: "token", baresalg: true });
+  assert.ok(a.kort.some((k) => k.id === "drage"));
+  const b = await butikkvisning({ sett: "", q: "Dragon Token", baresalg: true });
+  assert.ok(b.kort.some((k) => k.id === "drage"));
+});

@@ -348,9 +348,17 @@ export async function butikkvisning(opts: ButikkFilter) {
                         WHERE b.card_id = c.id
                         GROUP BY b.card_id HAVING SUM(b.antall) > 0)`);
   }
-  if (opts.q) {
+  // «token» i søket betyr «vis tokens»: Scryfall kaller tokenet «Treasure»,
+  // ikke «Treasure Token». Ordet tas ut av navnesøket og blir et filter, så
+  // både «token» og «treasure token» finner det folk mener.
+  let q = String(opts.q || "");
+  if (/\btokens?\b/i.test(q)) {
+    hvor.push("c.er_token = 1");
+    q = q.replace(/\btokens?\b/gi, " ").replace(/\s+/g, " ").trim();
+  }
+  if (q) {
     hvor.push("(c.name_norm LIKE ? OR c.oracle_text LIKE ?)");
-    args.push(`%${normaliserEnkelt(opts.q)}%`, `%${opts.q}%`);
+    args.push(`%${normaliserEnkelt(q)}%`, `%${q}%`);
   }
   // Flere rariteter om gangen. Ett valg er sjelden nok — man leter gjerne
   // etter rare og mythic samtidig.
