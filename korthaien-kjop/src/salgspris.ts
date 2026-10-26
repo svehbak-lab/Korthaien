@@ -358,9 +358,13 @@ export async function butikkvisning(opts: ButikkFilter) {
     hvor.push("c.er_token = 1");
     q = q.replace(/\btokens?\b/gi, " ").replace(/\s+/g, " ").trim();
   }
+  // Søket er på kortnavnet. Regelteksten har sitt eget filter (tekst) —
+  // ellers ga «treasure» Smothering Tithe og hundrevis av andre kort som
+  // bare nevner ordet.
   if (q) {
-    hvor.push("(c.name_norm LIKE ? OR c.oracle_text LIKE ?)");
-    args.push(`%${normaliserEnkelt(q)}%`, `%${q}%`);
+    hvor.push("(c.name_norm LIKE ? OR c.front_norm LIKE ? OR c.back_norm LIKE ?)");
+    const n = `%${normaliserEnkelt(q)}%`;
+    args.push(n, n, n);
   }
   // Flere rariteter om gangen. Ett valg er sjelden nok — man leter gjerne
   // etter rare og mythic samtidig.

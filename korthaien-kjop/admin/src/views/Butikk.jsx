@@ -231,16 +231,21 @@ function ButikkSider({ onFeil }) {
   // sju i et resultat med to sider og ser ingenting.
   useEffect(() => setSide(1), [sett, finish, sortering, perSide, f]);
 
+  // Hvert søk får et løpenummer. Svarene kan komme i feil rekkefølge — et
+  // tregt søk på hele katalogen kan komme etter det raske søket på «egg» —
+  // og da skal bare svaret på det siste søket vises.
+  const søkNr = useRef(0);
   useEffect(() => {
     setLaster(true);
+    const nr = ++søkNr.current;
     const t = setTimeout(() => {
       kapi.katalog({
         sett: sett || "", finish, sortering, side, perSide, ...f,
         rarity: f.rarity.join(","), farge: f.farge.join(","), type: f.type.join(","),
       })
-        .then(setData)
-        .catch(onFeil)
-        .finally(() => setLaster(false));
+        .then((d) => { if (nr === søkNr.current) setData(d); })
+        .catch((e) => { if (nr === søkNr.current) onFeil(e); })
+        .finally(() => { if (nr === søkNr.current) setLaster(false); });
     }, 250);
     return () => clearTimeout(t);
   }, [sett, finish, sortering, side, perSide, f]);
