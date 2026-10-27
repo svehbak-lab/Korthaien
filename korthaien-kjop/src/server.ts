@@ -1350,11 +1350,15 @@ app.get("/api/admin/cards", krevAdmin, fang(async (req: any, res: any) => {
                  (SELECT conditions FROM card_conditions cc WHERE cc.card_id = c.id) AS egne_conditions,
                  (SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='nonfoil') AS pris_nonfoil,
                  (SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='foil')    AS pris_foil,
-                 (SELECT qty        FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS stock_nonfoil,
+                 ${lagerkilde() === "bok"
+                   ? "(SELECT SUM(antall) FROM lager_bevegelser b WHERE b.card_id = c.id AND b.finish='nonfoil')"
+                   : "(SELECT qty FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil')"} AS stock_nonfoil,
                  (SELECT product_id   FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS prod_nonfoil,
                  (SELECT product_name FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS pnavn_nonfoil,
                  (SELECT category     FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS pkat_nonfoil,
-                 (SELECT qty        FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS stock_foil,
+                 ${lagerkilde() === "bok"
+                   ? "(SELECT SUM(antall) FROM lager_bevegelser b WHERE b.card_id = c.id AND b.finish='foil')"
+                   : "(SELECT qty FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')"} AS stock_foil,
                  (SELECT product_id   FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS prod_foil,
                  (SELECT product_name FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS pnavn_foil,
                  (SELECT category     FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS pkat_foil,

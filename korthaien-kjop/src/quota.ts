@@ -1,4 +1,5 @@
 import { db } from "./db.js";
+import { lagerkilde } from "./lager.js";
 import type { SetRule } from "./pricing.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,12 +58,20 @@ async function hentØnsket(cardId: string, finish: string, regel: SetRule) {
   return { wanted: regel.wanted_default, kilde: "sett" as const };
 }
 
+// Beholdningen kvoten regnes mot. Før overgangen Mystore-speilet; etter den
+// lagerboken, som får salg fra butikken og innkjøp når de legges inn. Speilet
+// står stille etter overgangen, og ville latt kjøpslista kjøpe de samme
+// kortene om igjen.
+const fraBoken = () => lagerkilde() === "bok";
+
 async function hentBeholdning(cardId: string, finish: string): Promise<number> {
   const r = await db().execute({
-    sql: "SELECT qty FROM mystore_stock WHERE card_id = ? AND finish = ?",
+    sql: fraBoken()
+      ? "SELECT COALESCE(SUM(antall), 0) AS qty FROM lager_bevegelser WHERE card_id = ? AND finish = ?"
+      : "SELECT qty FROM mystore_stock WHERE card_id = ? AND finish = ?",
     args: [cardId, finish],
   });
-  return r.rows[0] ? Number(r.rows[0].qty) : 0;
+  return r.rows[0] ? Math.max(0, Number(r.rows[0].qty)) : 0;
 }
 
 // En ordre holder kvoten til kortene er lagt inn i Mystore — ikke til kunden
@@ -96,7 +105,10 @@ export async function hentKvoterBulk(
 
   const [stock, reserved, wants] = await Promise.all([
     db().execute({
-      sql: `SELECT card_id, finish, qty FROM mystore_stock WHERE card_id IN (${plassholdere})`,
+      sql: fraBoken()
+        ? `SELECT card_id, finish, SUM(antall) AS qty FROM lager_bevegelser
+            WHERE card_id IN (${plassholdere}) GROUP BY card_id, finish`
+        : `SELECT card_id, finish, qty FROM mystore_stock WHERE card_id IN (${plassholdere})`,
       args: ids,
     }),
     db().execute({
@@ -116,7 +128,7 @@ export async function hentKvoterBulk(
     if (!kart.has(k)) kart.set(k, { stock: 0, reserved: 0, want: null });
     return kart.get(k)!;
   };
-  for (const r of stock.rows) hent(`${r.card_id}:${r.finish}`).stock = Number(r.qty);
+  for (const r of stock.rows) hent(`${r.card_id}:${r.finish}`).stock = Math.max(0, Number(r.qty));
   for (const r of reserved.rows) hent(`${r.card_id}:${r.finish}`).reserved = Number(r.n);
   for (const r of wants.rows) hent(`${r.card_id}:${r.finish}`).want = Number(r.wanted);
   return kart;

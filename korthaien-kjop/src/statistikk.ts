@@ -1,4 +1,5 @@
 import { db } from "./db.js";
+import { lagerkilde } from "./lager.js";
 import { hentSalgsOppsett, salgsprisØre } from "./salgspris.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,7 +169,7 @@ const RARITET_REKKEFØLGE = ["mythic", "rare", "uncommon", "common", "special", 
 
 export async function lagerrapport(): Promise<{
   sett: LagerSett[];
-  butikk: { kort: number; verdi_ore: number };
+  butikk: { kort: number; verdi_ore: number } | null;
   ukoblet: { produkter: number; kort: number };
   serienummererte: { kort: number; eksemplarer: number; navn: string[] };
 }> {
@@ -181,8 +182,22 @@ export async function lagerrapport(): Promise<{
   //
   // Mystore fører ikke tilstand på produktnivå, så alt prises som Near Mint.
   // Det stemmer for praktisk talt hele lageret.
-  const r = await db().execute(`
-    SELECT m.card_id, m.finish, m.qty AS n,
+  //
+  // Etter overgangen er lagerboken fasit: den har salgene fra butikken,
+  // innkjøpene som er lagt inn og tilstanden på hvert kort. Speilet står
+  // stille fra overgangen.
+  const bok = lagerkilde() === "bok";
+  const r = await db().execute(bok ? `
+    SELECT b.card_id, b.finish, b.condition, SUM(b.antall) AS n,
+           c.rarity, c.set_code, c.usd, c.usd_foil, c.er_serialized, c.name,
+           COALESCE(s.visningsnavn, s.name) AS set_name, s.released_at
+      FROM lager_bevegelser b
+      JOIN cards c ON c.id = b.card_id
+      LEFT JOIN sets s ON s.code = c.set_code
+     GROUP BY b.card_id, b.finish, b.condition
+    HAVING n > 0
+  ` : `
+    SELECT m.card_id, m.finish, 'NM' AS condition, m.qty AS n,
            c.rarity, c.set_code, c.usd, c.usd_foil,
            COALESCE(s.visningsnavn, s.name) AS set_name, s.released_at
       FROM mystore_stock m
@@ -230,7 +245,7 @@ export async function lagerrapport(): Promise<{
     const stk = salgsprisØre(
       x,
       finish,
-      "NM" as any,
+      String(x.condition || "NM") as any,
       opp,
       manuellSalg.get(nøkkel) ?? null,
       manuellUsd.get(nøkkel) ?? null
@@ -257,10 +272,13 @@ export async function lagerrapport(): Promise<{
   //
   // Bare koblede produkter med pris er med. Tilbehør, esker og de ukoblede
   // ligger utenfor, så dette er verdien av kortlageret, ikke av butikken.
-  const b = await db().execute(
-    `SELECT SUM(qty) AS kort, SUM(pris_ore * qty) AS ore
-       FROM mystore_stock WHERE qty > 0 AND pris_ore IS NOT NULL`
-  );
+  // Etter overgangen finnes det bare én pris — din — og den er summen over.
+  const b = bok
+    ? { rows: [{}] as any[] }
+    : await db().execute(
+        `SELECT SUM(qty) AS kort, SUM(pris_ore * qty) AS ore
+           FROM mystore_stock WHERE qty > 0 AND pris_ore IS NOT NULL`
+      );
   const br = (b.rows[0] || {}) as any;
 
   // Produkter som har kort på lager, men ingen kobling. Normalt null — og
@@ -281,27 +299,34 @@ export async function lagerrapport(): Promise<{
   // Kobleren gjetter ikke lenger på dem, men det som allerede er ført, står
   // der til noen ser det. Derfor står tallet her i stedet for å bli
   // oppdaget den dagen noen kjøper kortet.
-  const se = await db().execute(
-    `SELECT COUNT(*) AS kort, COALESCE(SUM(m.qty), 0) AS eksemplarer
-       FROM mystore_stock m JOIN cards c ON c.id = m.card_id
-      WHERE m.qty > 0 AND c.er_serialized = 1`
-  );
-  const ser = (se.rows[0] || {}) as any;
-
-  // Navnene, så varselet kan si hvilke kort det gjelder i stedet for bare
-  // hvor mange. Fem er nok til å kjenne dem igjen.
-  const senavn = Number(ser.kort || 0)
-    ? await db().execute(
-        `SELECT DISTINCT c.name FROM mystore_stock m JOIN cards c ON c.id = m.card_id
-          WHERE m.qty > 0 AND c.er_serialized = 1 ORDER BY c.name LIMIT 5`
-      )
-    : { rows: [] as any[] };
+  // Fra boken: regnet av radene vi allerede har, uten en ny runde mot basen.
+  let ser: any, senavn: { rows: any[] };
+  if (bok) {
+    const s = (r.rows as any[]).filter((x) => Number(x.er_serialized) === 1);
+    ser = { kort: new Set(s.map((x) => `${x.card_id}:${x.finish}`)).size, eksemplarer: s.reduce((n, x) => n + Number(x.n), 0) };
+    senavn = { rows: [...new Set(s.map((x) => String(x.name)))].sort().slice(0, 5).map((name) => ({ name })) };
+  } else {
+    const se = await db().execute(
+      `SELECT COUNT(*) AS kort, COALESCE(SUM(m.qty), 0) AS eksemplarer
+         FROM mystore_stock m JOIN cards c ON c.id = m.card_id
+        WHERE m.qty > 0 AND c.er_serialized = 1`
+    );
+    ser = (se.rows[0] || {}) as any;
+    // Navnene, så varselet kan si hvilke kort det gjelder i stedet for bare
+    // hvor mange. Fem er nok til å kjenne dem igjen.
+    senavn = Number(ser.kort || 0)
+      ? await db().execute(
+          `SELECT DISTINCT c.name FROM mystore_stock m JOIN cards c ON c.id = m.card_id
+            WHERE m.qty > 0 AND c.er_serialized = 1 ORDER BY c.name LIMIT 5`
+        )
+      : { rows: [] as any[] };
+  }
 
   return {
     sett: [...sett.values()].sort((a, b2) =>
       (b2.released_at || "").localeCompare(a.released_at || "") || a.set_name.localeCompare(b2.set_name)
     ),
-    butikk: {
+    butikk: bok ? null : {
       kort: Number(br.kort || 0),
       verdi_ore: Number(br.ore || 0),
     },
