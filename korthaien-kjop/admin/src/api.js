@@ -193,6 +193,7 @@ export const api = {
   nullstillPris: (id, finish) =>
     kall(`/api/admin/cards/${id}/pris?finish=${finish}`, { method: "DELETE" }),
   koble: (felt) => kall("/api/admin/mystore/link", { method: "POST", body: felt }),
+  leggInnFraMystore: (felt) => kall("/api/admin/mystore/legg-inn", { method: "POST", body: felt }),
 
   frakt: () => kall("/api/admin/frakt"),
   leggTilFrakt: (f) => kall("/api/admin/frakt", { method: "POST", body: f }),

@@ -317,6 +317,20 @@ CREATE TABLE IF NOT EXISTS mystore_categories (
 
 -- Manuelle koblinger. Disse overstyrer SKU-utledningen og huskes på tvers av
 -- synker, så en jobb du har gjort én gang aldri må gjøres om igjen.
+-- Etter overgangen: hvor mye av et ukoblet Mystore-produkt som er ført inn i
+-- lagerboken fra Kobling. Et produkt kan deles på flere kort (litt av hver
+-- utgave), og summen hindrer at det samme føres inn to ganger.
+CREATE TABLE IF NOT EXISTS mystore_innlagt (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id  TEXT NOT NULL,
+  card_id     TEXT NOT NULL,
+  finish      TEXT NOT NULL,
+  condition   TEXT NOT NULL,
+  antall      INTEGER NOT NULL,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mystore_innlagt ON mystore_innlagt (product_id);
+
 CREATE TABLE IF NOT EXISTS mystore_links (
   product_id  TEXT PRIMARY KEY,
   card_id     TEXT,

@@ -1556,7 +1556,10 @@ app.get("/api/admin/mystore/unmatched", krevAdmin, fang(async (_req: any, res: a
   const bok = lagerkilde() === "bok";
   const hvor = bok ? "WHERE u.stock > 0" : "";
   const r = await db().execute(`
-    SELECT u.* FROM mystore_unmatched u ${hvor}
+    SELECT u.*, COALESCE(i.n, 0) AS lagt_inn FROM mystore_unmatched u
+      LEFT JOIN (SELECT product_id, SUM(antall) AS n FROM mystore_innlagt GROUP BY product_id) i
+        ON i.product_id = u.product_id
+      ${hvor}
      ORDER BY u.stock DESC, u.name LIMIT 500`);
   const antall = await db().execute(`SELECT COUNT(*) AS n, COALESCE(SUM(stock), 0) AS stk FROM mystore_unmatched u ${hvor}`);
   const alle = await db().execute("SELECT COUNT(*) AS n FROM mystore_unmatched");
@@ -1654,25 +1657,66 @@ app.post("/api/admin/mystore/link", krevAdmin, fang(async (req: any, res: any) =
   // ganger koblingen angres og gjøres på nytt.
   let lagtInn = 0;
   if (!ignored && lagerkilde() === "bok") {
-    const p = await db().execute({ sql: "SELECT stock, name FROM mystore_unmatched WHERE product_id = ?", args: [String(product_id)] });
-    const stk = Number(p.rows[0]?.stock || 0);
-    const merke = `Mystore-produkt ${product_id}`;
-    const fins = await db().execute({
-      sql: "SELECT 1 FROM lager_bevegelser WHERE grunn = 'mystore' AND notat LIKE ? LIMIT 1",
-      args: [`%${merke}%`],
-    });
-    if (stk > 0 && !fins.rows.length) {
-      await db().execute({
-        sql: `INSERT INTO lager_bevegelser (card_id, finish, condition, antall, grunn, order_id, notat, created_at)
-              VALUES (?, ?, 'NM', ?, 'mystore', NULL, ?, ?)`,
-        args: [String(card_id), finish, stk, `Fra Mystore via Kobling: ${String(p.rows[0]?.name || "")} (${merke})`, nå],
-      });
-      lagtInn = stk;
-    }
+    const fins = await db().execute({ sql: "SELECT 1 FROM mystore_unmatched WHERE product_id = ?", args: [String(product_id)] });
+    if (fins.rows.length) lagtInn = await leggInnFraMystore(String(product_id), String(card_id), finish, "NM", null);
   }
 
   await db().execute({ sql: "DELETE FROM mystore_unmatched WHERE product_id = ?", args: [String(product_id)] });
   res.json({ ok: true, lagt_inn: lagtInn });
+}));
+
+// Etter overgangen: før (en del av) et ukoblet Mystore-produkt inn i
+// lagerboken. antall = null betyr det som er igjen. Når alt er ført inn,
+// forsvinner produktet fra lista.
+async function leggInnFraMystore(productId: string, cardId: string, finish: string, condition: string, antall: number | null): Promise<number> {
+  const p = await db().execute({ sql: "SELECT stock, name FROM mystore_unmatched WHERE product_id = ?", args: [productId] });
+  if (!p.rows[0]) throw new HttpFeil(404, "Fant ikke produktet i lista. Last inn på nytt.");
+  const før = await db().execute({ sql: "SELECT COALESCE(SUM(antall), 0) AS n FROM mystore_innlagt WHERE product_id = ?", args: [productId] });
+  const igjen = Math.max(0, Number(p.rows[0].stock || 0) - Number(før.rows[0]?.n || 0));
+  const n = antall === null ? igjen : antall;
+  if (!Number.isInteger(n) || n < 0) throw new HttpFeil(400, "Antallet må være et helt tall.");
+  if (n > igjen) throw new HttpFeil(400, `Det er bare ${igjen} igjen å føre inn fra dette produktet.`);
+  if (n === 0) return 0;
+  const nå = new Date().toISOString();
+  await db().batch([
+    {
+      sql: `INSERT INTO lager_bevegelser (card_id, finish, condition, antall, grunn, order_id, notat, created_at)
+            VALUES (?, ?, ?, ?, 'mystore', NULL, ?, ?)`,
+      args: [cardId, finish, condition, n, `Fra Mystore via Kobling: ${String(p.rows[0].name || "")} (Mystore-produkt ${productId})`, nå],
+    },
+    {
+      sql: "INSERT INTO mystore_innlagt (product_id, card_id, finish, condition, antall, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      args: [productId, cardId, finish, condition, n, nå],
+    },
+  ], "write");
+  return n;
+}
+
+app.post("/api/admin/mystore/legg-inn", krevAdmin, fang(async (req: any, res: any) => {
+  if (lagerkilde() !== "bok") throw new HttpFeil(400, "Før overgangen legges kortene inn i Mystore, ikke her.");
+  const { product_id, card_id, finish, condition, antall } = req.body || {};
+  if (!product_id || !card_id) throw new HttpFeil(400, "Mangler produkt eller kort.");
+  if (finish !== "nonfoil" && finish !== "foil") throw new HttpFeil(400, "Ukjent finish");
+  const tilstand = CONDITIONS.includes(condition) ? condition : "NM";
+  const lagtInn = await leggInnFraMystore(String(product_id), String(card_id), finish, tilstand, Number(antall));
+  const rest = await db().execute({
+    sql: `SELECT u.stock - COALESCE((SELECT SUM(antall) FROM mystore_innlagt i WHERE i.product_id = u.product_id), 0) AS igjen
+            FROM mystore_unmatched u WHERE u.product_id = ?`,
+    args: [String(product_id)],
+  });
+  const igjen = Number(rest.rows[0]?.igjen || 0);
+  // Alt ført inn: produktet er ferdig, og koblingen huskes til eventuelle nye synker.
+  if (igjen <= 0) {
+    await db().execute({
+      sql: `INSERT INTO mystore_links (product_id, card_id, finish, ignored, kilde, updated_at)
+            VALUES (?, ?, ?, 0, 'manuell', ?)
+            ON CONFLICT(product_id) DO UPDATE SET card_id = excluded.card_id, finish = excluded.finish,
+              ignored = 0, kilde = 'manuell', updated_at = excluded.updated_at`,
+      args: [String(product_id), String(card_id), finish, new Date().toISOString()],
+    });
+    await db().execute({ sql: "DELETE FROM mystore_unmatched WHERE product_id = ?", args: [String(product_id)] });
+  }
+  res.json({ lagt_inn: lagtInn, igjen });
 }));
 
 // ── admin: innstillinger og jobber ───────────────────────────────────────────

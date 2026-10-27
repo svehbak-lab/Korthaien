@@ -283,7 +283,7 @@ function Produkter({ data, onFerdig, onFeil }) {
       </div>
       )}
       {data.produkter.map((p) => (
-        <Produkt key={p.product_id} produkt={p} onFerdig={onFerdig} onFeil={onFeil} />
+        <Produkt key={p.product_id} produkt={p} bok={data.lagerkilde === "bok"} onFerdig={onFerdig} onFeil={onFeil} />
       ))}
       {data.antall > data.produkter.length && (
         <p className="dempet">Viser {data.produkter.length} av {data.antall}. Koble disse, så kommer resten.</p>
@@ -292,7 +292,13 @@ function Produkter({ data, onFerdig, onFeil }) {
   );
 }
 
-function Produkt({ produkt, onFerdig, onFeil }) {
+function Produkt({ produkt, bok, onFerdig, onFeil }) {
+  // Etter overgangen: kortene føres inn i lageret, og et produkt kan deles på
+  // flere utgaver — litt av hver, til alt er ført inn.
+  const igjen = Math.max(0, Number(produkt.stock || 0) - Number(produkt.lagt_inn || 0));
+  const [antall, setAntall] = useState(String(igjen));
+  const [tilstand, setTilstand] = useState("NM");
+  const [jobber, setJobber] = useState(false);
   const [q, setQ] = useState(produkt.name || "");
   const [treff, setTreff] = useState(null);
   const [søker, setSøker] = useState(false);
@@ -315,6 +321,24 @@ function Produkt({ produkt, onFerdig, onFeil }) {
   }
 
   async function koble(kort, finish) {
+    if (bok) {
+      const n = parseInt(antall, 10);
+      if (!Number.isInteger(n) || n < 1 || n > igjen) {
+        onFeil(new Error(`Skriv et antall mellom 1 og ${igjen}.`));
+        return;
+      }
+      setJobber(true);
+      try {
+        const r = await api.leggInnFraMystore({ product_id: produkt.product_id, card_id: kort.id, finish, condition: tilstand, antall: n });
+        setAntall(String(r.igjen));
+        onFerdig();
+      } catch (e) {
+        onFeil(e);
+      } finally {
+        setJobber(false);
+      }
+      return;
+    }
     try {
       await api.koble({ product_id: produkt.product_id, card_id: kort.id, finish });
       onFerdig();
@@ -338,7 +362,9 @@ function Produkt({ produkt, onFerdig, onFeil }) {
         <strong>{produkt.name || "(uten navn)"}</strong>
         {produkt.set_code && <span className="kode dempet">{String(produkt.set_code).toUpperCase()}</span>}
         {produkt.category && <span className="dempet">{produkt.category}</span>}
-        <span className="dempet">{produkt.stock} på lager</span>
+        <span className="dempet">
+          {produkt.stock} på lager{bok && Number(produkt.lagt_inn) > 0 ? ` · ${produkt.lagt_inn} lagt inn, ${igjen} igjen` : ""}
+        </span>
         <div style={{ marginLeft: "auto" }} className="rad-flex">
           <button className="knapp liten" onClick={ignorer} title="Ermer, esker og annet som ikke er kort">
             Ikke et kort
@@ -366,7 +392,30 @@ function Produkt({ produkt, onFerdig, onFeil }) {
               {søker ? "Søker…" : "Søk"}
             </button>
             <button className="knapp liten" onClick={() => setÅpen(false)}>Lukk</button>
+            {bok && (
+              <>
+                <label className="dempet" style={{ fontSize: 12.5, marginLeft: 12 }}>
+                  Antall{" "}
+                  <input
+                    type="text" inputMode="numeric" value={antall} style={{ width: 52 }}
+                    onChange={(e) => setAntall(e.target.value.replace(/[^\d]/g, ""))}
+                  />
+                </label>
+                <label className="dempet" style={{ fontSize: 12.5 }}>
+                  Tilstand{" "}
+                  <select value={tilstand} onChange={(e) => setTilstand(e.target.value)}>
+                    {["NM", "EX", "VG", "G"].map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                </label>
+              </>
+            )}
           </div>
+          {bok && (
+            <p className="dempet" style={{ margin: "0 0 10px", fontSize: 12.5 }}>
+              Velg utgave og trykk Vanlig eller Foil for å legge antallet inn i lageret. Har du flere utgaver,
+              gjør du det én gang per utgave — produktet blir stående til alle {produkt.stock} er lagt inn.
+            </p>
+          )}
 
           {treff?.length === 0 && (
             <p className="dempet">Ingen treff. Prøv bare kortnavnet, uten sett og tilleggsord.</p>
@@ -388,9 +437,9 @@ function Produkt({ produkt, onFerdig, onFeil }) {
                   {String(k.set_code).toUpperCase()} #{k.collector_number}
                 </div>
                 <div className="rad-flex" style={{ gap: 4, marginTop: 6 }}>
-                  <button className="knapp liten" onClick={() => koble(k, "nonfoil")}>Vanlig</button>
+                  <button className="knapp liten" disabled={jobber} onClick={() => koble(k, "nonfoil")}>Vanlig</button>
                   {Number(k.has_foil) > 0 && (
-                    <button className="knapp liten" onClick={() => koble(k, "foil")}>Foil</button>
+                    <button className="knapp liten" disabled={jobber} onClick={() => koble(k, "foil")}>Foil</button>
                   )}
                 </div>
               </div>
