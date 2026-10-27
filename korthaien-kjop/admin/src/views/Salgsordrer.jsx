@@ -314,9 +314,11 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                       </button>
                       {l.finish === "foil" && <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>foil</span>}
                       {l.utgave && <div style={{ fontSize: 12, fontWeight: 600, color: "var(--aksent, #1d4ed8)" }}>{l.utgave}</div>}
-                      <div className="dempet" style={{ fontSize: 11.5 }}>{l.rarity}</div>
                     </td>
-                    <td style={{ fontSize: 12.5 }}>{l.set_name}</td>
+                    <td style={{ fontSize: 12.5 }}>
+                      {l.set_name}
+                      {l.rarity && <div className="dempet" style={{ fontSize: 11.5 }}>{l.rarity}</div>}
+                    </td>
                     <td className="tall">{l.collector_number}</td>
                     <td>{l.produkt ? <span className="dempet">—</span> : l.condition}</td>
                     <td className="h tall" style={{ whiteSpace: "nowrap" }}>
