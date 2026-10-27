@@ -11,6 +11,67 @@ import { hvorfor } from "./hvorfor.js";
 import { varsleJobbfeil } from "./epost.js";
 import { åpningsbeholdningFraMystore, avvikMotMystore } from "./lager.js";
 import { kjørKuppjakt, hentKuppOppsett } from "./kupp.js";
+import { overgangsstatus, gjennomførOvergang } from "./overgang.js";
+import { butikklagerSql, settBokSomLagerkilde, lagerkilde } from "./lager.js";
+
+// Prøvekjøring av overgangsknappen mot en KOPI av databasen. Viser tallene
+// før og etter, og hvilke kort som får en annen beholdning i butikken.
+// Nekter å kjøre uten OVERGANG_TEST=kopi i miljøet, så den ikke kan
+// startes mot den ekte databasen ved et uhell.
+async function overgangTest() {
+  if (process.env.OVERGANG_TEST !== "kopi") {
+    throw new Error("Sett OVERGANG_TEST=kopi (og DATABASE_URL til kopien) for å prøvekjøre overgangen.");
+  }
+  const vert = String(process.env.DATABASE_URL || "").replace(/^\w+:\/\//, "").split("/")[0];
+  console.log(`Database: ${vert}`);
+  const lager = async () => {
+    const r = await db().execute(
+      `SELECT l.card_id, l.finish, SUM(l.antall) AS n, MAX(c.name) AS name, MAX(c.set_code) AS sett
+         FROM (${butikklagerSql()}) l LEFT JOIN cards c ON c.id = l.card_id
+        GROUP BY l.card_id, l.finish HAVING n <> 0`
+    );
+    const kart = new Map<string, { n: number; navn: string }>();
+    for (const x of r.rows as any[]) {
+      kart.set(`${x.card_id}:${x.finish}`, { n: Number(x.n), navn: `${x.name || x.card_id} (${x.sett || "?"}, ${x.finish})` });
+    }
+    return kart;
+  };
+  const sum = (k: Map<string, { n: number }>) => [...k.values()].reduce((a, b) => a + b.n, 0);
+  const innst = async () => {
+    const r = await db().execute(`SELECT key, value FROM settings WHERE key IN ('lagerkilde', 'krev_konto')`);
+    return Object.fromEntries((r.rows as any[]).map((x) => [x.key, x.value]));
+  };
+
+  settBokSomLagerkilde(false);
+  const før = await overgangsstatus();
+  const lagerFør = await lager();
+  console.log("\n── FØR ──");
+  console.log(`Lagerkilde: ${lagerkilde()}  Innstillinger: ${JSON.stringify(await innst())}`);
+  console.log(`Mystore-speilet: ${før.mystore.kort} kort, ${før.mystore.stk} stk. Sist synket ${før.mystore.sist_synket}`);
+  console.log(`Lagerboken: ${før.bok.map((b) => `${b.grunn} ${b.stk} stk.`).join(", ") || "tom"}`);
+  console.log(`Butikken viser: ${lagerFør.size} kort, ${sum(lagerFør)} stk.`);
+  console.log(`Åpne/usendte salgsordrer: ${før.usendte_salg}  Kjøp ikke lagt inn: ${før.kjop_ikke_lagt_inn}`);
+
+  const etter = await gjennomførOvergang();
+  const lagerEtter = await lager();
+  console.log("\n── ETTER ──");
+  console.log(`Lagerkilde: ${lagerkilde()}  Innstillinger: ${JSON.stringify(await innst())}`);
+  console.log(`Lagerboken: ${etter.bok.map((b) => `${b.grunn} ${b.stk} stk.`).join(", ") || "tom"}`);
+  console.log(`Butikken viser: ${lagerEtter.size} kort, ${sum(lagerEtter)} stk.`);
+
+  const avvik: string[] = [];
+  for (const k of new Set([...lagerFør.keys(), ...lagerEtter.keys()])) {
+    const a = lagerFør.get(k)?.n || 0, b = lagerEtter.get(k)?.n || 0;
+    if (a !== b) avvik.push(`  ${(lagerFør.get(k) || lagerEtter.get(k))!.navn}: ${a} → ${b}`);
+  }
+  console.log(`\nKort med annen beholdning i butikken etter overgangen: ${avvik.length}`);
+  if (avvik.length) {
+    console.log("(Salg i den nye butikken som Mystore ikke vet om, kommer tilbake på lager.)");
+    avvik.slice(0, 60).forEach((l) => console.log(l));
+    if (avvik.length > 60) console.log(`  … og ${avvik.length - 60} til`);
+  }
+  console.log("\nPrøvekjøringen er ferdig. Kopien kan slettes.");
+}
 
 // Kommandolinje for jobbene. Render kjører disse som cron.
 
@@ -127,6 +188,9 @@ try {
       console.log(n ? `${n} dobbeltsidige kort oppdatert.` : "Alt er allerede indeksert.");
       break;
     }
+    case "overgang-test":
+      await overgangTest();
+      break;
     case "lager-fra-mystore":
       await åpningsbeholdningFraMystore();
       break;
