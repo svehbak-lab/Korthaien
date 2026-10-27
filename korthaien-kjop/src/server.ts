@@ -1554,7 +1554,7 @@ app.get("/api/admin/mystore/unmatched", krevAdmin, fang(async (_req: any, res: a
     SELECT u.* FROM mystore_unmatched u
      ORDER BY u.stock DESC, u.name LIMIT 500`);
   const antall = await db().execute("SELECT COUNT(*) AS n FROM mystore_unmatched");
-  res.json({ antall: Number(antall.rows[0]?.n || 0), produkter: r.rows });
+  res.json({ antall: Number(antall.rows[0]?.n || 0), produkter: r.rows, lagerkilde: lagerkilde() });
 }));
 
 // Forslag basert på produktnavnet. Sparer deg for å skrive navnet på nytt for
@@ -1636,8 +1636,31 @@ app.post("/api/admin/mystore/link", krevAdmin, fang(async (req: any, res: any) =
     }
   }
 
+  // Etter overgangen er det lagerboken som teller. Produkter som ikke fant
+  // kortet sitt, kom aldri med i åpningsbeholdningen — kobles de nå, føres
+  // Mystore-beholdningen inn i boken. Én gang per produkt, uansett hvor mange
+  // ganger koblingen angres og gjøres på nytt.
+  let lagtInn = 0;
+  if (!ignored && lagerkilde() === "bok") {
+    const p = await db().execute({ sql: "SELECT stock, name FROM mystore_unmatched WHERE product_id = ?", args: [String(product_id)] });
+    const stk = Number(p.rows[0]?.stock || 0);
+    const merke = `Mystore-produkt ${product_id}`;
+    const fins = await db().execute({
+      sql: "SELECT 1 FROM lager_bevegelser WHERE grunn = 'mystore' AND notat LIKE ? LIMIT 1",
+      args: [`%${merke}%`],
+    });
+    if (stk > 0 && !fins.rows.length) {
+      await db().execute({
+        sql: `INSERT INTO lager_bevegelser (card_id, finish, condition, antall, grunn, order_id, notat, created_at)
+              VALUES (?, ?, 'NM', ?, 'mystore', NULL, ?, ?)`,
+        args: [String(card_id), finish, stk, `Fra Mystore via Kobling: ${String(p.rows[0]?.name || "")} (${merke})`, nå],
+      });
+      lagtInn = stk;
+    }
+  }
+
   await db().execute({ sql: "DELETE FROM mystore_unmatched WHERE product_id = ?", args: [String(product_id)] });
-  res.json({ ok: true });
+  res.json({ ok: true, lagt_inn: lagtInn });
 }));
 
 // ── admin: innstillinger og jobber ───────────────────────────────────────────

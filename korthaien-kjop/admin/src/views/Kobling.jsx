@@ -269,10 +269,18 @@ function Produkter({ data, onFerdig, onFeil }) {
 
   return (
     <>
+      {data.lagerkilde === "bok" ? (
+        <div className="varsel info" style={{ marginBottom: 16 }}>
+          <b>{data.antall} produkter fra Mystore fant ikke sitt kort, og kom ikke med i lageret ved overgangen.</b>{" "}
+          Når du kobler et produkt her, legges beholdningen fra Mystore inn i lageret som NM, og kortet
+          vises i butikken. Produkter du ikke har, kan du ignorere.
+        </div>
+      ) : (
       <div className="varsel feil" style={{ marginBottom: 16 }}>
         {data.antall} produkter i sett du kjøper fra fant ikke sitt kort. Beholdningen
         deres regnes som 0, så kunder kan selge deg kort du har fra før.
       </div>
+      )}
       {data.produkter.map((p) => (
         <Produkt key={p.product_id} produkt={p} onFerdig={onFerdig} onFeil={onFeil} />
       ))}
