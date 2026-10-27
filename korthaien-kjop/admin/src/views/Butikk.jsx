@@ -1517,15 +1517,10 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
   // allerede, og baresalg gjør at den bare viser det du faktisk har.
   useEffect(() => {
     let avbrutt = false;
+    // Én flis per utgave, i den rekkefølgen de kom inn. Serveren velger.
     kapi
-      .katalog({ sortering: "nyeste", perSide: 30, baresalg: true, utenTokens: true })
-      // Én flis per utgave: vanlig og foil er to ulike ting å kjøpe, med hvert
-      // sitt antall og sin pris. Flisa viser bare den ene.
-      .then((d) => !avbrutt && setKort((d.kort || []).flatMap((k) =>
-        (k.varianter || [])
-          .filter((v) => v.påLager > 0)
-          .map((v) => ({ ...k, varianter: [v], flisnøkkel: `${k.id}:${v.finish}` }))
-      )))
+      .nylig()
+      .then((d) => !avbrutt && setKort(d.kort || []))
       .catch((e) => !avbrutt && onFeil(e));
     return () => {
       avbrutt = true;

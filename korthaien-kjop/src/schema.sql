@@ -151,6 +151,8 @@ CREATE TABLE IF NOT EXISTS lager_bevegelser (
 );
 CREATE INDEX IF NOT EXISTS idx_lager_kort  ON lager_bevegelser (card_id, finish, condition);
 CREATE INDEX IF NOT EXISTS idx_lager_ordre ON lager_bevegelser (order_id);
+-- «Nylig inn» på forsiden leser de siste bevegelsene baklengs i tid.
+CREATE INDEX IF NOT EXISTS idx_lager_tid ON lager_bevegelser (created_at);
 
 -- Utsalgspris per raritet og dollarintervall. Et rare til under 0,90 dollar
 -- koster det samme uansett om markedet sier 0,20 eller 0,80.

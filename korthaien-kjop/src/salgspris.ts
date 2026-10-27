@@ -320,6 +320,8 @@ export type ButikkFilter = {
   perSide?: number;
   // Forsiden: «Nylig inn» skal vise kort, ikke tokens.
   utenTokens?: boolean;
+  // Bare disse kortene (forsidens «Nylig inn»).
+  ider?: string[];
 };
 
 export async function butikkvisning(opts: ButikkFilter) {
@@ -333,6 +335,10 @@ export async function butikkvisning(opts: ButikkFilter) {
   // egen pris, og vises derfor heller ikke.
   const hvor: string[] = opts.utenTokens ? ["c.er_token = 0", "c.er_serialized = 0"] : ["c.er_serialized = 0"];
   const args: any[] = [];
+  if (opts.ider) {
+    if (!opts.ider.length) hvor.push("0");
+    else { hvor.push(`c.id IN (${opts.ider.map(() => "?").join(",")})`); args.push(...opts.ider); }
+  }
   if (opts.sett) {
     hvor.push(`(c.set_code = ? OR c.set_code IN (SELECT code FROM sets WHERE parent_code = ? AND set_type = 'token'))`);
     args.push(opts.sett.toLowerCase(), opts.sett.toLowerCase());
@@ -600,6 +606,45 @@ function normaliserEnkelt(s: string): string {
 // Kortsiden: alt vi vet om ett trykk, pluss de andre utgavene av samme kort.
 // «Samme kort» er oracle_id — det er Scryfalls identitet på tvers av sett, og
 // den holder også når navnet er skrevet ulikt.
+// ── nylig inn ─────────────────────────────────────────────────────────────────
+// Forsidens rad: de siste kortene som kom inn, én flis per utgave (vanlig og
+// foil hver for seg), i den rekkefølgen de kom. Innkjøp og manuelt innlagte
+// kort teller; et salg som ble kansellert, en telling eller en rettelse gjør
+// ikke kortet nytt. Gammelt Mystore-lager som kobles etter overgangen, er
+// heller ikke nytt.
+//
+// Leses baklengs fra de siste bevegelsene (indeks på tid), ikke ved å regne
+// ut siste dato for hvert kort i katalogen — det ville lest hele lagerboken
+// for hver som åpner forsiden.
+export async function nyligInn(antall = 30) {
+  const r = await db().execute(`
+    SELECT card_id, finish, notat FROM lager_bevegelser
+     WHERE antall > 0 AND grunn IN ('ordre', 'mystore', 'manuell')
+     ORDER BY created_at DESC LIMIT 600`);
+  const par: { id: string; finish: string }[] = [];
+  const sett = new Set<string>();
+  for (const x of r.rows as any[]) {
+    if (String(x.notat || "").startsWith("Fra Mystore via Kobling")) continue;
+    const k = `${x.card_id}:${x.finish}`;
+    if (sett.has(k)) continue;
+    sett.add(k);
+    par.push({ id: String(x.card_id), finish: String(x.finish) });
+    if (par.length >= antall * 2) break;
+  }
+  const ider = [...new Set(par.map((p) => p.id))];
+  const v = await butikkvisning({ sett: "", ider, baresalg: true, utenTokens: true, perSide: 200 });
+  const etterId = new Map((v.kort as any[]).map((k) => [k.id, k]));
+  const ut: any[] = [];
+  for (const p of par) {
+    const k = etterId.get(p.id);
+    const variant = (k?.varianter || []).find((x: any) => x.finish === p.finish && x.påLager > 0);
+    if (!variant) continue;
+    ut.push({ ...k, varianter: [variant], flisnøkkel: `${p.id}:${p.finish}` });
+    if (ut.length >= antall) break;
+  }
+  return ut;
+}
+
 export async function kortdetaljer(cardId: string) {
   const opp = await hentSalgsOppsett();
   const { beholdning } = await import("./lager.js");

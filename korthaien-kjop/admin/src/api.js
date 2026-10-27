@@ -330,6 +330,7 @@ export const kunde = {
   },
   kort: (id) => kundekall(`/api/butikk/kort/${encodeURIComponent(id)}`),
   nyesteSett: (antall) => kundekall(`/api/butikk/nyeste?antall=${antall || 5}`),
+  nylig: () => kundekall("/api/butikk/nylig"),
   settinfo: (kode) => kundekall(`/api/butikk/sett/${encodeURIComponent(kode)}`),
   settliste: () => kundekall("/api/butikk/settliste"),
   produkter: (o = {}) =>

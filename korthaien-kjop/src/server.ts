@@ -15,7 +15,7 @@ import { sendBekreftelse, varsleMeg, varsleStatus, sendOppgjør, sendKontakt } f
 import { bokførOrdre, reverserOrdre, beholdning, historikk, settBeholdning, avvikMotMystore } from "./lager.js";
 import {
   hentIntervaller, lagreIntervaller, finnHull, salgsprisForSett, settManuellSalg,
-  butikkvisning, kortdetaljer, utenPrisPåLager,
+  butikkvisning, kortdetaljer, nyligInn, utenPrisPåLager,
 } from "./salgspris.js";
 import { hentFrakt, leggTilFrakt, endreFrakt, slåAvFrakt } from "./frakt.js";
 import {
@@ -914,6 +914,10 @@ app.get("/api/butikk/katalog", grense(REGLER.butikk), fang(async (req: any, res:
 
 app.get("/api/butikk/nyeste", grense(REGLER.butikk), fang(async (req: any, res: any) => {
   res.json({ sett: await forsideSett(Math.min(12, Number(req.query.antall) || 5)) });
+}));
+
+app.get("/api/butikk/nylig", grense(REGLER.butikk), fang(async (_req: any, res: any) => {
+  res.json({ kort: await nyligInn(30) });
 }));
 
 app.get("/api/butikk/kort/:id", grense(REGLER.butikk), fang(async (req: any, res: any) => {
