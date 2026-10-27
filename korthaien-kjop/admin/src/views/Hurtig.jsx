@@ -313,6 +313,9 @@ export default function Hurtig({ onFeil }) {
                     {k.variant && k.variant !== "vanlig" && (
                       <span className="dempet"> · {k.variant}</span>
                     )}
+                    {finish === "foil" && (
+                      <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>foil</span>
+                    )}
                     {Number(k.er_token) === 1 && (
                       <span className="merkelapp m-vent" style={{ marginLeft: 6 }}>token</span>
                     )}
