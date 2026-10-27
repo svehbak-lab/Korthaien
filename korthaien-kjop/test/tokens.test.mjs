@@ -141,3 +141,15 @@ test("tokens vises som «Navn Token» i butikken", async () => {
   assert.equal(tokenNavn("Wrenn and Six Emblem", 1), "Wrenn and Six Emblem");
   assert.equal(tokenNavn("Lightning Bolt", 0), "Lightning Bolt");
 });
+
+test("kort på lager uten pris telles ikke i fanene (ingen tom liste med tall over)", async () => {
+  const { butikkvisning, settManuellSalg } = await import("../src/salgspris.ts");
+  await settManuellSalg("drage", "nonfoil", null);
+  const r = await butikkvisning({ sett: "", q: "Dragon", baresalg: true });
+  assert.equal(r.totalt, 0);
+  assert.equal(r.kort.length, 0);
+  await settManuellSalg("drage", "nonfoil", 500);
+  const r2 = await butikkvisning({ sett: "", q: "Dragon", baresalg: true });
+  assert.equal(r2.totalt, 1);
+  assert.equal(r2.kort.length, 1);
+});

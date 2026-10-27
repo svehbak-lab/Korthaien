@@ -340,10 +340,20 @@ export async function butikkvisning(opts: ButikkFilter) {
   // Finish-kravet legges på lenger ned, ikke her. Fanetallene skal telles
   // uten det — ellers telles fanene inni hverandre, og «Enkeltkort» viser
   // hvor mange enkeltkort det er blant foilene.
+  // Har kortet en pris i denne finishen? Samme kilder som salgsprisØre:
+  // din egen salgspris, din egen dollarpris, eller Scryfalls. Uten dette
+  // telte fanene kort som så ble sortert bort fordi de ikke har pris — og
+  // da sto det «Alle treff (3)» over en tom liste.
+  const harPris = (f: string) => `(
+      EXISTS (SELECT 1 FROM card_sale_prices sp WHERE sp.card_id = c.id AND sp.finish = '${f}' AND sp.nm_ore > 0)
+      OR EXISTS (SELECT 1 FROM card_prices cp WHERE cp.card_id = c.id AND cp.finish = '${f}' AND cp.usd > 0)
+      OR COALESCE(${f === "foil" ? "c.usd_foil" : "c.usd"}, 0) > 0)`;
+  const påLagerMedPris = (f: string) =>
+    `(EXISTS (SELECT 1 FROM (${butikklagerSql()}) b
+               WHERE b.card_id = c.id AND b.finish = '${f}'
+               GROUP BY b.card_id HAVING SUM(b.antall) > 0) AND ${harPris(f)})`;
   if (opts.baresalg) {
-    hvor.push(`EXISTS (SELECT 1 FROM (${butikklagerSql()}) b
-                        WHERE b.card_id = c.id
-                        GROUP BY b.card_id HAVING SUM(b.antall) > 0)`);
+    hvor.push(`(${påLagerMedPris("nonfoil")} OR ${påLagerMedPris("foil")})`);
   } else if (!opts.sett && !opts.q) {
     // Uten sett, uten søk og uten lagerfilter ville vi hentet hele katalogen.
     hvor.push(`EXISTS (SELECT 1 FROM (${butikklagerSql()}) b
@@ -477,7 +487,7 @@ export async function butikkvisning(opts: ButikkFilter) {
               GROUP BY b.card_id HAVING SUM(b.antall) > 0)`;
 
   const VISES = opts.baresalg
-    ? { nonfoil: påLager("nonfoil"), foil: påLager("foil") }
+    ? { nonfoil: påLagerMedPris("nonfoil"), foil: påLagerMedPris("foil") }
     : { nonfoil: "c.has_nonfoil = 1", foil: "c.has_foil = 1" };
 
   const FINISH_KRAV =
