@@ -1551,11 +1551,22 @@ app.put("/api/admin/mystore/categories/:id", krevAdmin, fang(async (req: any, re
 }));
 
 app.get("/api/admin/mystore/unmatched", krevAdmin, fang(async (_req: any, res: any) => {
+  // Etter overgangen betyr bare produkter med beholdning noe: de uten kan
+  // ikke føres inn i lageret, og koblingen av dem har ingen virkning lenger.
+  const bok = lagerkilde() === "bok";
+  const hvor = bok ? "WHERE u.stock > 0" : "";
   const r = await db().execute(`
-    SELECT u.* FROM mystore_unmatched u
+    SELECT u.* FROM mystore_unmatched u ${hvor}
      ORDER BY u.stock DESC, u.name LIMIT 500`);
-  const antall = await db().execute("SELECT COUNT(*) AS n FROM mystore_unmatched");
-  res.json({ antall: Number(antall.rows[0]?.n || 0), produkter: r.rows, lagerkilde: lagerkilde() });
+  const antall = await db().execute(`SELECT COUNT(*) AS n, COALESCE(SUM(stock), 0) AS stk FROM mystore_unmatched u ${hvor}`);
+  const alle = await db().execute("SELECT COUNT(*) AS n FROM mystore_unmatched");
+  res.json({
+    antall: Number(antall.rows[0]?.n || 0),
+    stk: Number(antall.rows[0]?.stk || 0),
+    uten_beholdning: Number(alle.rows[0]?.n || 0) - Number(antall.rows[0]?.n || 0),
+    produkter: r.rows,
+    lagerkilde: lagerkilde(),
+  });
 }));
 
 // Forslag basert på produktnavnet. Sparer deg for å skrive navnet på nytt for

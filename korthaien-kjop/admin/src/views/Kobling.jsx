@@ -271,9 +271,10 @@ function Produkter({ data, onFerdig, onFeil }) {
     <>
       {data.lagerkilde === "bok" ? (
         <div className="varsel info" style={{ marginBottom: 16 }}>
-          <b>{data.antall} produkter fra Mystore fant ikke sitt kort, og kom ikke med i lageret ved overgangen.</b>{" "}
+          <b>{data.antall} produkter fra Mystore ({data.stk} stk.) fant ikke sitt kort, og kom ikke med i lageret ved overgangen.</b>{" "}
           Når du kobler et produkt her, legges beholdningen fra Mystore inn i lageret som NM, og kortet
           vises i butikken. Produkter du ikke har, kan du ignorere.
+          {data.uten_beholdning > 0 && ` ${data.uten_beholdning} produkter uten beholdning er skjult — de har ingen betydning lenger.`}
         </div>
       ) : (
       <div className="varsel feil" style={{ marginBottom: 16 }}>
