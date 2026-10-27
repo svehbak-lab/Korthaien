@@ -443,6 +443,12 @@ function ButikkSider({ onFeil }) {
               <input type="text" value={f.q} onChange={(e) => endre("q", e.target.value)} style={{ width: "100%" }} />
             </Fast>
 
+            {/* Rett under søket: det er det første valget folk vil ta. */}
+            <label className="b-baresalg">
+              <input type="checkbox" checked={f.baresalg} onChange={(e) => endre("baresalg", e.target.checked)} />
+              Vis kun kort på lager
+            </label>
+
             <Fast navn="Sett">
               <select value={sett || ""} onChange={(e) => setSett(e.target.value || null)} style={{ width: "100%" }}>
                 <option value="">Alle sett</option>
@@ -520,11 +526,6 @@ function ButikkSider({ onFeil }) {
                 />
               </div>
             </Gruppe>
-
-            <label className="dempet" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
-              <input type="checkbox" checked={f.baresalg} onChange={(e) => endre("baresalg", e.target.checked)} />
-              Vis kun kort på lager
-            </label>
 
             <button className="knapp liten" style={{ marginTop: 12 }} onClick={() => setF(TOMT)}>
               Nullstill filtre

@@ -1505,3 +1505,10 @@ label.kreditt-boks { cursor: pointer; }
 .betalingsvalg .betalingsikon { width: 26px; height: 18px; flex: none; }
 .vipps-offisiell { cursor: pointer; width: 100%; }
 .vipps-offisiell vipps-mobilepay-button { display: block; width: 100%; }
+
+/* «Vis kun kort på lager» rett under kortnavnet, med samme skillelinje som feltene. */
+.butikk .b-baresalg {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: 13.5px; margin-bottom: 10px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--strek);
+}
