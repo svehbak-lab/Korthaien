@@ -234,6 +234,10 @@ CREATE TABLE IF NOT EXISTS orders (
   total_nok      INTEGER NOT NULL DEFAULT 0,
   total_ore      INTEGER NOT NULL DEFAULT 0,
   quoted_ore     INTEGER NOT NULL DEFAULT 0,
+  -- Hva kortene er verdt til dine salgspriser (NM-pris × tilstandstrappen),
+  -- regnet når ordren kom inn og hver gang linjene endres. Står fast etterpå,
+  -- så månedstallene ikke flytter seg med markedet.
+  salgsverdi_ore INTEGER,
   -- Tidspunktet kunden krysset av for vilkår og alder. Selve haken er verdiløs
   -- som bevis; det som betyr noe er at spørsmålet ble stilt, og når.
   vilkar_godtatt TEXT,

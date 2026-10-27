@@ -131,7 +131,16 @@ function Ordre({ ordre, åpen, onVeksle, onLukk, onEndret, onFeil }) {
         {ordre.discount_code && (
           <span className="merkelapp m-ok" title="Rabattkode lagt inn">{ordre.discount_code}</span>
         )}
-        <span style={{ marginLeft: "auto" }} className="sum">{kroner(ordre.total_ore)}</span>
+        {/* Kreditten kunden får, og under: hva kortene er verdt til dine
+            salgspriser. Forskjellen er det ordren er verdt for butikken. */}
+        <span style={{ marginLeft: "auto", textAlign: "right", lineHeight: 1.2 }}>
+          <span className="sum" title="Det kunden får">{kroner(ordre.total_ore)}</span>
+          {ordre.salgsverdi_ore !== null && ordre.salgsverdi_ore !== undefined && (
+            <span className="dempet" style={{ display: "block", fontSize: 11.5 }} title="Hva kortene er verdt til dine salgspriser">
+              salgsverdi {kroner(ordre.salgsverdi_ore)}
+            </span>
+          )}
+        </span>
         {/* Rett i oversikten, så du slipper å åpne ordren og bla til bunnen
             når en pakke kommer. Samme handling som «Merk mottatt» nederst,
             og kunden varsles på samme måte. */}

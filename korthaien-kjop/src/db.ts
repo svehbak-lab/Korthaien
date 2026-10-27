@@ -191,6 +191,9 @@ async function leggTilNyeKolonner(): Promise<void> {
   }
 
   const ordre = await kolonner("orders");
+  if (ordre.size && !ordre.has("salgsverdi_ore")) {
+    await db().execute("ALTER TABLE orders ADD COLUMN salgsverdi_ore INTEGER");
+  }
   if (ordre.size && !ordre.has("total_ore")) {
     await db().execute("ALTER TABLE orders ADD COLUMN total_ore INTEGER NOT NULL DEFAULT 0");
     await db().execute("UPDATE orders SET total_ore = total_nok * 100");

@@ -181,6 +181,8 @@ export async function lagOrdre(input: {
     });
   }
 
+  await oppdaterSalgsverdi([ordreId]).catch((e) => console.error("Salgsverdien feilet:", e?.message));
+
   return {
     order_no: ordreNr,
     total_ore: total,
@@ -299,6 +301,48 @@ export async function regnOmLinje(
 }
 
 // Totalen regnes alltid på det som faktisk er mottatt når det tallet finnes.
+// Salgsverdien av kjøpsordrer: hva kortene er verdt til dine egne salgspriser,
+// i tilstanden de ble mottatt i. Fjernede linjer og «annet» (displayer o.l.
+// uten kort) er ikke med.
+export async function oppdaterSalgsverdi(orderIds: number[]): Promise<void> {
+  const ider = [...new Set(orderIds.filter((x) => Number.isFinite(x)))];
+  if (!ider.length) return;
+  const { hentSalgsOppsett, salgsprisØre } = await import("./salgspris.js");
+  const opp = await hentSalgsOppsett();
+  const ph = ider.map(() => "?").join(",");
+  const l = await db().execute({
+    sql: `SELECT l.order_id, l.card_id, l.finish, l.condition, COALESCE(l.qty_received, l.qty) AS q,
+                 c.usd, c.usd_foil, c.rarity
+            FROM order_lines l JOIN cards c ON c.id = l.card_id
+           WHERE l.order_id IN (${ph}) AND l.fjernet_at IS NULL AND COALESCE(l.kilde, '') <> 'annet'`,
+    args: ider,
+  });
+  const kort = [...new Set((l.rows as any[]).map((x) => String(x.card_id)))];
+  const salg = new Map<string, number>();
+  const usd = new Map<string, number>();
+  for (let i = 0; i < kort.length; i += 400) {
+    const del = kort.slice(i, i + 400);
+    const p2 = del.map(() => "?").join(",");
+    const [a, b] = await Promise.all([
+      db().execute({ sql: `SELECT card_id, finish, nm_ore FROM card_sale_prices WHERE card_id IN (${p2})`, args: del }),
+      db().execute({ sql: `SELECT card_id, finish, usd FROM card_prices WHERE card_id IN (${p2})`, args: del }),
+    ]);
+    for (const x of a.rows as any[]) salg.set(`${x.card_id}:${x.finish}`, Number(x.nm_ore));
+    for (const x of b.rows as any[]) usd.set(`${x.card_id}:${x.finish}`, Number(x.usd));
+  }
+  const sum = new Map<number, number>(ider.map((id) => [id, 0]));
+  for (const x of l.rows as any[]) {
+    const k = `${x.card_id}:${x.finish}`;
+    const stk = salgsprisØre(x, String(x.finish), String(x.condition) as any, opp, salg.get(k) ?? null, usd.get(k) ?? null);
+    sum.set(Number(x.order_id), (sum.get(Number(x.order_id)) || 0) + stk * Number(x.q || 0));
+  }
+  const setninger = [...sum.entries()].map(([id, ore]) => ({
+    sql: "UPDATE orders SET salgsverdi_ore = ? WHERE id = ?",
+    args: [ore, id],
+  }));
+  for (let i = 0; i < setninger.length; i += 200) await db().batch(setninger.slice(i, i + 200), "write");
+}
+
 export async function oppdaterTotal(orderId: number): Promise<number> {
   const r = await db().execute({
     sql: `SELECT COALESCE(SUM(unit_ore * COALESCE(qty_received, qty)), 0) AS n
@@ -310,6 +354,7 @@ export async function oppdaterTotal(orderId: number): Promise<number> {
     sql: "UPDATE orders SET total_ore = ?, total_nok = ? WHERE id = ?",
     args: [ore, Math.round(ore / 100), orderId],
   });
+  await oppdaterSalgsverdi([orderId]).catch((e) => console.error("Salgsverdien feilet:", e?.message));
   return ore;
 }
 

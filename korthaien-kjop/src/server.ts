@@ -29,7 +29,7 @@ import { aktivtBanner, lagreBilde, hentBilde } from "./toppbanner.js";
 import { kontoer, bevegelser, saldo, leggTil as leggTilKreditt, settSaldo } from "./kreditt.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
-  lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal,
+  lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal, oppdaterSalgsverdi,
   leggTilLinje,
   leggTilAnnet, fjernLinje, byttKort, endringslogg, instruksjoner, SORTERING,
   settRabattkode, markerKredittSendt, gjørOppSomKreditt, HttpFeil,
@@ -2048,6 +2048,15 @@ migrate()
         })
         .catch((e) => console.error("Henting av settlista feilet:", e?.message));
     }
+    // Salgsverdien på kjøpsordrene kom til senere. Eldre ordrer får den
+    // regnet ut én gang, med dagens priser, i bakgrunnen.
+    db().execute("SELECT id FROM orders WHERE salgsverdi_ore IS NULL")
+      .then(async (r) => {
+        const ider = (r.rows as any[]).map((x) => Number(x.id));
+        for (let i = 0; i < ider.length; i += 100) await oppdaterSalgsverdi(ider.slice(i, i + 100));
+        if (ider.length) console.log(`Salgsverdi regnet ut for ${ider.length} kjøpsordrer.`);
+      })
+      .catch((e) => console.error("Salgsverdien på kjøpsordrene feilet:", e?.message));
     server = app.listen(PORT, () => console.log(`Korthaien Kjøp lytter på :${PORT}`));
     // Rydder reservasjoner hver time, så kvoter ikke blir stående låst.
     // unref, slik at en test som importerer serveren ikke holdes i live av

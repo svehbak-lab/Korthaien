@@ -63,6 +63,9 @@ function Tall({ merke, m }) {
       <div className="dempet" style={{ fontSize: 12 }}>
         {m.antall} {m.antall === 1 ? "ordre" : "ordrer"} · {(m.kort ?? 0).toLocaleString("nb-NO")} kort
       </div>
+      <div className="dempet" style={{ fontSize: 12 }} title="Hva de innkjøpte kortene er verdt til dine salgspriser">
+        Salgsverdi {kroner(m.salg_ore ?? 0)}
+      </div>
     </div>
   );
 }
@@ -92,6 +95,7 @@ function Historikk({ data }) {
               <span>
                 {sum?.antall ?? 0} {sum?.antall === 1 ? "ordre" : "ordrer"},{" "}
                 {(sum?.kort ?? 0).toLocaleString("nb-NO")} kort — {kroner(sum?.sum_ore ?? 0)}
+                <span className="dempet" style={{ fontWeight: 400 }}> · salgsverdi {kroner(sum?.salg_ore ?? 0)}</span>
               </span>
             </div>
             <table className="tabell" style={{ width: "100%", marginTop: 6 }}>
@@ -105,6 +109,9 @@ function Historikk({ data }) {
                     <td style={{ textAlign: "right", width: 95 }} className="dempet">
                       {(m.kort ?? 0).toLocaleString("nb-NO")} kort</td>
                     <td style={{ textAlign: "right", width: 130 }}>{kroner(m.sum_ore)}</td>
+                    <td style={{ textAlign: "right", width: 150 }} className="dempet" title="Salgsverdi">
+                      {kroner(m.salg_ore ?? 0)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
