@@ -109,7 +109,7 @@ app.get("/api/health", fang(async (_req: any, res: any) => {
 
 // Kundesiden trenger adressen, minstesummen og fristen. Alt annet i settings
 // er internt og deles ikke.
-app.get("/api/config", grense(REGLER.søk), fang(async (_req: any, res: any) => {
+app.get("/api/config", grense(REGLER.søk), fang(async (req: any, res: any) => {
   const s = await hentSettings();
   res.json({
     min_order_ore: s.min_order_ore,
@@ -127,7 +127,8 @@ app.get("/api/config", grense(REGLER.søk), fang(async (_req: any, res: any) => 
     // Etter overgangen må kunden være innlogget for å sende inn kort.
     krev_konto: !!s.krev_konto,
     // Under overgangen tar vi ikke imot kort heller.
-    stengt: !!s.stengt?.aktiv,
+    // Admin kan prøvesende mens det er stengt.
+    stengt: !!s.stengt?.aktiv && !erAdmin(req),
     butikk_url: butikkUrl(),
   });
 }));

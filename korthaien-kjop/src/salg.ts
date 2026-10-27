@@ -1079,6 +1079,17 @@ export async function kanseller(ordrenr: string, grunn: string, måte: "kort" | 
   } finally {
     tx.close();
   }
+  try {
+    const { sendKansellering } = await import("./epost.js");
+    await sendKansellering(Number(o.id), {
+      til_kort_ore: tilKort ? kortdel : 0,
+      til_kreditt_ore: tilKreditt,
+      til_gavekort_ore: tilGavekort,
+      betalt_med: erVipps ? "Vipps" : "kort",
+    });
+  } catch (e: any) {
+    console.error("E-posten om kanselleringen feilet:", e?.message);
+  }
   return hentOrdre(ordrenr);
 }
 

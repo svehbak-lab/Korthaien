@@ -514,6 +514,37 @@ export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
   });
 }
 
+// Ordren er kansellert, og pengene er på vei tilbake.
+export async function sendKansellering(
+  ordreId: number,
+  r: { til_kort_ore: number; til_kreditt_ore: number; til_gavekort_ore: number; betalt_med: string }
+): Promise<Utfall> {
+  const q = await db().execute({ sql: "SELECT ordrenr, email FROM salgsordrer WHERE id = ?", args: [ordreId] });
+  const o: any = q.rows[0];
+  if (!o?.email) return { sendt: false, grunn: "fant ikke ordren" };
+  const hvor = [
+    r.til_kort_ore ? `${kr(r.til_kort_ore)} tilbake til ${r.betalt_med === "Vipps" ? "Vipps" : "kortet du betalte med"}` : "",
+    r.til_kreditt_ore ? `${kr(r.til_kreditt_ore)} som kreditt på kontoen din` : "",
+    r.til_gavekort_ore ? `${kr(r.til_gavekort_ore)} tilbake på gavekortet` : "",
+  ].filter(Boolean);
+  const sum = r.til_kort_ore + r.til_kreditt_ore + r.til_gavekort_ore;
+  const tid = r.til_kort_ore ? " Det kan ta noen dager før beløpet vises hos banken." : "";
+  const penger = sum > 0 ? `Du får ${kr(sum)} tilbake: ${hvor.join(", ")}.${tid}` : "";
+  return send({
+    til: String(o.email),
+    bcc: MIN_ADRESSE(),
+    emne: `Ordre ${o.ordrenr} er kansellert — Korthaien`,
+    html: RAMME(
+      `<h2 style="font-size:20px;margin:0 0 6px">Ordren er kansellert</h2>
+       <p>Ordre <b>${trygg(o.ordrenr)}</b> er kansellert.</p>
+       ${penger ? `<p>${trygg(penger)}</p>` : ""}
+       <p style="font-size:13px;color:#7a746c">Spørsmål? Svar på denne e-posten.</p>`,
+      "Kansellert"
+    ),
+    tekst: [`Ordre ${o.ordrenr} er kansellert.`, penger, "Spørsmål? Svar på denne e-posten."].filter(Boolean).join("\n\n"),
+  });
+}
+
 // Ordren er rettet: et kort manglet, og mellomlegget er sendt tilbake.
 export async function sendJustering(
   ordreId: number,
