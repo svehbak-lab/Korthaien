@@ -97,6 +97,7 @@ function lesLenke() {
     bekreft: p.get("bekreft"),
     kort: p.get("kort"),
     side: p.get("side"),
+    q: p.get("q"),
     tilbake: p.get("tilbake"),
   };
   // Salgssiden sender kunden hit for å logge inn, og vil ha henne tilbake
@@ -106,7 +107,7 @@ function lesLenke() {
     try { localStorage.setItem(TILBAKE, JSON.stringify({ url: ut.tilbake, t: Date.now() })); } catch {}
     ut.innlogging = ut.innlogging || "1";
   }
-  if (ut.kasse || ut.nyttpassord || ut.innlogging || ut.bekreft || ut.kort || ut.side || ut.tilbake) {
+  if (ut.kasse || ut.nyttpassord || ut.innlogging || ut.bekreft || ut.kort || ut.side || ut.q || ut.tilbake) {
     window.history.replaceState(null, "", window.location.pathname);
   }
   return ut;
@@ -141,10 +142,13 @@ function ButikkSider({ onFeil }) {
     setSkjerm("liste");
     window.scrollTo(0, 0);
   };
-  const [f, setF] = useState(TOMT);
+  // ?q= fra toppen på salgssiden: rett i lista med søket.
+  const [f, setF] = useState(() => (lenke.q ? { ...TOMT, q: lenke.q } : TOMT));
   // ?kort=<id> fra e-posten om ønskelista åpner kortet direkte.
   const [åpentKort, setÅpentKort] = useState(() => lenke.kort || null);
-  const [minSideFane, setMinSideFane] = useState("ordrer");
+  const [minSideFane, setMinSideFane] = useState(() =>
+    lenke.side === "onskeliste" ? "onskeliste" : lenke.side === "minesalg" ? "salg" : "ordrer"
+  );
   // Forsiden først. Lista er fortsatt det arbeidsredskapet den alltid har
   // vært — den er ett klikk unna, og søket herfra lander rett i den.
   const [skjerm, setSkjerm] = useState(() =>
@@ -153,7 +157,11 @@ function ButikkSider({ onFeil }) {
       : lenke.nyttpassord ? "nyttpassord"
       : lenke.bekreft ? "bekreft"
       : lenke.innlogging ? "konto"
-      : ["vilkar", "personvern", "retur", "frakt", "tilstand"].includes(lenke.side) ? lenke.side
+      : lenke.q ? "liste"
+      : ["onskeliste", "minekjop", "minesalg"].includes(lenke.side) ? "konto"
+      // Lenkene fra salgssiden (toppen og bunnen der) peker hit.
+      : ["vilkar", "personvern", "retur", "frakt", "tilstand", "sett", "sealed", "komplettsett", "tix", "kurv",
+         "konto", "kontakt", "omoss", "kreditt", "bulksok"].includes(lenke.side) ? lenke.side
       : "forside"
   );
   const [kvittering, setKvittering] = useState(

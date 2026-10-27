@@ -9,6 +9,7 @@ import { Kurv, Gjennomgang, Skjema, Kvittering } from "./views/Kasse.jsx";
 import Oppslag from "./views/Oppslag.jsx";
 import Vilkår from "./views/Vilkar.jsx";
 import Tilstander from "./views/Tilstander.jsx";
+import { Topp, Bunn } from "./views/Ramme.jsx";
 
 export default function App() {
   const [steg, setSteg] = useState("velg");       // velg → gjennomgang → skjema → kvittering
@@ -99,54 +100,29 @@ export default function App() {
   const tomKurv = antallKort(kurv) === 0;
 
   return (
-    <>
-      <header className="topp">
-        {/* Ryggfinnen. Navnet er Korthaien, så finnen er merket — ikke en
-            illustrasjon. Derfor så lav kontrast at den så vidt anes, og
-            skjult på mobil der den bare ville tatt plass. */}
-        <svg className="finne" viewBox="88 22 128 136" fill="currentColor" aria-hidden="true">
-          <path d="M95 150C125 132 172 88 208 30 186 76 182 118 196 150Z" />
-        </svg>
-        <div className="inni">
-          <b>Korthaien</b>
-          <span>Innkjøp av Magic-kort</span>
-          <button className="knapp blank ingen-print" onClick={() => setSteg("oppslag")}>
-            Finn ordren min
-          </button>
-          {/* Den som er ferdig med å selge er også den som er mest innstilt
-              på å handle. Veien tilbake bør ikke være nettleserens knapp. */}
-          <a
-            className="knapp blank ingen-print"
-            style={{ marginLeft: "auto" }}
-            href="https://korthaien.no"
-          >
-            Til nettbutikken
-          </a>
-        </div>
-
-        {steg === "velg" && (
-          <div className="hero">
-            <h1>Selg kort til Korthaien</h1>
-            <p className="ingress">
-              Søk opp kortene eller lim inn hele lista. Du ser prisen med én gang,
-              og hvor mange jeg har plass til. Oppgjøret er butikkreditt på
-              korthaien.no.
-            </p>
-          </div>
-        )}
-      </header>
-
-      {/* Soft launch. Kunden skal vite det før hen legger kort i en konvolutt,
-          ikke etterpå — og terskelen for å si fra skal være lav. */}
-      <div className="testfase ingen-print">
-        <div className="inni">
-          Siden er ny og fortsatt under uttesting. Finner du en feil, eller har
-          et forslag, send det gjerne til{" "}
-          <a href="mailto:korthaien@gmail.com">korthaien@gmail.com</a>.
-        </div>
-      </div>
+    <div className="kh" data-tema={config?.tema || "dagens"}>
+      <Topp
+        config={config}
+        meg={meg}
+        antallSelg={antallKort(kurv)}
+        onSelgKurv={() => { setSteg(tomKurv ? "velg" : "gjennomgang"); window.scrollTo(0, 0); }}
+      />
 
       <main className="ark">
+        {steg === "velg" && (
+          <div className="sidehode">
+            <div>
+              <h1>Selg kortene dine til Korthaien</h1>
+              <p className="ingress">
+                Søk opp kortene eller lim inn hele lista. Du ser prisen med én gang,
+                og hvor mange jeg har plass til. Oppgjøret er butikkreditt på kontoen din.
+              </p>
+            </div>
+            <button className="knapp blank ingen-print" onClick={() => setSteg("oppslag")}>
+              Finn ordren min
+            </button>
+          </div>
+        )}
         {feil && <div className="varsel feil">{feil}</div>}
 
         {beskjed && (
@@ -253,12 +229,13 @@ export default function App() {
             kort, er det bedre å sende flere små ordrer enn å samle alt i én.
           </p>
         )}
-        <footer className="ingen-print" style={{ marginTop: 40, paddingTop: 18, borderTop: "1px solid var(--strek, #eae7e1)" }}>
-          <button className="knapp blank" onClick={() => { setSteg("vilkar"); window.scrollTo(0, 0); }}>
-            Vilkår og personvern
-          </button>
-        </footer>
+
       </main>
-    </>
+      <Bunn
+        config={config}
+        onVilkår={() => { setSteg("vilkar"); window.scrollTo(0, 0); }}
+        onOppslag={() => { setSteg("oppslag"); window.scrollTo(0, 0); }}
+      />
+    </div>
   );
 }

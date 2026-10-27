@@ -11,31 +11,45 @@
    sjeldenhetsfargene på kortene uten å låne noe fra dem.
    ───────────────────────────────────────────────────────────────────────── */
 
-:root {
-  --dyp: #04302c;
-  --dyp-lys: #0c554d;
-  --skum: #edf2f0;
-  --flate: #ffffff;
-  --strek: #dee6e3;
-  --strek-sterk: #c3d0cc;
-  --blekk: #0e1f1d;
-  --dempet: #5c6a67;
-  --sjo: #0c6259;
-  --sjo-svak: #e8f2f0;
-  --brass: #9c6b18;
-  --brass-svak: #faf3e4;
-  --ok: #156b3a;
-  --feil: #a52a21;
-  --skygge: 0 1px 2px rgba(4, 48, 44, 0.06), 0 8px 24px -16px rgba(4, 48, 44, 0.5);
+:root { color-scheme: light; }
+
+/* Fargene og skriftene kommer fra butikkens tema (butikktema.css, generert).
+   Her står bare navnene salgssiden bruker i tillegg, uttrykt i temaets. */
+.kh {
+  --skum: var(--papir);
+  --dyp-lys: var(--sjo);
+  --brass-svak: color-mix(in srgb, var(--brass) 9%, var(--flate));
+  --skygge: 0 1px 2px rgb(0 0 0 / 6%), 0 8px 24px -16px rgb(0 0 0 / 45%);
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--papir);
+  color: var(--blekk);
+  font-family: var(--skrift);
 }
+.kh .ark { flex: 1; width: 100%; }
+.kh > .ark { max-width: 1232px; box-sizing: border-box; padding: 22px 26px 20px; }
+@media (max-width: 860px) { .kh > .ark { padding: 22px 16px 20px; } }
+
+/* Butikkens topp og bunn ligger i butikken inne i en flate med luft rundt;
+   her står de rett på siden. */
+.kh > .b-skall-topp { margin: 0; }
+.kh > .b-bunn { margin: 44px 0 0; }
+.kh a.b-kurv, .kh a.b-toppknapp { color: var(--topp-tekst); }
+.kh .b-linje2 a.b-navvalg { color: var(--topp2-tekst); }
+.kh .b-linje2 a.b-navvalg:hover { color: var(--topp-tekst); }
+.kh button.b-kurv { cursor: pointer; }
+
+/* Overskriften på siden, som forsiden i butikken. */
+.sidehode { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin: 0 0 18px; }
+.sidehode h1 { font-size: 27px; letter-spacing: -0.02em; margin: 0 0 6px; }
+.sidehode .ingress { margin: 0; }
+@media (max-width: 620px) { .sidehode { flex-direction: column; gap: 4px; } }
+
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--skum);
-  color: var(--blekk);
-  font-family: Archivo, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 15.5px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
@@ -53,73 +67,7 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus { border-color: var(--sjo); }
 :focus-visible { outline: 2px solid var(--sjo); outline-offset: 2px; }
 
-/* ── vannbåndet ──────────────────────────────────────────────────────────── */
-.topp {
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(168deg, var(--dyp) 0%, var(--dyp-lys) 100%);
-  color: #f4faf8;
-}
-/* Vannlinjer: brede, svake striper på skrå. De gir båndet dybde uten å bli
-   et mønster man legger merke til. */
-.topp::before {
-  content: "";
-  position: absolute; inset: 0;
-  background: repeating-linear-gradient(
-    100deg, transparent 0 38px, rgba(255, 255, 255, 0.035) 38px 40px
-  );
-  pointer-events: none;
-}
-.topp .inni {
-  position: relative; z-index: 1;
-  max-width: 1120px; margin: 0 auto; padding: 18px 22px 20px;
-  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
-}
-.topp b {
-  font-size: 20px; font-weight: 700; letter-spacing: -0.025em;
-}
-.topp span { color: rgba(244, 250, 248, 0.62); font-size: 13.5px; }
-.topp .knapp.blank { color: rgba(244, 250, 248, 0.86); }
-.topp .knapp.blank:hover { color: #fff; }
-
-/* Finnen. Absolutt plassert, bleier ut av høyre kant, og forsvinner på
-   smale skjermer der den bare ville stjålet plass. */
-/* Stor nok til å fylle båndet i høyden, og svak nok til å bli et merke og
-   ikke en illustrasjon. Seks prosent forsvant helt; elleve leses. */
-.finne {
-  position: absolute; z-index: 0;
-  right: 26px; bottom: -36px;
-  width: 310px; height: auto;
-  color: rgba(255, 255, 255, 0.11);
-  pointer-events: none;
-}
-@media (max-width: 1000px) { .finne { width: 220px; right: 8px; } }
-@media (max-width: 720px) { .finne { display: none; } }
-
-.hero {
-  position: relative; z-index: 1;
-  max-width: 1120px; margin: 0 auto; padding: 8px 22px 30px;
-}
-.hero h1 {
-  color: #f6fbfa;
-  font-size: clamp(28px, 4.6vw, 40px);
-  font-weight: 700; letter-spacing: -0.03em; line-height: 1.1;
-  margin: 0 0 10px; max-width: 17ch;
-}
-.hero .ingress { color: rgba(244, 250, 248, 0.72); max-width: 56ch; margin: 0; }
-
-/* Under vannbåndet, over arbeidsflaten. Rolig nok til ikke å skremme, tydelig
-   nok til at ingen kan si de ikke visste. */
-.testfase {
-  background: var(--brass-svak);
-  border-bottom: 1px solid #ecdfc4;
-  color: #6f4d11;
-  font-size: 14px;
-}
-.testfase .inni { max-width: 1120px; margin: 0 auto; padding: 11px 22px; }
-.testfase a { color: inherit; font-weight: 600; }
-
-.ark { max-width: 1120px; margin: 0 auto; padding: 26px 22px 80px; }
+.ark { margin: 0 auto; }
 .todelt { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; align-items: start; }
 
 h1 { font-size: 27px; line-height: 1.2; letter-spacing: -0.025em; margin: 0 0 10px; }
@@ -151,12 +99,12 @@ h3 { font-size: 15.5px; margin: 20px 0 4px; }
 .knapp {
   display: inline-block;
   border: 1px solid var(--strek-sterk); background: var(--flate); color: var(--blekk);
-  border-radius: 8px; padding: 9px 15px; font-weight: 500;
+  border-radius: var(--runding); padding: 9px 15px; font-weight: 500;
   font-size: 14.5px; text-decoration: none; cursor: pointer;
 }
 .knapp:hover { border-color: var(--sjo); }
 .knapp.primar {
-  background: var(--dyp); border-color: var(--dyp); color: #f4faf8; font-weight: 600;
+  background: var(--dyp); border-color: var(--dyp); color: #fff; font-weight: 600;
 }
 .knapp.primar:hover { background: var(--dyp-lys); border-color: var(--dyp-lys); }
 .knapp.blank { border: none; background: none; color: var(--sjo); padding: 6px 2px; }
@@ -169,12 +117,12 @@ h3 { font-size: 15.5px; margin: 20px 0 4px; }
 /* ── paneler og treff ────────────────────────────────────────────────────── */
 .panel {
   background: var(--flate); border: 1px solid var(--strek);
-  border-radius: 12px; padding: 18px 20px; margin-bottom: 18px;
+  border-radius: calc(var(--runding) * 1.5); padding: 18px 20px; margin-bottom: 18px;
 }
 
 .treff {
   background: var(--flate); border: 1px solid var(--strek);
-  border-radius: 12px; padding: 13px 16px; margin-bottom: 9px;
+  border-radius: calc(var(--runding) * 1.5); padding: 13px 16px; margin-bottom: 9px;
 }
 .treff .rad { display: flex; gap: 14px; align-items: flex-start; }
 .treff .midt { min-width: 0; flex: 1; }
@@ -220,7 +168,7 @@ h3 { font-size: 15.5px; margin: 20px 0 4px; }
   position: relative;
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
   border: 1px solid var(--strek-sterk); background: var(--flate);
-  border-radius: 9px; padding: 6px 22px 7px 11px; min-width: 92px;
+  border-radius: var(--runding); padding: 6px 22px 7px 11px; min-width: 92px;
 }
 .pris-knapp::after {
   content: "+";
@@ -249,7 +197,7 @@ h3 { font-size: 15.5px; margin: 20px 0 4px; }
 /* ── kurv ────────────────────────────────────────────────────────────────── */
 .kurv {
   background: var(--flate); border: 1px solid var(--strek);
-  border-radius: 12px; position: sticky; top: 20px; overflow: hidden;
+  border-radius: calc(var(--runding) * 1.5); position: sticky; top: 20px; overflow: hidden;
 }
 .kurv header {
   padding: 15px 17px 12px; border-bottom: 1px solid var(--strek);
@@ -298,8 +246,8 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
 .godta input { margin-top: 3px; flex: none; }
 
 /* ── varsler ─────────────────────────────────────────────────────────────── */
-.varsel { border-radius: 10px; padding: 13px 16px; margin-bottom: 16px; font-size: 14.5px; }
-.varsel.info { background: var(--sjo-svak); color: #0a4d46; }
+.varsel { border-radius: var(--runding); padding: 13px 16px; margin-bottom: 16px; font-size: 14.5px; }
+.varsel.info { background: var(--sjo-svak); color: var(--blekk); }
 .varsel.feil { background: #fbeceb; color: var(--feil); }
 
 /* ── øvrig ───────────────────────────────────────────────────────────────── */
@@ -336,13 +284,13 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
   display: block; width: 100%; padding: 0; border: none;
   background: none; cursor: zoom-in; border-radius: 8px;
 }
-.bildeknapp:hover img { box-shadow: 0 2px 6px rgba(4,48,44,.18), 0 12px 28px -14px rgba(4,48,44,.7); }
+.bildeknapp:hover img { box-shadow: 0 2px 6px rgb(0 0 0 / 18%), 0 12px 28px -14px rgb(0 0 0 / 60%); }
 
 /* Forstørringen. Bildet skal få så mye plass som skjermen tillater — det er
    detaljene i kantene folk prøver å se. */
 .lupe {
   position: fixed; inset: 0; z-index: 100;
-  background: rgba(4, 48, 44, 0.93);
+  background: rgb(0 0 0 / 90%);
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   gap: 14px; padding: 24px; cursor: zoom-out;
@@ -383,13 +331,12 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
   .kurv { position: static; }
   .kurv .liste { max-height: none; }
   .feltrad { grid-template-columns: 1fr; }
-  .hero { padding-bottom: 24px; }
 }
 
 /* Kvitteringen er også pakkseddelen. Alt som ikke hører hjemme i en konvolutt
    forsvinner ved utskrift. */
 @media print {
-  .ingen-print, .topp, .hero, .faner, .kurv { display: none !important; }
+  .ingen-print, .faner, .kurv { display: none !important; }
   .ark { padding: 0; max-width: none; }
   .panel { border: none; box-shadow: none; padding: 0; page-break-inside: auto; }
   body { background: #fff; }
@@ -400,4 +347,9 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+@media (max-width: 620px) {
+  .faner { gap: 18px; }
+  .faner button { font-size: 15px; }
 }
