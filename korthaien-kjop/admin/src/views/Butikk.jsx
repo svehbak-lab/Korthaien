@@ -1484,7 +1484,7 @@ function FulleRader({ kort, rader, onÅpne }) {
   const antall = Math.max(Math.min(kolonner, kort.length), Math.floor(maks / kolonner) * kolonner);
   return (
     <div className="b-rute" ref={ref}>
-      {kort.slice(0, antall).map((k) => <Flis key={k.id} kort={k} onÅpne={() => onÅpne(k.id)} />)}
+      {kort.slice(0, antall).map((k) => <Flis key={k.flisnøkkel || k.id} kort={k} onÅpne={() => onÅpne(k.id)} />)}
     </div>
   );
 }
@@ -1519,7 +1519,13 @@ function Forside({ onButikk, onÅpne, onSett, onProdukt, produktantall, onFeil }
     let avbrutt = false;
     kapi
       .katalog({ sortering: "nyeste", perSide: 30, baresalg: true, utenTokens: true })
-      .then((d) => !avbrutt && setKort(d.kort))
+      // Én flis per utgave: vanlig og foil er to ulike ting å kjøpe, med hvert
+      // sitt antall og sin pris. Flisa viser bare den ene.
+      .then((d) => !avbrutt && setKort((d.kort || []).flatMap((k) =>
+        (k.varianter || [])
+          .filter((v) => v.påLager > 0)
+          .map((v) => ({ ...k, varianter: [v], flisnøkkel: `${k.id}:${v.finish}` }))
+      )))
       .catch((e) => !avbrutt && onFeil(e));
     return () => {
       avbrutt = true;
@@ -1677,12 +1683,8 @@ function Flis({ kort, onÅpne }) {
     .map((t) => t.ore);
   const fra = priser.length ? Math.min(...priser) : null;
   const flerePriser = new Set(priser).size > 1;
-  // Vanlig og foil er to utgaver av samme kort, og tallene holdes hver for
-  // seg. Én sum med «foil» i navnet så ut som ti foils når det var én.
-  const iFinish = (f) => (kort.varianter || []).filter((v) => v.finish === f).reduce((n, v) => n + (v.påLager || 0), 0);
-  const vanlig = iFinish("nonfoil");
-  const foilAntall = iFinish("foil");
-  const bareFoil = foilAntall > 0 && vanlig === 0;
+  const antall = (kort.varianter || []).reduce((n, v) => n + (v.påLager || 0), 0);
+  const foil = (kort.varianter || []).some((v) => v.finish === "foil" && v.påLager > 0);
 
   return (
     <button className="b-flis" onClick={onÅpne}>
@@ -1696,16 +1698,12 @@ function Flis({ kort, onÅpne }) {
       <span className="linje">
         {kort.set_name} · {kort.collector_number}
         {kort.variant && kort.variant !== "vanlig" ? " · " + kort.variant : ""}
-        {bareFoil ? " · foil" : ""}
+        {foil ? " · foil" : ""}
       </span>
       <span className="pris tall">
         {fra === null ? "Utsolgt" : (flerePriser ? "fra " : "") + kroner(fra)}
       </span>
-      <span className="linje">
-        {vanlig > 0 && foilAntall > 0
-          ? `${vanlig} vanlig · ${foilAntall} foil på lager`
-          : `${vanlig + foilAntall} på lager`}
-      </span>
+      <span className="linje">{antall} på lager</span>
     </button>
   );
 }
