@@ -73,6 +73,7 @@ export default function Hurtig({ onFeil }) {
   const [søk, setSøk] = useState("");
 
   const [data, setData] = useState(null);
+  const [kilde, setKilde] = useState(null);
   const [laster, setLaster] = useState(false);
   const [utkast, setUtkast] = useState({});
   const [lagret, setLagret] = useState({});
@@ -101,7 +102,11 @@ export default function Hurtig({ onFeil }) {
       setUtkast({});
       api
         .lager(sett, søkAlle)
-        .then((r) => !avbrutt && setData(r.kort || []))
+        .then((r) => {
+          if (avbrutt) return;
+          setData(r.kort || []);
+          setKilde(r.lagerkilde || null);
+        })
         .catch((e) => !avbrutt && onFeil(e))
         .finally(() => !avbrutt && setLaster(false));
     }, alleSett ? 300 : 0);
@@ -251,6 +256,14 @@ export default function Hurtig({ onFeil }) {
               {visTabell && !laster && `${synlige.length} kort · ${iSettet} stk. i hylla`}
             </span>
           </div>
+          {kilde === "mystore" && (
+            <div className="varsel info" style={{ marginTop: 12, marginBottom: 0 }}>
+              <b>Før overgangen viser denne siden lagerboken, ikke Mystore-beholdningen.</b>{" "}
+              Butikken bruker fortsatt Mystore, så tallene her kan være 0 selv om kortet er på lager.
+              Ved overgangen tømmes lagerboken og fylles med Mystore-beholdningen, så endringer du gjør
+              her nå blir borte.
+            </div>
+          )}
         </div>
       </div>
 

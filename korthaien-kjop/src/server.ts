@@ -1146,6 +1146,7 @@ app.get("/api/admin/lager", krevAdmin, fang(async (req: any, res: any) => {
   const kort = [...kart.values()];
   res.json({
     kort,
+    lagerkilde: lagerkilde(),
     stykker: kort.reduce((n, k) => n + Object.values(k.lager).reduce((a: any, b: any) => a + b, 0), 0),
   });
 }));
