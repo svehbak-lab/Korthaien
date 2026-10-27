@@ -616,6 +616,30 @@ export async function synkMystore(
           foil = true;
         }
       }
+      // Motsatt vei: produktet sier foil, men kortet vi fant finnes ikke i
+      // foil. Finnes det et annet trykk av kortet i samme settfamilie som
+      // finnes i foil (som regel extended art eller showcase), er det mest
+      // sannsynlig det. «Rain of Riches (Foil)» i New Capenna Commander er
+      // eksempelet: #150 finnes bare uten foil.
+      //
+      // Finnes det ikke, blir koblingen stående — navnet er en påstand om et
+      // fysisk kort, og da er det kortdataene som skal mistenkes.
+      if (
+        foil && !nummer && !lenke?.card_id &&
+        Number((treff.rows[0] as any).has_foil) === 0
+      ) {
+        const medFoil = await db().execute({
+          sql: `SELECT c.id, c.has_nonfoil, c.has_foil FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+                 WHERE c.set_code IN (${plass}) AND c.has_foil = 1
+                   AND (c.name_norm = ? OR c.name_norm = ? OR c.front_norm = ? OR c.back_norm = ?)${tokenKravC}${ikkeSerie}
+                 ORDER BY (c.set_code = ?) DESC,
+                          CAST(c.collector_number AS INTEGER) ASC,
+                          s.released_at ASC
+                 LIMIT 1`,
+          args: [...sett, n, helt, n, n, setCode],
+        });
+        if (medFoil.rows[0]) treff = medFoil;
+      }
       // Et produkt kan bare være ett kort. Flytter det seg — fordi
       // variantmatchingen ble bedre, eller fordi du rettet et navn — må den
       // gamle raden bort. Ellers står beholdningen igjen på et kort som ikke
