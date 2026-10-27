@@ -29,7 +29,6 @@ export default function Landing({ tema, tittel, tekst, dato, forhåndsvisning })
         {åpner && <p className="landing-dato">Åpner {penDato(åpner)}</p>}
         <p className="landing-tekst">{tekst || STANDARD_TEKST}</p>
         <div className="landing-lenker">
-          <a className="knapp primar" href="https://kortsalg.korthaien.no">Selg kortene dine til oss</a>
           <a className="knapp" href="mailto:korthaien@gmail.com">korthaien@gmail.com</a>
         </div>
       </div>

@@ -281,6 +281,18 @@ export function Skjema({ kurv, sender, config, meg, onTilbake, onSend, onVilkår
     /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.email) &&
     f.phone.replace(/\D/g, "").length >= 8;
 
+  if (config?.stengt) {
+    return (
+      <>
+        <h1>Innkjøpet er midlertidig stengt</h1>
+        <div className="varsel info" style={{ maxWidth: 560 }}>
+          Vi flytter til ny nettbutikk og tar ikke imot kort akkurat nå. Kurven din er lagret og venter her –
+          kom tilbake når vi har åpnet igjen.
+        </div>
+        <button className="knapp" onClick={onTilbake}>Tilbake til kurven</button>
+      </>
+    );
+  }
   if (kreverKonto && !meg?.lastet) return <p className="dempet">Et øyeblikk…</p>;
   if (kreverKonto && (!kunde || !kunde.bekreftet)) {
     const tilbake = `${window.location.origin}${window.location.pathname}?steg=skjema`;

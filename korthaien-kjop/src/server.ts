@@ -126,6 +126,8 @@ app.get("/api/config", grense(REGLER.søk), fang(async (_req: any, res: any) => 
     tix_kreditt_ore: s.tix_kreditt_ore,
     // Etter overgangen må kunden være innlogget for å sende inn kort.
     krev_konto: !!s.krev_konto,
+    // Under overgangen tar vi ikke imot kort heller.
+    stengt: !!s.stengt?.aktiv,
     butikk_url: butikkUrl(),
   });
 }));
@@ -196,6 +198,11 @@ function iBakgrunnen(navn: string, p: Promise<{ sendt: boolean; grunn?: string }
 }
 
 app.post("/api/orders", grense(REGLER.ordre), kundeValgfri, fang(async (req: any, res: any) => {
+  // Stengt under overgangen: ingen innsending, så ingen ordre havner midt i
+  // byttet av lager og oppgjørsform. Admin kan fortsatt prøve.
+  if ((await hentSettings()).stengt?.aktiv && !erAdmin(req)) {
+    throw new HttpFeil(503, "Vi tar ikke imot kort akkurat nå, mens vi flytter til ny nettbutikk. Kurven din er lagret – prøv igjen litt senere.");
+  }
   await utløpGamleOrdrer();
   // Etter overgangen sendes kort bare inn fra en konto med bekreftet
   // e-postadresse. Kreditten havner da garantert der kunden finner den.
