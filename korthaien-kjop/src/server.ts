@@ -52,7 +52,7 @@ import {
 } from "./kunder.js";
 import {
   SalgFeil, prisKurv, åpneKasse, avbrytKasse, stripeHendelse, hentOrdre as hentSalgsordre, lagerForPlukk, offentlig, kundensOrdrer,
-  tilhørerKunde, riktigMerke, tilgjengeligKreditt, adminOrdrer, settStatus, kanseller,
+  tilhørerKunde, riktigMerke, tilgjengeligKreditt, adminOrdrer, settStatus, kanseller, justerOrdre,
   salgsstatistikk, utløpGamle, harStripe, oppdaterVippsOrdre, butikkUrl, RESERVASJON_MIN,
 } from "./salg.js";
 import { bevegelser as kredittBevegelser } from "./kreditt.js";
@@ -1069,6 +1069,18 @@ app.patch("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: an
 app.post("/api/admin/salg/ordrer/:nr/kanseller", krevAdmin, fang(async (req: any, res: any) => {
   const måte = req.body?.maate === "kreditt" ? "kreditt" : "kort";
   res.json({ ordre: await medBilderOgLager(await kanseller(String(req.params.nr), String(req.body?.grunn || ""), måte)) });
+}));
+
+// Rett antallet på en betalt ordre. Uten bekreft: bare beløpet som ville
+// gått tilbake, så admin ser det før noe skjer.
+app.post("/api/admin/salg/ordrer/:nr/juster", krevAdmin, fang(async (req: any, res: any) => {
+  const b = req.body || {};
+  const r = await justerOrdre(String(req.params.nr), Array.isArray(b.linjer) ? b.linjer : [], {
+    tilbakePåLager: b.tilbake_paa_lager === true,
+    grunn: String(b.grunn || "").slice(0, 300),
+    bekreft: b.bekreft === true,
+  });
+  res.json(r.ordre ? { ...r, ordre: await medBilderOgLager(r.ordre) } : r);
 }));
 
 app.get("/api/admin/salg/statistikk", krevAdmin, fang(async (_req: any, res: any) => {

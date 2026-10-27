@@ -514,6 +514,50 @@ export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
   });
 }
 
+// Ordren er rettet: et kort manglet, og mellomlegget er sendt tilbake.
+export async function sendJustering(
+  ordreId: number,
+  j: {
+    linjer: { card_name: string; fra: number; til: number }[];
+    refusjon_ore: number;
+    til_kort_ore: number;
+    til_kreditt_ore: number;
+    til_gavekort_ore: number;
+    betalt_med: string;
+  }
+): Promise<Utfall> {
+  const r = await db().execute({ sql: "SELECT ordrenr, email, status FROM salgsordrer WHERE id = ?", args: [ordreId] });
+  const o: any = r.rows[0];
+  if (!o?.email) return { sendt: false, grunn: "fant ikke ordren" };
+  const linjer = j.linjer.map((l) => `${l.card_name}: ${l.fra} → ${l.til} stk.`);
+  const hvor = [
+    j.til_kort_ore ? `${kr(j.til_kort_ore)} tilbake til ${j.betalt_med === "Vipps" ? "Vipps" : "kortet du betalte med"}` : "",
+    j.til_kreditt_ore ? `${kr(j.til_kreditt_ore)} tilbake som kreditt på kontoen din` : "",
+    j.til_gavekort_ore ? `${kr(j.til_gavekort_ore)} tilbake på gavekortet` : "",
+  ].filter(Boolean);
+  const tid = j.til_kort_ore ? " Det kan ta noen dager før beløpet vises hos banken." : "";
+  return send({
+    til: String(o.email),
+    bcc: MIN_ADRESSE(),
+    emne: `Endring i ordre ${o.ordrenr} — Korthaien`,
+    html: RAMME(
+      `<h2 style="font-size:20px;margin:0 0 6px">Endring i ordren din</h2>
+       <p>Beklager! Da jeg pakket ordre <b>${trygg(o.ordrenr)}</b>, manglet jeg noe av det du bestilte:</p>
+       <ul style="margin:0 0 14px;padding-left:18px">${linjer.map((x) => `<li>${trygg(x)}</li>`).join("")}</ul>
+       <p>Du får <b>${kr(j.refusjon_ore)}</b> tilbake: ${trygg(hvor.join(", "))}.${tid}</p>
+       ${o.status === "sendt" ? "" : "<p>Resten av ordren sendes som vanlig.</p>"}`,
+      "Endring i ordren"
+    ),
+    tekst: [
+      `Beklager! Da jeg pakket ordre ${o.ordrenr}, manglet jeg noe av det du bestilte:`,
+      ...linjer.map((x) => `- ${x}`),
+      "",
+      `Du får ${kr(j.refusjon_ore)} tilbake: ${hvor.join(", ")}.${tid}`,
+      o.status === "sendt" ? "" : "Resten av ordren sendes som vanlig.",
+    ].join("\n"),
+  });
+}
+
 export async function varsleSendt(ordreId: number): Promise<Utfall> {
   const r = await db().execute({ sql: "SELECT * FROM salgsordrer WHERE id = ?", args: [ordreId] });
   const o: any = r.rows[0];

@@ -564,6 +564,26 @@ CREATE TABLE IF NOT EXISTS salgsordre_linjer (
   mva              INTEGER NOT NULL DEFAULT 0);
 
 CREATE INDEX IF NOT EXISTS idx_salgslinjer_ordre ON salgsordre_linjer (ordre_id);
+
+-- Rettelser etter betaling: et kort du ikke hadde, eller færre enn ordren
+-- sa. Én rad per rettelse, med det som gikk tilbake til kunden og hvordan.
+-- uten_mva_ore og med_mva_ore er pengedelen som tilbakeføres i rapporten,
+-- datert når rettelsen ble gjort. Ordrens egne tall for salget står urørt,
+-- så en rapport som er levert som bilag, ikke endrer seg.
+CREATE TABLE IF NOT EXISTS salgsordre_justeringer (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  ordre_id       INTEGER NOT NULL REFERENCES salgsordrer(id) ON DELETE CASCADE,
+  beskrivelse    TEXT NOT NULL,
+  refusjon_ore   INTEGER NOT NULL,
+  til_kort_ore   INTEGER NOT NULL DEFAULT 0,
+  til_kreditt_ore INTEGER NOT NULL DEFAULT 0,
+  til_gavekort_ore INTEGER NOT NULL DEFAULT 0,
+  uten_mva_ore   INTEGER NOT NULL DEFAULT 0,
+  med_mva_ore    INTEGER NOT NULL DEFAULT 0,
+  refusjon_id    TEXT,
+  created_at     TEXT NOT NULL);
+
+CREATE INDEX IF NOT EXISTS idx_salgsjusteringer_ordre ON salgsordre_justeringer (ordre_id);
 CREATE INDEX IF NOT EXISTS idx_salgslinjer_kort ON salgsordre_linjer (card_id, finish, condition);
 CREATE INDEX IF NOT EXISTS idx_salgsordrer_kunde ON salgsordrer (kunde_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_salgsordrer_epost ON salgsordrer (email, created_at);

@@ -1082,6 +1082,194 @@ export async function kanseller(ordrenr: string, grunn: string, måte: "kort" | 
   return hentOrdre(ordrenr);
 }
 
+// Rettelse etter betaling: færre av et kort enn ordren sa, fordi beholdningen
+// var feil. Antallet settes ned (ned til 0 fjerner linjen), summen regnes på
+// nytt, og mellomlegget går tilbake til kunden samme vei som det kom:
+// kort/Vipps først, så kreditt, så gavekort. Frakten står.
+//
+// Uten bekreft regnes det bare ut, så admin ser beløpet før noe skjer.
+//
+// Kortet går ikke tilbake på lager med mindre du ber om det: oftest rettes
+// ordren fordi kortet ikke fantes, og da er lageret riktig som det er.
+export async function justerOrdre(
+  ordrenr: string,
+  endringer: { id: number; antall: number }[],
+  valg: { tilbakePåLager?: boolean; grunn?: string; bekreft?: boolean } = {}
+): Promise<any> {
+  const o = await hentOrdre(ordrenr);
+  if (!o) throw new SalgFeil(404, "Fant ikke ordren.");
+  if (!["betalt", "pakket", "sendt"].includes(String(o.status))) {
+    throw new SalgFeil(400, "Bare betalte ordrer kan rettes.");
+  }
+  const ny = new Map<number, number>();
+  for (const e of endringer || []) {
+    const n = Number(e?.antall);
+    if (!Number.isInteger(n) || n < 0) throw new SalgFeil(400, "Antallet må være et helt tall, null eller mer.");
+    ny.set(Number(e.id), n);
+  }
+  const linjer = (o.linjer as any[]).map((l) => {
+    const gammel = Number(l.antall);
+    const nytt = ny.has(Number(l.id)) ? ny.get(Number(l.id))! : gammel;
+    if (nytt > gammel) throw new SalgFeil(400, `${l.card_name}: antallet kan bare settes ned. Kunden har betalt for ${gammel}.`);
+    return { ...l, gammel, nytt };
+  });
+  const endret = linjer.filter((l) => l.nytt !== l.gammel);
+  if (!endret.length) throw new SalgFeil(400, "Ingen antall er endret.");
+  const kortIgjen = linjer.reduce((n, l) => n + l.nytt, 0);
+  if (!kortIgjen) throw new SalgFeil(400, "Da er det ingenting igjen i ordren. Kanseller den i stedet.");
+
+  const gammelVarer = Number(o.varer_ore) || 0;
+  const gammelRabatt = Number(o.rabatt_ore) || 0;
+  const nyVarer = linjer.reduce((n, l) => n + Number(l.enhet_ore) * l.nytt, 0);
+  // Prosentrabatten følger varene: samme andel av det som er igjen.
+  const nyRabatt = gammelVarer ? Math.round((nyVarer * gammelRabatt) / gammelVarer) : 0;
+  const nySealed = linjer.filter((l) => Number(l.mva) === 1).reduce((n, l) => n + Number(l.enhet_ore) * l.nytt, 0);
+  const nyMvaVarer = nyVarer ? Math.round(nySealed * (1 - nyRabatt / nyVarer)) : 0;
+  const refusjon = gammelVarer - gammelRabatt - (nyVarer - nyRabatt);
+
+  const stripeFør = Number(o.stripe_ore) || 0;
+  const kredittFør = Number(o.kreditt_ore) || 0;
+  const gavekortFør = o.rabattkode ? Number(o.gavekort_ore) || 0 : 0;
+  let rest = refusjon;
+  const tilKort = Math.min(rest, stripeFør);
+  rest -= tilKort;
+  const tilKreditt = Math.min(rest, kredittFør);
+  rest -= tilKreditt;
+  const tilGavekort = Math.min(rest, gavekortFør);
+  rest -= tilGavekort;
+  if (rest > 0) throw new SalgFeil(400, "Beløpet som skal tilbake, er større enn det som er betalt. Ta kontakt med utvikler.");
+
+  // Pengedelen i rapporten, regnet på samme måte som ved betaling: frakt og
+  // sealed regnes betalt med penger først.
+  const fraktOre = Number(o.frakt_ore) || 0;
+  const delt = (penger: number, mvaVarer: number) => {
+    const med = Math.min(fraktOre + mvaVarer, penger);
+    return { med, uten: penger - med };
+  };
+  const før = delt(stripeFør, Number(o.mva_varer_ore) || 0);
+  const etter = delt(stripeFør - tilKort, nyMvaVarer);
+  const betaltMed = o.betalingsmate === "vipps" ? "Vipps" : "kort";
+
+  const forslag = {
+    refusjon_ore: refusjon,
+    til_kort_ore: tilKort,
+    til_kreditt_ore: tilKreditt,
+    til_gavekort_ore: tilGavekort,
+    betalt_med: betaltMed,
+    linjer: endret.map((l) => ({ id: l.id, card_name: l.card_name, fra: l.gammel, til: l.nytt })),
+  };
+  if (!valg.bekreft) return { forslag };
+  if (refusjon <= 0) throw new SalgFeil(400, "Det er ingenting å refundere.");
+
+  const beskrivelse = endret
+    .map((l) => `${l.card_name}${l.utgave ? ` (${l.utgave})` : ""} ${l.gammel} → ${l.nytt}`)
+    .join(", ");
+  // Samme rettelse to ganger (dobbeltklikk, nytt forsøk) gir samme nøkkel og
+  // dermed ikke en refusjon til. En ny rettelse senere får en ny.
+  const fingeravtrykk = endret.map((l) => `${l.id}:${l.gammel}-${l.nytt}`).join(",");
+  let refusjonsId: string | null = null;
+  if (tilKort > 0) {
+    if (o.betalingsmate === "vipps") {
+      if (!o.vipps_ref) throw new SalgFeil(400, "Fant ikke Vipps-betalingen for denne ordren. Refunder i Vipps-portalen.");
+      try {
+        await refunderVipps(String(o.vipps_ref), tilKort, `justering-${o.vipps_ref}-${fingeravtrykk}`);
+        refusjonsId = String(o.vipps_ref);
+      } catch (e: any) {
+        throw new SalgFeil(502, `Vipps avviste refusjonen: ${e?.message || "ukjent feil"}. Ingenting er endret.`);
+      }
+    } else {
+      if (!o.stripe_betaling) throw new SalgFeil(400, "Fant ikke betalingen hos Stripe for denne ordren. Refunder i Stripe.");
+      try {
+        const r = await stripe().refunds.create(
+          { payment_intent: String(o.stripe_betaling), amount: tilKort, metadata: { ordrenr, justering: fingeravtrykk } },
+          { idempotencyKey: `justering-${ordrenr}-${fingeravtrykk}` }
+        );
+        refusjonsId = r.id;
+      } catch (e: any) {
+        throw new SalgFeil(502, `Stripe avviste refusjonen: ${e?.message || "ukjent feil"}. Ingenting er endret.`);
+      }
+    }
+  }
+
+  const tid = nå();
+  const notat =
+    `Rettet ${new Date(tid).toLocaleDateString("nb-NO", { timeZone: "Europe/Oslo" })}: ${beskrivelse}.` +
+    (String(valg.grunn || "").trim() ? ` ${String(valg.grunn).trim()}.` : "") +
+    (tilKort ? ` ${(tilKort / 100).toFixed(2)} kr refundert til ${betaltMed}.` : "") +
+    (tilKreditt ? ` ${(tilKreditt / 100).toFixed(2)} kr som kreditt.` : "") +
+    (tilGavekort ? ` ${(tilGavekort / 100).toFixed(2)} kr tilbake på gavekortet ${o.rabattkode}.` : "");
+
+  const tx = await db().transaction("write");
+  try {
+    // Tallene ordren hadde da beløpet ble regnet ut, er låsen: har noe
+    // endret ordren i mellomtiden, stopper vi før noe skrives.
+    const u = await tx.execute({
+      sql: `UPDATE salgsordrer
+               SET varer_ore = ?, rabatt_ore = ?, mva_varer_ore = ?, antall_kort = ?,
+                   stripe_ore = stripe_ore - ?, kreditt_ore = kreditt_ore - ?, gavekort_ore = gavekort_ore - ?,
+                   admin_notat = trim(COALESCE(admin_notat, '') || ' ' || ?)
+             WHERE id = ? AND varer_ore = ? AND stripe_ore = ? AND kreditt_ore = ?
+               AND status IN ('betalt', 'pakket', 'sendt')`,
+      args: [nyVarer, nyRabatt, nyMvaVarer, kortIgjen, tilKort, tilKreditt, tilGavekort, notat,
+             o.id, gammelVarer, stripeFør, kredittFør],
+    });
+    if (!u.rowsAffected) throw new SalgFeil(409, "Ordren ble endret i mellomtiden. Last inn på nytt.");
+    for (const l of endret) {
+      if (l.nytt === 0) await tx.execute({ sql: "DELETE FROM salgsordre_linjer WHERE id = ?", args: [l.id] });
+      else await tx.execute({ sql: "UPDATE salgsordre_linjer SET antall = ? WHERE id = ?", args: [l.nytt, l.id] });
+      if (!valg.tilbakePåLager) continue;
+      const tilbake = l.gammel - l.nytt;
+      if (erProdukt(l.card_id)) {
+        await tx.execute({
+          sql: "UPDATE produkter SET antall = antall + ?, updated_at = ? WHERE id = ?",
+          args: [tilbake, tid, Number(String(l.card_id).slice(2))],
+        });
+      } else {
+        await tx.execute({
+          sql: `INSERT INTO lager_bevegelser (card_id, finish, condition, antall, grunn, order_id, notat, created_at)
+                VALUES (?, ?, ?, ?, 'reversert', NULL, ?, ?)`,
+          args: [l.card_id, l.finish, l.condition, tilbake, `Rettet ${o.ordrenr}`, tid],
+        });
+      }
+    }
+    if (tilKreditt > 0) {
+      await tx.execute({
+        sql: `INSERT INTO kreditt_bevegelser (email, ore, grunn, notat, order_no, created_at) VALUES (?, ?, 'refusjon', ?, ?, ?)`,
+        args: [o.email, tilKreditt, `Rettet ordre ${o.ordrenr}`, o.ordrenr, tid],
+      });
+    }
+    if (tilGavekort > 0) {
+      await tx.execute({
+        sql: `INSERT INTO rabattkode_bevegelser (kode_id, ore, grunn, notat, ordrenr, created_at)
+              SELECT id, ?, 'refusjon', ?, ?, ? FROM rabattkoder WHERE kode = ?`,
+        args: [tilGavekort, `Rettet ordre ${o.ordrenr}`, o.ordrenr, tid, o.rabattkode],
+      });
+    }
+    await tx.execute({
+      sql: `INSERT INTO salgsordre_justeringer
+              (ordre_id, beskrivelse, refusjon_ore, til_kort_ore, til_kreditt_ore, til_gavekort_ore,
+               uten_mva_ore, med_mva_ore, refusjon_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [o.id, beskrivelse, refusjon, tilKort, tilKreditt, tilGavekort,
+             før.uten - etter.uten, før.med - etter.med, refusjonsId, tid],
+    });
+    await tx.commit();
+  } catch (e) {
+    await tx.rollback().catch(() => {});
+    throw e;
+  } finally {
+    tx.close();
+  }
+
+  try {
+    const { sendJustering } = await import("./epost.js");
+    await sendJustering(Number(o.id), forslag);
+  } catch (e: any) {
+    console.error("E-posten om rettelsen feilet:", e?.message);
+  }
+  return { forslag, ordre: await hentOrdre(ordrenr) };
+}
+
 // ── statistikk ──────────────────────────────────────────────────────────────
 // Omsetning er alt kunden betalte for (kort og frakt), uansett om det ble
 // betalt med kreditt eller kort. Kansellerte ordrer telles ikke.

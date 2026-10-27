@@ -139,10 +139,12 @@ export const trekkVipps = (reference: string, ore: number) =>
     kropp: { modificationAmount: kr(ore) },
   });
 
-export const refunderVipps = (reference: string, ore: number) =>
+// Nøkkelen gjør et nytt forsøk på samme refusjon trygt. Delrefusjoner (en
+// rettet ordre) må ha sin egen, ellers svarer Vipps med den første.
+export const refunderVipps = (reference: string, ore: number, nøkkel = `refusjon-${reference}`) =>
   kall(`/epayment/v1/payments/${encodeURIComponent(reference)}/refund`, {
     metode: "POST",
-    nøkkel: `refusjon-${reference}`,
+    nøkkel,
     kropp: { modificationAmount: kr(ore) },
   });
 

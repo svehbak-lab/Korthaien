@@ -208,6 +208,8 @@ export const api = {
   endreSalgsordre: (nr, felt) => kall(`/api/admin/salg/ordrer/${encodeURIComponent(nr)}`, { method: "PATCH", body: felt }),
   kansellerSalgsordre: (nr, grunn, maate) =>
     kall(`/api/admin/salg/ordrer/${encodeURIComponent(nr)}/kanseller`, { method: "POST", body: { grunn, maate } }),
+  justerSalgsordre: (nr, felt) =>
+    kall(`/api/admin/salg/ordrer/${encodeURIComponent(nr)}/juster`, { method: "POST", body: felt }),
   salgsstatistikk: () => kall("/api/admin/salg/statistikk"),
   kredittKonto: (epost) => kall(`/api/admin/kreditt/${encodeURIComponent(epost)}`),
   bokførKreditt: (felt) => kall("/api/admin/kreditt", { method: "POST", body: felt }),

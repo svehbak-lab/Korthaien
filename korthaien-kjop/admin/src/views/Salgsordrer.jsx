@@ -194,6 +194,48 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
   const [jobber, setJobber] = useState(false);
   const [vis, setVis] = useState(null);
   const [svev, setSvev] = useState(null);
+  // Retting av antall: null når du ikke retter, ellers nytt antall per linje.
+  const [retting, setRetting] = useState(null);
+  const [forslag, setForslag] = useState(null);
+  const [rettFeil, setRettFeil] = useState("");
+  const [tilbake, setTilbake] = useState(false);
+  const [rettGrunn, setRettGrunn] = useState("");
+
+  const rettLinjer = retting
+    ? Object.entries(retting).map(([id, v]) => ({ id: Number(id), antall: v === "" ? NaN : Number(v) }))
+    : [];
+  const rettNøkkel = JSON.stringify(rettLinjer);
+  useEffect(() => {
+    if (!retting) return;
+    setForslag(null);
+    setRettFeil("");
+    if (!rettLinjer.length || rettLinjer.some((l) => !Number.isInteger(l.antall))) return;
+    let avbrutt = false;
+    const t = setTimeout(() => {
+      api
+        .justerSalgsordre(nr, { linjer: rettLinjer })
+        .then((r) => !avbrutt && setForslag(r.forslag))
+        .catch((e) => !avbrutt && setRettFeil(e.message || String(e)));
+    }, 250);
+    return () => { avbrutt = true; clearTimeout(t); };
+  }, [rettNøkkel]);
+
+  async function lagreRetting() {
+    setJobber(true);
+    try {
+      const r = await api.justerSalgsordre(nr, { linjer: rettLinjer, bekreft: true, tilbake_paa_lager: tilbake, grunn: rettGrunn });
+      setO(r.ordre);
+      setNotat(r.ordre.admin_notat || "");
+      setRetting(null);
+      setForslag(null);
+      setTilbake(false);
+      setRettGrunn("");
+      onMelding(`Ordren er rettet. ${kroner(r.forslag.refusjon_ore)} er sendt tilbake, og kunden har fått e-post.`);
+    } catch (e) {
+      onFeil(e);
+    }
+    setJobber(false);
+  }
 
   useEffect(() => {
     if (!vis) return;
@@ -285,20 +327,33 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                 return (
                   <tr
                     key={l.id}
-                    style={{ cursor: "pointer", opacity: ok ? 0.5 : 1 }}
+                    style={{ cursor: retting ? "default" : "pointer", opacity: ok && !retting ? 0.5 : 1 }}
                     onClick={() => {
+                      if (retting) return;
                       const ny = new Set(plukket);
                       ok ? ny.delete(l.id) : ny.add(l.id);
                       setPlukket(ny);
                     }}
                   >
                     <td>
+                      {retting ? (
+                        <input
+                          type="number"
+                          min={0}
+                          max={l.antall}
+                          value={retting[l.id] ?? String(l.antall)}
+                          onChange={(e) => setRetting((r) => ({ ...r, [l.id]: e.target.value.replace(/[^\d]/g, "") }))}
+                          style={{ width: 56, padding: "4px 6px", fontSize: 15 }}
+                          aria-label={`Nytt antall for ${l.card_name}`}
+                        />
+                      ) : (
                       <span className="rad-flex" style={{ gap: 8 }}>
                         <input type="checkbox" checked={ok} readOnly />
                         <span className="tall" style={{ fontSize: 15, fontWeight: Number(l.antall) > 1 ? 800 : 500 }}>
                           {l.antall}
                         </span>
                       </span>
+                      )}
                     </td>
                     <td>
                       <button
@@ -329,7 +384,9 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                         </>
                       ) : "—"}
                     </td>
-                    <td className="h tall" style={{ whiteSpace: "nowrap" }}>{kroner(l.enhet_ore * l.antall)}</td>
+                    <td className="h tall" style={{ whiteSpace: "nowrap" }}>
+                      {kroner(l.enhet_ore * (retting && retting[l.id] !== undefined && retting[l.id] !== "" ? Number(retting[l.id]) : l.antall))}
+                    </td>
                   </tr>
                 );
               })}
@@ -411,6 +468,56 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                     <button className="knapp liten" disabled={jobber} onClick={() => endre({ status: "betalt" })}>
                       Angre «sendt»
                     </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {etterBetaling && (
+            <div className="panel">
+              <header><h3>Rett antall</h3></header>
+              <div className="krop skjema">
+                {!retting ? (
+                  <>
+                    <span className="dempet" style={{ fontSize: 12.5 }}>
+                      Mangler du et kort? Sett ned antallet, så får kunden mellomlegget tilbake.
+                    </span>
+                    <button className="knapp" disabled={jobber} onClick={() => { setRetting({}); setPlukket(new Set()); }}>
+                      Rett antall…
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="dempet" style={{ fontSize: 12.5 }}>
+                      Endre antallet i plukklisten. 0 fjerner kortet fra ordren.
+                    </span>
+                    {rettFeil && <div className="varsel feil" style={{ margin: 0 }}>{rettFeil}</div>}
+                    {forslag && (
+                      <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+                        Tilbake til kunden: <b>{kroner(forslag.refusjon_ore)}</b>
+                        {forslag.til_kort_ore > 0 && <div>· {kroner(forslag.til_kort_ore)} til {forslag.betalt_med === "Vipps" ? "Vipps" : "kortet"}</div>}
+                        {forslag.til_kreditt_ore > 0 && <div>· {kroner(forslag.til_kreditt_ore)} som kreditt</div>}
+                        {forslag.til_gavekort_ore > 0 && <div>· {kroner(forslag.til_gavekort_ore)} på gavekortet</div>}
+                        <div className="dempet" style={{ fontSize: 12 }}>Frakten endres ikke. Kunden får en e-post.</div>
+                      </div>
+                    )}
+                    <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                      <input type="checkbox" style={{ marginTop: 3 }} checked={tilbake} onChange={(e) => setTilbake(e.target.checked)} />
+                      <span>
+                        Legg kortene tilbake på lager
+                        <div className="dempet" style={{ fontSize: 12 }}>Bare hvis du har dem likevel. Manglet kortet, lar du den stå av.</div>
+                      </span>
+                    </label>
+                    <label>Grunn (bare for deg)<input value={rettGrunn} onChange={(e) => setRettGrunn(e.target.value)} placeholder="F.eks. fant ikke kortet" /></label>
+                    <div className="rad-flex">
+                      <button className="knapp" disabled={jobber} onClick={() => { setRetting(null); setForslag(null); setRettFeil(""); }}>
+                        Avbryt
+                      </button>
+                      <button className="knapp primar" disabled={jobber || !forslag || forslag.refusjon_ore <= 0} onClick={lagreRetting}>
+                        {jobber ? "Lagrer…" : forslag ? `Lagre og refunder ${kroner(forslag.refusjon_ore)}` : "Lagre"}
+                      </button>
+                    </div>
                   </>
                 )}
               </div>

@@ -87,11 +87,23 @@ export async function salgsrapport(fra: string, til: string): Promise<Salgsrappo
   // En kansellert ordre er et salg i perioden den ble betalt, og en
   // tilbakeføring i perioden den ble kansellert. Den forsvinner ikke fra den
   // første: en rapport som allerede er levert som bilag, skal ikke endre seg.
+  // En kansellert ordre som var rettet først, har allerede fått noe
+  // tilbakeført. Kanselleringen tar bare det som var igjen.
   const k = await db().execute({
-    sql: `SELECT ordrenr, kunde_navn, uten_mva_ore, med_mva_ore, kansellert_at
-            FROM salgsordrer
-           WHERE status = 'kansellert' AND kansellert_at >= ? AND kansellert_at < ?
-             AND uten_mva_ore + med_mva_ore <> 0`,
+    sql: `SELECT o.ordrenr, o.kunde_navn, o.kansellert_at,
+                 o.uten_mva_ore - COALESCE((SELECT SUM(j.uten_mva_ore) FROM salgsordre_justeringer j WHERE j.ordre_id = o.id), 0) AS uten_mva_ore,
+                 o.med_mva_ore - COALESCE((SELECT SUM(j.med_mva_ore) FROM salgsordre_justeringer j WHERE j.ordre_id = o.id), 0) AS med_mva_ore
+            FROM salgsordrer o
+           WHERE o.status = 'kansellert' AND o.kansellert_at >= ? AND o.kansellert_at < ?
+             AND o.uten_mva_ore + o.med_mva_ore <> 0`,
+    args: [før, etter],
+  });
+  // Rettelser: et kort manglet, og mellomlegget ble betalt tilbake. Føres
+  // som en tilbakeføring den dagen rettelsen ble gjort.
+  const j = await db().execute({
+    sql: `SELECT o.ordrenr, o.kunde_navn, j.created_at, j.uten_mva_ore, j.med_mva_ore
+            FROM salgsordre_justeringer j JOIN salgsordrer o ON o.id = j.ordre_id
+           WHERE j.created_at >= ? AND j.created_at < ? AND j.uten_mva_ore + j.med_mva_ore <> 0`,
     args: [før, etter],
   });
 
@@ -107,11 +119,22 @@ export async function salgsrapport(fra: string, til: string): Promise<Salgsrappo
     });
   }
   for (const x of k.rows as any[]) {
+    if (!Number(x.uten_mva_ore) && !Number(x.med_mva_ore)) continue;
     const dato = osloDato(String(x.kansellert_at));
     if (dato < fra || dato > til) continue;
     rader.push({
       dato,
       ordrenr: `${x.ordrenr} kreditert`,
+      kunde: String(x.kunde_navn),
+      ...beløp(-(Number(x.uten_mva_ore) || 0), -(Number(x.med_mva_ore) || 0)),
+    });
+  }
+  for (const x of j.rows as any[]) {
+    const dato = osloDato(String(x.created_at));
+    if (dato < fra || dato > til) continue;
+    rader.push({
+      dato,
+      ordrenr: `${x.ordrenr} rettet`,
       kunde: String(x.kunde_navn),
       ...beløp(-(Number(x.uten_mva_ore) || 0), -(Number(x.med_mva_ore) || 0)),
     });

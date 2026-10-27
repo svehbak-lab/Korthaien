@@ -385,3 +385,105 @@ test("plukklisten: i hylla teller solgte kort til ordren er sendt, ledig er det 
   p = (await salg.lagerForPlukk([id])).get(`${id}:nonfoil:NM`);
   assert.deepEqual(p, { hylle: 1, ledig: 1 });
 });
+
+test("rettelse: antallet settes ned, mellomlegget går tilbake som kreditt, lageret står", async () => {
+  const a = await kort("aaa", "Rett Meg", "rare", 1000, 5);
+  const b = await kort("aaa", "Rett Meg Også", "rare", 2500, 5);
+  const kari = await konto.loggInn("selger@eksempel.no", "passord123");
+  await kreditt.leggTil({ email: kari.email, ore: 50000, grunn: "manuell" });
+  const r = await salg.åpneKasse(
+    {
+      ...adresse, email: "", bruk_kreditt: true,
+      linjer: [
+        { card_id: a, finish: "nonfoil", condition: "NM", antall: 2 },
+        { card_id: b, finish: "nonfoil", condition: "NM", antall: 1 },
+      ],
+    },
+    kari
+  );
+  const o = await salg.hentOrdre(r.ordrenr);
+  assert.equal(o.status, "betalt");
+  const la = o.linjer.find((l) => l.card_id === a);
+  const lb = o.linjer.find((l) => l.card_id === b);
+  const saldo = await kreditt.saldo(kari.email);
+
+  // Forhåndsvisning endrer ingenting.
+  const f = await salg.justerOrdre(r.ordrenr, [{ id: la.id, antall: 1 }, { id: lb.id, antall: 0 }]);
+  assert.equal(f.forslag.refusjon_ore, 1000 + 2500);
+  assert.equal(f.forslag.til_kreditt_ore, 3500);
+  assert.equal(await kreditt.saldo(kari.email), saldo);
+
+  await assert.rejects(salg.justerOrdre(r.ordrenr, [{ id: la.id, antall: 3 }]), /bare settes ned/);
+  await assert.rejects(salg.justerOrdre(r.ordrenr, [{ id: la.id, antall: 0 }, { id: lb.id, antall: 0 }]), /Kanseller/);
+
+  const ut = await salg.justerOrdre(r.ordrenr, [{ id: la.id, antall: 1 }, { id: lb.id, antall: 0 }], { bekreft: true });
+  assert.equal(await kreditt.saldo(kari.email), saldo + 3500);
+  assert.equal(ut.ordre.linjer.length, 1);
+  assert.equal(Number(ut.ordre.linjer[0].antall), 1);
+  assert.equal(Number(ut.ordre.varer_ore), 1000);
+  assert.equal(Number(ut.ordre.antall_kort), 1);
+  assert.equal(Number(ut.ordre.kreditt_ore), 1000 + 5500);
+  // Kortet fantes ikke: lageret skal ikke få det tilbake.
+  assert.equal(await lager(a), 3);
+  assert.equal(await lager(b), 4);
+  assert.match(String(ut.ordre.admin_notat), /Rett Meg 2 → 1/);
+
+  // Kansellering etterpå gir bare tilbake det som er igjen.
+  await salg.kanseller(r.ordrenr, "Angret");
+  assert.equal(await kreditt.saldo(kari.email), saldo + 3500 + 1000 + 5500);
+});
+
+test("rettelse på kortbetalt ordre: pengedelen refunderes først, og rapporten får en tilbakeføring", async () => {
+  const id = await kort("aaa", "Kortbetalt Rettelse", "rare", 3000, 4);
+  const kari = await konto.loggInn("selger@eksempel.no", "passord123");
+  const saldo0 = await kreditt.saldo(kari.email);
+  if (saldo0) await kreditt.leggTil({ email: kari.email, ore: -saldo0, grunn: "manuell" });
+  await kreditt.leggTil({ email: kari.email, ore: 2000, grunn: "manuell" });
+
+  const refusjoner = [];
+  process.env.STRIPE_SECRET_KEY = "sk_test_falsk";
+  salg._brukStripe({
+    checkout: { sessions: { create: async () => ({ id: "cs_falsk2", url: "https://stripe.test/cs" }) } },
+    refunds: { create: async (p, opt) => { refusjoner.push({ ...p, nøkkel: opt?.idempotencyKey }); return { id: "re_" + refusjoner.length }; } },
+  });
+  try {
+    // 3 × 30 kr + 55 kr frakt = 145 kr; 20 kr kreditt, 125 kr kort.
+    const r = await salg.åpneKasse(
+      { ...adresse, email: "", bruk_kreditt: true, linjer: [{ card_id: id, finish: "nonfoil", condition: "NM", antall: 3 }] },
+      kari
+    );
+    const o = (await db().execute({ sql: "SELECT id FROM salgsordrer WHERE ordrenr = ?", args: [r.ordrenr] })).rows[0];
+    await salg.fullfør(Number(o.id), "stripe", "pi_falsk2");
+    await db().execute({ sql: "UPDATE salgsordrer SET stripe_betaling = 'pi_falsk2', betalingsmate = 'kort' WHERE id = ?", args: [o.id] });
+    const betalt = await salg.hentOrdre(r.ordrenr);
+    assert.equal(Number(betalt.stripe_ore), 12500);
+
+    const linje = betalt.linjer[0];
+    await salg.justerOrdre(r.ordrenr, [{ id: linje.id, antall: 2 }], { bekreft: true, tilbakePåLager: true });
+    assert.equal(refusjoner.length, 1);
+    assert.equal(refusjoner[0].amount, 3000);
+    assert.equal(await kreditt.saldo(kari.email), 0);
+    // Bedt om å legge tilbake: 4 − 3 + 1.
+    assert.equal(await lager(id), 2);
+
+    const dag = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(new Date());
+    const rap = await salgsrapport(dag, dag);
+    const salgRad = rap.rader.find((x) => x.ordrenr === r.ordrenr);
+    const rettet = rap.rader.find((x) => x.ordrenr === `${r.ordrenr} rettet`);
+    assert.equal(salgRad.sum_ore, 12500);
+    assert.equal(rettet.sum_ore, -3000);
+    // Frakten står; det som går tilbake, er kort (avansemetoden).
+    assert.equal(rettet.uten_mva_ore, -3000);
+
+    await salg.kanseller(r.ordrenr, "Angret", "kort");
+    assert.equal(refusjoner[1].amount, 9500);
+    assert.notEqual(refusjoner[0].nøkkel, refusjoner[1].nøkkel);
+    const rap2 = await salgsrapport(dag, dag);
+    const kred = rap2.rader.find((x) => x.ordrenr === `${r.ordrenr} kreditert`);
+    assert.equal(kred.sum_ore, -9500);
+    assert.equal(rap2.rader.filter((x) => x.ordrenr.startsWith(r.ordrenr)).reduce((n, x) => n + x.sum_ore, 0), 0);
+  } finally {
+    delete process.env.STRIPE_SECRET_KEY;
+    salg._brukStripe(null);
+  }
+});
