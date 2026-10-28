@@ -126,7 +126,11 @@ export default function App() {
             over den ser ut som om siden begynner to ganger. */}
         {side !== "butikk" && (
           <>
-            <h1 className="tittel">{SIDER.find((s) => s.id === side).navn}</h1>
+            <h1 className="tittel">
+              {/* Enkeltkort står ikke i menyen (den nås fra Kjøpsliste), og
+                  har derfor ingen rad i SIDER. */}
+              {SIDER.find((s) => s.id === side)?.navn || (side === "kort" ? "Enkeltkort" : "")}
+            </h1>
             <p className="undertittel">{FORKLARING[side]}</p>
           </>
         )}
