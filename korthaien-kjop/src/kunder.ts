@@ -156,6 +156,7 @@ export async function nySesjon(kundeId: number): Promise<string> {
         args: [hash(token), kundeId, new Date(nå.getTime() + SESJON_DAGER * DAG).toISOString(), nå.toISOString()],
       },
       { sql: "UPDATE kunder SET sist_inne_at = ? WHERE id = ?", args: [nå.toISOString(), kundeId] },
+      { sql: "INSERT OR IGNORE INTO kunde_besok (dato, kunde_id) VALUES (?, ?)", args: [osloDato(nå), kundeId] },
       // Utløpte sesjoner ryddes når nye lages. Det holder tabellen liten uten
       // en egen jobb.
       { sql: "DELETE FROM kunde_sesjoner WHERE expires_at < ?", args: [nå.toISOString()] },
@@ -163,6 +164,21 @@ export async function nySesjon(kundeId: number): Promise<string> {
     "write"
   );
   return token;
+}
+
+// Norsk dato (YYYY-MM-DD), uansett hvor serveren står.
+const osloDato = (d = new Date()) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(d);
+
+// «Sist inne» oppdateres når kunden er innom, ikke bare når hen logger inn —
+// en innlogging varer i 60 dager. Høyst én gang i timen, så hvert sidebytte
+// ikke blir en skriving.
+async function registrerBesøk(kundeId: number, sist: unknown): Promise<void> {
+  const t = sist ? Date.parse(String(sist)) : 0;
+  if (t && Date.now() - t < 3600_000 && osloDato(new Date(t)) === osloDato()) return;
+  await db().batch([
+    { sql: "UPDATE kunder SET sist_inne_at = ? WHERE id = ?", args: [new Date().toISOString(), kundeId] },
+    { sql: "INSERT OR IGNORE INTO kunde_besok (dato, kunde_id) VALUES (?, ?)", args: [osloDato(), kundeId] },
+  ], "write");
 }
 
 export async function sesjonsKunde(token: string | undefined): Promise<Kunde | null> {
@@ -174,6 +190,7 @@ export async function sesjonsKunde(token: string | undefined): Promise<Kunde | n
   });
   const rad: any = r.rows[0];
   if (!rad) return null;
+  await registrerBesøk(Number(rad.id), rad.sist_inne_at).catch(() => {});
   // Fornyes ved bruk, men ikke ved hvert eneste kall: én gang i døgnet holder.
   const igjen = Date.parse(String(rad.s_utløp)) - Date.now();
   if (igjen < (SESJON_DAGER - 1) * DAG) {
@@ -563,10 +580,21 @@ const ALLE = `
     FROM kreditt_bevegelser b
    WHERE b.email NOT IN (SELECT email FROM kunder)
    GROUP BY b.email`;
-export async function kundeoversikt(q: string, side = 0) {
+const SORTERING: Record<string, string> = {
+  sist_inne: "COALESCE(x.sist_inne_at, '')",
+  navn: "lower(COALESCE(NULLIF(x.navn, ''), x.email))",
+  siden: "x.created_at",
+  kreditt: "x.kreditt_ore",
+  ordrer: "x.ordrer",
+  mystore: "COALESCE(x.mystore_ordreverdi_ore, -1)",
+};
+
+export async function kundeoversikt(q: string, side = 0, sort = "sist_inne", opp = false) {
   const s = `%${String(q || "").trim().toLowerCase()}%`;
   const per = 50;
-  const [tall, liste, antall] = await Promise.all([
+  const orden = `${SORTERING[sort] || SORTERING.sist_inne} ${opp ? "ASC" : "DESC"}, x.created_at DESC`;
+  const fra = new Date(Date.now() - 13 * 86400000);
+  const [tall, liste, antall, besøk] = await Promise.all([
     db().execute(`
       SELECT COUNT(*) AS totalt,
              SUM(passord_hash IS NOT NULL) AS med_passord,
@@ -580,7 +608,7 @@ export async function kundeoversikt(q: string, side = 0) {
     db().execute({
       sql: `SELECT * FROM (${ALLE}) x
              WHERE ? = '%%' OR lower(x.email) LIKE ? OR lower(x.navn) LIKE ?
-             ORDER BY COALESCE(x.sist_inne_at, '') DESC, x.created_at DESC
+             ORDER BY ${orden}
              LIMIT ? OFFSET ?`,
       args: [s, s, s, per, side * per],
     }),
@@ -588,7 +616,17 @@ export async function kundeoversikt(q: string, side = 0) {
       sql: `SELECT COUNT(*) AS n FROM (${ALLE}) x WHERE ? = '%%' OR lower(x.email) LIKE ? OR lower(x.navn) LIKE ?`,
       args: [s, s, s],
     }),
+    db().execute({
+      sql: "SELECT dato, COUNT(*) AS n FROM kunde_besok WHERE dato >= ? GROUP BY dato ORDER BY dato DESC",
+      args: [osloDato(fra)],
+    }),
   ]);
+  // De siste 14 dagene, også dagene uten besøk.
+  const perDag = new Map((besøk.rows as any[]).map((x) => [String(x.dato), Number(x.n)]));
+  const dager = Array.from({ length: 14 }, (_, i) => {
+    const d = osloDato(new Date(Date.now() - i * 86400000));
+    return { dato: d, innom: perDag.get(d) || 0 };
+  });
   const t: any = tall.rows[0];
   const n = (x: any) => Number(x || 0);
   return {
@@ -596,6 +634,7 @@ export async function kundeoversikt(q: string, side = 0) {
       totalt: n(t.totalt), med_passord: n(t.med_passord), med_google: n(t.med_google), bekreftet: n(t.bekreftet),
       fra_mystore: n(t.fra_mystore), mystore_ikke_aktivert: n(t.mystore_ikke_aktivert), nye_30: n(t.nye_30), inne_30: n(t.inne_30),
     },
+    besok: dager,
     google_paa: harGoogle(),
     kunder: liste.rows,
     antall: n(antall.rows[0].n),

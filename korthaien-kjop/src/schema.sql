@@ -337,6 +337,14 @@ CREATE TABLE IF NOT EXISTS mystore_innlagt (
 );
 CREATE INDEX IF NOT EXISTS idx_mystore_innlagt ON mystore_innlagt (product_id);
 
+-- Innloggede kunder som var innom, én rad per kunde og norsk dato. Gir tallet
+-- «innom i dag» og dagene bakover, uten å logge hvert eneste kall.
+CREATE TABLE IF NOT EXISTS kunde_besok (
+  dato      TEXT NOT NULL,
+  kunde_id  INTEGER NOT NULL,
+  PRIMARY KEY (dato, kunde_id)
+);
+
 CREATE TABLE IF NOT EXISTS mystore_links (
   product_id  TEXT PRIMARY KEY,
   card_id     TEXT,

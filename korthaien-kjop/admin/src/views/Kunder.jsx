@@ -13,6 +13,8 @@ export default function Kunder({ onFeil, onMelding }) {
   const [q, setQ] = useState("");
   const [søk, setSøk] = useState("");
   const [side, setSide] = useState(0);
+  // Sortering: kolonne og retning. «Sist inne» med nyeste først er standard.
+  const [sort, setSort] = useState({ felt: "sist_inne", opp: false });
   const [data, setData] = useState(null);
   const [importerer, setImporterer] = useState(false);
   const [resultat, setResultat] = useState(null);
@@ -23,12 +25,23 @@ export default function Kunder({ onFeil, onMelding }) {
 
   async function last() {
     try {
-      setData(await api.kunder(søk, side));
+      setData(await api.kunder(søk, side, sort.felt, sort.opp));
     } catch (e) {
       onFeil(e);
     }
   }
-  useEffect(() => { last(); }, [søk, side]);
+  useEffect(() => { last(); }, [søk, side, sort]);
+  // Navn sorteres fra A, alt annet med høyest/nyest først.
+  const sorterPå = (felt) => {
+    setSide(0);
+    setSort((x) => (x.felt === felt ? { felt, opp: !x.opp } : { felt, opp: felt === "navn" }));
+  };
+  const Kol = ({ felt, children, className, title }) => (
+    <th className={className} title={title ? `${title} — klikk for å sortere` : "Klikk for å sortere"}
+      style={{ cursor: "pointer", userSelect: "none" }} onClick={() => sorterPå(felt)}>
+      {children}{sort.felt === felt ? (sort.opp ? " ▲" : " ▼") : ""}
+    </th>
+  );
   useEffect(() => {
     const t = setTimeout(() => { setSide(0); setSøk(q); }, 250);
     return () => clearTimeout(t);
@@ -104,6 +117,30 @@ export default function Kunder({ onFeil, onMelding }) {
         <Tall merke="Nye siste 30 dager" verdi={t.nye_30} under={`${t.inne_30} logget inn`} />
       </div>
 
+      {data.besok && (
+        <div className="panel">
+          <header><h3>Innloggede kunder innom</h3>
+            <span className="dempet" style={{ fontSize: 12.5 }}>Hver kunde telles én gang per dag. Telles fra 28. oktober.</span>
+          </header>
+          <div className="krop" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-end" }}>
+            {(() => {
+              const maks = Math.max(1, ...data.besok.map((d) => d.innom));
+              return [...data.besok].reverse().map((d, i, alle) => (
+                <div key={d.dato} style={{ textAlign: "center", width: 46 }} title={`${d.dato}: ${d.innom}`}>
+                  <div className="tall" style={{ fontSize: 13, fontWeight: i === alle.length - 1 ? 700 : 500 }}>{d.innom}</div>
+                  <div style={{ height: 40, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+                    <div style={{ width: 22, height: Math.max(2, (d.innom / maks) * 40), background: i === alle.length - 1 ? "var(--aksent)" : "var(--strek-sterk)", borderRadius: 3 }} />
+                  </div>
+                  <div className="dempet" style={{ fontSize: 11 }}>
+                    {i === alle.length - 1 ? "i dag" : new Date(d.dato + "T12:00:00").toLocaleDateString("nb-NO", { weekday: "short", day: "numeric" })}
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+
       <div className="panel">
         <header>
           <h3>Kunder</h3>
@@ -121,13 +158,13 @@ export default function Kunder({ onFeil, onMelding }) {
         <table>
           <thead>
             <tr>
-              <th>Kunde</th>
+              <Kol felt="navn">Kunde</Kol>
               <th>Innlogging</th>
-              <th>Kunde siden</th>
-              <th>Sist inne</th>
-              <th className="h">Kreditt</th>
-              <th className="h">Ordrer</th>
-              <th className="h" title="Fra Mystore-eksporten">Mystore</th>
+              <Kol felt="siden">Kunde siden</Kol>
+              <Kol felt="sist_inne" title="Sist innlogget eller innom butikken">Sist inne</Kol>
+              <Kol felt="kreditt" className="h">Kreditt</Kol>
+              <Kol felt="ordrer" className="h">Ordrer</Kol>
+              <Kol felt="mystore" className="h" title="Fra Mystore-eksporten">Mystore</Kol>
             </tr>
           </thead>
           <tbody>
@@ -156,7 +193,11 @@ export default function Kunder({ onFeil, onMelding }) {
                   {k.kilde === "mystore" && <div className="dempet" style={{ fontSize: 11.5 }}>fra Mystore</div>}
                   {k.kilde === "kreditt" && <div className="dempet" style={{ fontSize: 11.5 }}>første kreditt</div>}
                 </td>
-                <td>{k.sist_inne_at ? dato(k.sist_inne_at) : <span className="dempet">—</span>}</td>
+                <td>
+                  {k.sist_inne_at
+                    ? new Date(k.sist_inne_at).toLocaleString("nb-NO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                    : <span className="dempet">—</span>}
+                </td>
                 <td className="h tall" style={{ fontWeight: Number(k.kreditt_ore) ? 600 : 400 }}>
                   {Number(k.kreditt_ore) ? kroner(Number(k.kreditt_ore)) : <span className="dempet">—</span>}
                 </td>

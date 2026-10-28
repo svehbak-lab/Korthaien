@@ -1949,7 +1949,10 @@ app.patch("/api/admin/rabattkoder/:id", krevAdmin, fang(async (req: any, res: an
 }));
 
 app.get("/api/admin/kunder", krevAdmin, fang(async (req: any, res: any) => {
-  res.json(await kundeoversikt(String(req.query.q || ""), Math.max(0, Number(req.query.side) || 0)));
+  res.json(await kundeoversikt(
+    String(req.query.q || ""), Math.max(0, Number(req.query.side) || 0),
+    String(req.query.sort || "sist_inne"), String(req.query.opp || "") === "1",
+  ));
 }));
 
 app.post("/api/admin/kunder/import", krevAdmin, express.text({ type: "*/*", limit: "15mb" }), fang(async (req: any, res: any) => {
