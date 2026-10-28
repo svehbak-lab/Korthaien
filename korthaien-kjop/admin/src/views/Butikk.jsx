@@ -527,7 +527,7 @@ function ButikkSider({ onFeil }) {
               </div>
             </Gruppe>
 
-            <button className="knapp liten" style={{ marginTop: 12 }} onClick={() => setF(TOMT)}>
+            <button className="knapp liten" style={{ marginTop: 12 }} onClick={() => { setF(TOMT); setSett(null); setFane("alle"); }}>
               Nullstill filtre
             </button>
           </div>

@@ -31,7 +31,7 @@ const RARITETER = [
 // Nettleserlagring kan kaste — privat vindu, blokkert lagring — og da skal
 // siden virke likevel. Derfor try/catch begge veier.
 const NOKKEL = "korthaien.hurtig";
-const STANDARD = { sett: "", finish: "nonfoil", conditions: [...CONDITIONS], rariteter: [], sortering: { felt: "nr", opp: true } };
+const STANDARD = { sett: "", finisher: ["nonfoil"], conditions: [...CONDITIONS], rariteter: [], sortering: { felt: "nr", opp: true } };
 const SORTFELT = ["nr", "navn", "sett", "raritet", ...CONDITIONS];
 
 function lesHusket() {
@@ -41,7 +41,10 @@ function lesHusket() {
     const h = JSON.parse(rå);
     return {
       sett: typeof h.sett === "string" ? h.sett : "",
-      finish: h.finish === "foil" ? "foil" : "nonfoil",
+      // Vanlig, foil eller begge. Eldre lagring hadde én verdi i «finish».
+      finisher: Array.isArray(h.finisher) && h.finisher.some((f) => f === "nonfoil" || f === "foil")
+        ? ["nonfoil", "foil"].filter((f) => h.finisher.includes(f))
+        : [h.finish === "foil" ? "foil" : "nonfoil"],
       // Ukjente verdier siles bort: lagret en eldre versjon noe vi ikke har
       // lenger, skal det ikke bli en kolonne som ikke finnes.
       conditions: Array.isArray(h.conditions)
@@ -71,7 +74,7 @@ export default function Hurtig({ onFeil }) {
   const start = lesHusket();
   const [alle, setAlle] = useState([]);
   const [sett, setSett] = useState(start.sett);
-  const [finish, setFinish] = useState(start.finish);
+  const [finisher, setFinisher] = useState(start.finisher);
   const [conditions, setConditions] = useState(start.conditions);
   const [rariteter, setRariteter] = useState(start.rariteter);
   const [sortering, setSortering] = useState(start.sortering);
@@ -85,8 +88,8 @@ export default function Hurtig({ onFeil }) {
   const [historikk, setHistorikk] = useState(null);
 
   useEffect(() => {
-    husk({ sett, finish, conditions, rariteter, sortering });
-  }, [sett, finish, conditions, rariteter, sortering]);
+    husk({ sett, finisher, conditions, rariteter, sortering });
+  }, [sett, finisher, conditions, rariteter, sortering]);
 
   useEffect(() => {
     api.sett().then((r) => setAlle(r.sett || [])).catch(onFeil);
@@ -125,7 +128,7 @@ export default function Hurtig({ onFeil }) {
   const vekslet = (liste, verdi) =>
     liste.includes(verdi) ? liste.filter((x) => x !== verdi) : liste.concat(verdi);
 
-  async function lagre(kortId, cond, tekst) {
+  async function lagre(kortId, finish, cond, tekst) {
     const n = Math.max(0, parseInt(String(tekst).trim()) || 0);
     const kort = (data || []).find((k) => k.id === kortId);
     const nå = kort?.lager?.[`${finish}:${cond}`] ?? 0;
@@ -139,7 +142,7 @@ export default function Hurtig({ onFeil }) {
           k.id === kortId ? { ...k, lager: { ...k.lager, [`${finish}:${cond}`]: n } } : k
         )
       );
-      const nøkkel = `${kortId}:${cond}`;
+      const nøkkel = `${kortId}:${finish}:${cond}`;
       setLagret((s) => ({ ...s, [nøkkel]: true }));
       setTimeout(() => setLagret((s) => ({ ...s, [nøkkel]: false })), 1400);
     } catch (e) {
@@ -153,23 +156,31 @@ export default function Hurtig({ onFeil }) {
     const n = parseInt(String(k.collector_number || ""), 10);
     return Number.isNaN(n) ? Infinity : n;
   };
-  const sammenlign = (a, b) => {
+  // Én rad per kort og utgave: med både vanlig og foil valgt står foil-raden
+  // rett under den vanlige.
+  const sammenlign = (ra, rb) => {
+    const a = ra.k, b = rb.k;
     const f = sortering.felt;
     let r = 0;
     if (f === "navn") r = String(a.name).localeCompare(String(b.name), "nb");
     else if (f === "sett") r = String(a.set_name || a.set_code).localeCompare(String(b.set_name || b.set_code), "nb");
     else if (f === "raritet") r = (RARITETSORDEN[a.rarity] ?? 9) - (RARITETSORDEN[b.rarity] ?? 9);
-    else if (CONDITIONS.includes(f)) r = (a.lager?.[`${finish}:${f}`] || 0) - (b.lager?.[`${finish}:${f}`] || 0);
+    else if (CONDITIONS.includes(f)) r = (a.lager?.[`${ra.f}:${f}`] || 0) - (b.lager?.[`${rb.f}:${f}`] || 0);
     if (r === 0) r = nrTall(a) - nrTall(b) || String(a.collector_number).localeCompare(String(b.collector_number));
     if (r === 0) r = String(a.name).localeCompare(String(b.name), "nb");
+    if (r === 0 && a.id === b.id) return ra.f === rb.f ? 0 : ra.f === "nonfoil" ? -1 : 1;
     return sortering.opp ? r : -r;
   };
-  const synlige = (data || []).filter((k) => {
-    if (finish === "foil" ? !Number(k.has_foil) : !Number(k.has_nonfoil)) return false;
-    if (rariteter.length && !rariteter.includes(String(k.rarity || ""))) return false;
-    if (q && !alleSett && !String(k.name).toLowerCase().includes(q)) return false;
-    return true;
-  }).sort(sammenlign);
+  const synlige = (data || [])
+    .filter((k) => {
+      if (rariteter.length && !rariteter.includes(String(k.rarity || ""))) return false;
+      if (q && !alleSett && !String(k.name).toLowerCase().includes(q)) return false;
+      return true;
+    })
+    .flatMap((k) => finisher
+      .filter((f) => (f === "foil" ? Number(k.has_foil) : Number(k.has_nonfoil)))
+      .map((f) => ({ k, f })))
+    .sort(sammenlign);
   // Klikk på en kolonne sorterer på den; klikk igjen snur rekkefølgen.
   // Antall sorteres med flest først, alt annet fra A/lavest.
   const sorterPå = (felt) =>
@@ -183,7 +194,7 @@ export default function Hurtig({ onFeil }) {
 
   const kolonner = CONDITIONS.filter((c) => conditions.includes(c));
   const iSettet = synlige.reduce(
-    (n, k) => n + kolonner.reduce((m, c) => m + (k.lager?.[`${finish}:${c}`] || 0), 0),
+    (n, { k, f }) => n + kolonner.reduce((m, c) => m + (k.lager?.[`${f}:${c}`] || 0), 0),
     0
   );
 
@@ -276,8 +287,14 @@ export default function Hurtig({ onFeil }) {
             ].map(([v, navn]) => (
               <button
                 key={v}
-                className={`knapp liten ${finish === v ? "primar" : ""}`}
-                onClick={() => setFinish(v)}
+                className={`knapp liten ${finisher.includes(v) ? "primar" : ""}`}
+                title="Trykk for å slå av og på. Begge kan være på samtidig."
+                onClick={() =>
+                  setFinisher((fs) => {
+                    const ny = fs.includes(v) ? fs.filter((x) => x !== v) : [...fs, v];
+                    return ny.length ? ["nonfoil", "foil"].filter((x) => ny.includes(x)) : fs;
+                  })
+                }
               >
                 {navn}
               </button>
@@ -336,8 +353,8 @@ export default function Hurtig({ onFeil }) {
               </tr>
             </thead>
             <tbody>
-              {synlige.map((k) => (
-                <tr key={k.id}>
+              {synlige.map(({ k, f: finish }) => (
+                <tr key={`${k.id}:${finish}`}>
                   <td className="kode dempet">{k.collector_number}</td>
                   <td>
                     {k.name}
@@ -354,7 +371,7 @@ export default function Hurtig({ onFeil }) {
                   {alleSett && <td className="dempet">{k.set_name || String(k.set_code || "").toUpperCase()}</td>}
                   <td className="dempet">{k.rarity || "—"}</td>
                   {kolonner.map((c) => {
-                    const nøkkel = `${k.id}:${c}`;
+                    const nøkkel = `${k.id}:${finish}:${c}`;
                     const verdi = utkast[nøkkel] ?? String(k.lager?.[`${finish}:${c}`] ?? 0);
                     return (
                       <td key={c} className="h">
@@ -365,7 +382,7 @@ export default function Hurtig({ onFeil }) {
                           onChange={(e) =>
                             setUtkast((u) => ({ ...u, [nøkkel]: e.target.value.replace(/[^\d]/g, "") }))
                           }
-                          onBlur={(e) => lagre(k.id, c, e.target.value)}
+                          onBlur={(e) => lagre(k.id, finish, c, e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") e.currentTarget.blur();
                             if (e.key === "Escape") {
@@ -410,7 +427,7 @@ export default function Hurtig({ onFeil }) {
           {!synlige.length && (
             <div className="tom">
               Ingen kort passer filteret
-              {finish === "foil" ? " — finnes noen av dem i foil?" : "."}
+              {finisher.length === 1 && finisher[0] === "foil" ? " — finnes noen av dem i foil?" : "."}
             </div>
           )}
         </div>
