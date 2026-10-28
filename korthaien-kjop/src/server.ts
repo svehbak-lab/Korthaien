@@ -2097,6 +2097,21 @@ migrate()
         })
         .catch((e) => console.error("Henting av settlista feilet:", e?.message));
     }
+    // Én gang (28.10.2026): Kobling-lista ble bygget på nytt av en full synk
+    // etter overgangen, med produkter som allerede står riktig i lageret.
+    // Bare kortene fra blandede kategorier og produkter du har begynt å føre
+    // inn beholdes. Merket i settings, så det aldri skjer igjen.
+    db().execute("SELECT 1 FROM settings WHERE key = 'ryddet_kobling_20261028'")
+      .then(async (r) => {
+        if (r.rows.length) return;
+        const d = await db().execute(`
+          DELETE FROM mystore_unmatched
+           WHERE COALESCE(category, '') NOT LIKE '%— blandet kategori'
+             AND product_id NOT IN (SELECT product_id FROM mystore_innlagt)`);
+        await db().execute("INSERT INTO settings (key, value) VALUES ('ryddet_kobling_20261028', 'true')");
+        console.log(`Kobling ryddet: ${d.rowsAffected} produkter fra fullsynken fjernet.`);
+      })
+      .catch((e) => console.error("Rydding av Kobling feilet:", e?.message));
     // Salgsverdien på kjøpsordrene kom til senere. Eldre ordrer får den
     // regnet ut én gang, med dagens priser, i bakgrunnen.
     db().execute("SELECT id FROM orders WHERE salgsverdi_ore IS NULL")
