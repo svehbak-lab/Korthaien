@@ -232,6 +232,7 @@ export const api = {
   rabattkodeBevegelser: (id) => kall(`/api/admin/rabattkoder/${id}/bevegelser`),
   justerRabattkode: (id, felt) => kall(`/api/admin/rabattkoder/${id}/saldo`, { method: "POST", body: felt }),
   endreRabattkode: (id, felt) => kall(`/api/admin/rabattkoder/${id}`, { method: "PATCH", body: felt }),
+  kunderPerFylke: () => kall("/api/admin/kunder/fylker"),
   kunder: (q, side, sort = "sist_inne", opp = false) =>
     kall(`/api/admin/kunder?q=${encodeURIComponent(q || "")}&side=${side || 0}&sort=${sort}&opp=${opp ? 1 : 0}`),
   innstillinger: () => kall("/api/admin/settings"),

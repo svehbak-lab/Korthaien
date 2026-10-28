@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomBytes, scrypt as scryptCb, timingSafeEqual, createHash } from "node:crypto";
 import { promisify } from "node:util";
 import type { Request, Response, NextFunction } from "express";
@@ -106,6 +109,34 @@ async function finnPåEpost(email: string): Promise<any | null> {
 export async function hentKunde(id: number): Promise<Kunde | null> {
   const r = await db().execute({ sql: "SELECT * FROM kunder WHERE id = ?", args: [id] });
   return r.rows[0] ? tilKunde(r.rows[0]) : null;
+}
+
+// ── kunder per fylke ─────────────────────────────────────────────────────────
+// Postnummeret gir kommunen, og de to første sifrene i kommunenummeret gir
+// fylket (inndelingen fra 2024). Tabellen er hentet fra Postens register
+// via npm-pakken «postnummer», lagret i src/data.
+let postnrFylke: Record<string, string> | null = null;
+function fylkeFor(postnr: unknown): string | null {
+  if (!postnrFylke) {
+    const her = dirname(fileURLToPath(import.meta.url));
+    postnrFylke = JSON.parse(readFileSync(join(her, "data", "postnr-fylke.json"), "utf8"));
+  }
+  const p = String(postnr || "").replace(/\D/g, "").padStart(4, "0").slice(0, 4);
+  return postnrFylke![p] || null;
+}
+
+export async function kunderPerFylke() {
+  const r = await db().execute("SELECT postnr, land FROM kunder");
+  const fylker: Record<string, number> = {};
+  let utland = 0, ukjent = 0;
+  for (const x of r.rows as any[]) {
+    const land = String(x.land || "NO").toUpperCase();
+    if (land !== "NO") { utland++; continue; }
+    const f = x.postnr ? fylkeFor(x.postnr) : null;
+    if (!f) { ukjent++; continue; }
+    fylker[f] = (fylker[f] || 0) + 1;
+  }
+  return { fylker, utland, ukjent, totalt: r.rows.length };
 }
 
 // ── registrering og innlogging ──────────────────────────────────────────────

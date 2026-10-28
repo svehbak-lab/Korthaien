@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { api, kroner, dato, importerKunder } from "../api.js";
 import { Konto } from "./Kreditt.jsx";
+import KundeKart from "./KundeKart.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KUNDER
@@ -116,6 +117,8 @@ export default function Kunder({ onFeil, onMelding }) {
         <Tall merke="Fra Mystore" verdi={t.fra_mystore} under={`${t.mystore_ikke_aktivert} ikke logget inn ennå`} />
         <Tall merke="Nye siste 30 dager" verdi={t.nye_30} under={`${t.inne_30} logget inn`} />
       </div>
+
+      <KundeKart onFeil={onFeil} />
 
       {data.besok && (
         <div className="panel">

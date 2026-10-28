@@ -1955,6 +1955,11 @@ app.get("/api/admin/kunder", krevAdmin, fang(async (req: any, res: any) => {
   ));
 }));
 
+app.get("/api/admin/kunder/fylker", krevAdmin, fang(async (_req: any, res: any) => {
+  const { kunderPerFylke } = await import("./kunder.js");
+  res.json(await kunderPerFylke());
+}));
+
 app.post("/api/admin/kunder/import", krevAdmin, express.text({ type: "*/*", limit: "15mb" }), fang(async (req: any, res: any) => {
   res.json(await importerMystoreKunder(String(req.body || "")));
 }));
