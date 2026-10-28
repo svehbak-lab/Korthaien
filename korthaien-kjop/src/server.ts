@@ -1574,6 +1574,39 @@ app.get("/api/admin/mystore/categories/:id/produkter", krevAdmin, fang(async (re
   });
 }));
 
+// Blandede kategorier (Promo, Duel Decks): produktene hentes rett inn i
+// Kobling-lista, uten å vente på en synk. Bare de med beholdning, og ikke de
+// som allerede er koblet eller merket «ikke et kort».
+async function hentBlandet(kategoriIder: string[]): Promise<number> {
+  const { hentProdukter } = await import("./mystore.js");
+  const lr = await db().execute("SELECT product_id, card_id, ignored FROM mystore_links");
+  const ferdig = new Set((lr.rows as any[]).filter((x) => x.card_id || Number(x.ignored)).map((x) => String(x.product_id)));
+  const nå = new Date().toISOString();
+  let n = 0;
+  for (const id of kategoriIder) {
+    const k = await db().execute({ sql: "SELECT name FROM mystore_categories WHERE category_id = ?", args: [id] });
+    const navn = String((k.rows[0] as any)?.name || "");
+    const p = (await hentProdukter(id)).filter((x) => x.lager > 0 && !ferdig.has(String(x.id)));
+    const setninger = p.map((x) => ({
+      sql: `INSERT INTO mystore_unmatched (product_id, sku, name, stock, category, set_code, seen_at)
+            VALUES (?, ?, ?, ?, ?, NULL, ?)
+            ON CONFLICT(product_id) DO UPDATE SET name = excluded.name, stock = excluded.stock,
+              category = excluded.category, seen_at = excluded.seen_at`,
+      args: [String(x.id), x.sku, x.navn, x.lager, `${navn} — blandet kategori`, nå],
+    }));
+    for (let i = 0; i < setninger.length; i += 200) await db().batch(setninger.slice(i, i + 200), "write");
+    n += p.length;
+  }
+  return n;
+}
+
+app.post("/api/admin/mystore/blandet/hent", krevAdmin, fang(async (_req: any, res: any) => {
+  if (!harMystore()) throw new HttpFeil(400, "Mystore er ikke satt opp på serveren.");
+  const r = await db().execute("SELECT category_id FROM mystore_categories WHERE set_code = '*'");
+  const ider = (r.rows as any[]).map((x) => String(x.category_id));
+  res.json({ kategorier: ider.length, produkter: await hentBlandet(ider) });
+}));
+
 app.put("/api/admin/mystore/categories/:id", krevAdmin, fang(async (req: any, res: any) => {
   const setCode = req.body?.set_code ? String(req.body.set_code).toLowerCase() : null;
   if (setCode && setCode !== "*") {
@@ -1584,7 +1617,9 @@ app.put("/api/admin/mystore/categories/:id", krevAdmin, fang(async (req: any, re
     sql: `UPDATE mystore_categories SET set_code = ?, manuell = 1 WHERE category_id = ?`,
     args: [setCode, String(req.params.id)],
   });
-  res.json({ ok: true });
+  // Blandet: kortene rett inn i Kobling-lista, så de kan kobles med en gang.
+  const hentet = setCode === "*" && harMystore() ? await hentBlandet([String(req.params.id)]) : 0;
+  res.json({ ok: true, hentet });
 }));
 
 app.get("/api/admin/mystore/unmatched", krevAdmin, fang(async (_req: any, res: any) => {

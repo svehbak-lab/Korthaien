@@ -286,7 +286,7 @@ function KategoriRad({ rad, onFerdig, onFeil }) {
             className="knapp liten"
             disabled={lagrer}
             onClick={() => lagre("*")}
-            title="Kort fra mange sett (Promo, Duel Decks). Etter neste synk havner hvert produkt under Enkeltprodukter, der du velger utgave."
+            title="Kort fra mange sett (Promo, Duel Decks). Hvert produkt med beholdning havner under Enkeltprodukter, der du velger utgave."
           >
             Blandet
           </button>
@@ -296,9 +296,40 @@ function KategoriRad({ rad, onFerdig, onFeil }) {
   );
 }
 
+// Henter kortene fra kategoriene merket «Blandet» inn i lista under.
+function HentBlandet({ onFerdig, onFeil }) {
+  const [jobber, setJobber] = useState(false);
+  const [svar, setSvar] = useState(null);
+  async function hent() {
+    setJobber(true);
+    try {
+      const r = await api.hentBlandet();
+      setSvar(r);
+      onFerdig();
+    } catch (e) {
+      onFeil(e);
+    }
+    setJobber(false);
+  }
+  return (
+    <div className="rad-flex" style={{ marginBottom: 12 }}>
+      <button className="knapp liten" onClick={hent} disabled={jobber}>
+        {jobber ? "Henter…" : "Hent kort fra blandede kategorier"}
+      </button>
+      <span className="dempet" style={{ fontSize: 12.5 }}>
+        {svar
+          ? `${svar.produkter} kort hentet fra ${svar.kategorier} kategorier.`
+          : "Promo, Duel Decks og andre kategorier du har merket «Blandet»."}
+      </span>
+    </div>
+  );
+}
+
 function Produkter({ data, onFerdig, onFeil }) {
   if (!data.produkter.length) {
     return (
+      <>
+      <HentBlandet onFerdig={onFerdig} onFeil={onFeil} />
       <div className="panel">
         <div className="tom">
           <b>Alle produkter er koblet</b>
@@ -306,11 +337,13 @@ function Produkter({ data, onFerdig, onFeil }) {
           riktig i kvotene.
         </div>
       </div>
+      </>
     );
   }
 
   return (
     <>
+      <HentBlandet onFerdig={onFerdig} onFeil={onFeil} />
       {data.lagerkilde === "bok" ? (
         <div className="varsel info" style={{ marginBottom: 16 }}>
           <b>{data.antall} produkter fra Mystore ({data.stk} stk.) fant ikke sitt kort, og kom ikke med i lageret ved overgangen.</b>{" "}
