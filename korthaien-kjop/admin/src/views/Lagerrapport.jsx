@@ -30,6 +30,10 @@ export default function Lagerrapport({ onFeil }) {
   // dem du vurderer å kjøpe komplett. Derfor en bryter, ikke et valg.
   const [visTomme, setVisTomme] = useState(false);
   const [åpne, setÅpne] = useState(() => new Set());
+  // Sortering av settlista. «utgitt» er rekkefølgen fra serveren: nyeste først.
+  const [sort, setSort] = useState({ felt: "utgitt", opp: false });
+  const sorterPå = (felt) =>
+    setSort((x) => (x.felt === felt ? { felt, opp: !x.opp } : { felt, opp: felt === "navn" }));
 
   async function last() {
     try {
@@ -52,8 +56,27 @@ export default function Lagerrapport({ onFeil }) {
         const rader = s.rader.filter((r) => (r.finish === "foil" ? foil : vanlig));
         return { ...s, rader, sum: rader.reduce(legg, tom()) };
       })
-      .filter((s) => s.sum.antall > 0 || (visTomme && s.grunnsett));
+      .filter((s) => s.sum.antall > 0 || (visTomme && s.grunnsett))
+      .map((s, i) => ({ ...s, rekkefølge: i }));
   }, [data, vanlig, foil, visTomme]);
+
+  const sortert = useMemo(() => {
+    const verdi = {
+      utgitt: (s) => -s.rekkefølge,
+      navn: (s) => s.set_name.toLowerCase(),
+      antall: (s) => s.sum.antall,
+      verdi: (s) => s.sum.verdi_ore,
+      uten_pris: (s) => s.sum.uten_pris,
+      grunnsett: (s) => s.grunnsett?.til ?? -1,
+      marked: (s) => s.grunnsett?.marked_ore ?? -1,
+      salg: (s) => s.grunnsett?.salg_ore ?? -1,
+    }[sort.felt];
+    return [...sett].sort((a, b) => {
+      const x = verdi(a), y = verdi(b);
+      const r = typeof x === "string" ? x.localeCompare(y, "nb") : x - y;
+      return sort.opp ? r : -r;
+    });
+  }, [sett, sort]);
 
   const total = useMemo(() => sett.map((s) => s.sum).reduce(legg, tom()), [sett]);
 
@@ -178,17 +201,28 @@ export default function Lagerrapport({ onFeil }) {
       <table className="tabell" style={{ width: "100%" }}>
         <thead>
           <tr>
-            <th>Sett</th>
-            <th style={{ textAlign: "right", width: 90 }}>Antall</th>
-            <th style={{ textAlign: "right", width: 130 }}>Salgsverdi</th>
-            <th style={{ textAlign: "right", width: 90 }}>Uten pris</th>
-            <th style={{ textAlign: "right", width: 110 }}>Grunnsett t.o.m.</th>
-            <th style={{ textAlign: "right", width: 130 }}>Marked</th>
-            <th style={{ textAlign: "right", width: 130 }}>Din pris</th>
+            {[
+              ["navn", "Sett", null],
+              ["antall", "Antall", 90],
+              ["verdi", "Salgsverdi", 130],
+              ["uten_pris", "Uten pris", 90],
+              ["grunnsett", "Grunnsett t.o.m.", 110],
+              ["marked", "Marked", 130],
+              ["salg", "Din pris", 130],
+            ].map(([felt, navn, bredde]) => (
+              <th
+                key={felt}
+                onClick={() => sorterPå(felt)}
+                title="Klikk for å sortere. Klikk igjen for å snu."
+                style={{ cursor: "pointer", userSelect: "none", ...(bredde ? { textAlign: "right", width: bredde } : {}) }}
+              >
+                {navn}{sort.felt === felt ? (sort.opp ? " ▲" : " ▼") : ""}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {sett.map((s) => (
+          {sortert.map((s) => (
             <SettRad
               key={s.set_code}
               sett={s}
