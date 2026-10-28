@@ -12,9 +12,10 @@ const PERIODER = [
   { id: "alt", navn: "Alt", dager: null, gruppe: "måned" },
 ];
 
+// «Verdi i butikken» var Mystore-prisene. Etter overgangen finnes det bare
+// én pris, din, og den er salgsverdien.
 const MÅL = [
-  { id: "butikk", navn: "Verdi i butikken", type: "kr" },
-  { id: "modell", navn: "Verdi etter modellen", type: "kr" },
+  { id: "modell", navn: "Salgsverdi", type: "kr" },
   { id: "antall", navn: "Antall kort", type: "stk" },
 ];
 
@@ -94,7 +95,7 @@ export default function LagerGraf({ onFeil }) {
   const [rader, setRader] = useState(null);
   const [feil, setFeil] = useState(null);
   const [periode, setPeriode] = useState("90");
-  const [mål, setMål] = useState("butikk");
+  const [mål, setMål] = useState("modell");
   const [visTrend, setVisTrend] = useState(true);
 
   useEffect(() => {
@@ -125,11 +126,7 @@ export default function LagerGraf({ onFeil }) {
     }
     if (!utvalg.length) return [];
     const les = (r) =>
-      mål === "antall"
-        ? r.antall + r.antall_foil
-        : mål === "modell"
-          ? r.verdi_ore + r.verdi_foil_ore
-          : r.butikk_ore;
+      mål === "antall" ? r.antall + r.antall_foil : r.verdi_ore + r.verdi_foil_ore;
     return grupper(utvalg, p.gruppe).map((r) => ({ dato: r.dato, v: les(r) }));
   }, [rader, periode, mål]);
 

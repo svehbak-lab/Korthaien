@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { db, migrate, settSetting, fyllForsidenavn } from "./db.js";
+import { db, migrate, settSetting, fyllForsidenavn, hentSettings } from "./db.js";
 import { importerScryfall, importerSett } from "./import-scryfall.js";
 import { synkMystore, gjettKategorier } from "./mystore.js";
 import { lagSkrivefeilrapport } from "./skrivefeil.js";
@@ -133,6 +133,8 @@ async function seed() {
 }
 
 await migrate();
+// Etter overgangen leser jobbene lagerboken, som serveren gjør.
+settBokSomLagerkilde((await hentSettings()).lagerkilde === "bok");
 
 // Cron-jobber feiler i stillhet med mindre noen ser etter. De som kjører
 // uten tilsyn sender nå en e-post når de ryker, og avslutter med feilkode så
@@ -143,6 +145,15 @@ try {
   switch (kommando) {
     case "import":
       await importerScryfall();
+      // Dagens punkt i lagerkurven. Ble før tatt av Mystore-synken, som ikke
+      // kjører lenger. Nye priser først, så verdien er dagens.
+      try {
+        const { lagreLagermåling } = await import("./statistikk.js");
+        const m = await lagreLagermåling();
+        console.log(`Lagermåling ${m.dato}: ${m.antall + m.antall_foil} kort.`);
+      } catch (e: any) {
+        console.error("Lagermålingen feilet:", e?.message);
+      }
       break;
     case "mystore":
       // --alle (eller MYSTORE_ALLE=1 på cron-jobben): hent alle sett, ikke
