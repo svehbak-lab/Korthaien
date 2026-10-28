@@ -19,6 +19,21 @@ const INGEN = "#e9ecef";
 // Mercator, så Norge ser ut som Norge og ikke strekkes i bredden.
 const projiser = ([lon, lat]) => [lon, -Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) * (180 / Math.PI)];
 
+// De tre målene kartet kan vise. Ordrer og omsetning er Mystore-historikken
+// fra kundeimporten pluss ordrene i den nye butikken.
+const MÅL = [
+  { id: "kunder", navn: "Kunder", tittel: "Kunder per fylke", enhet: "kunder" },
+  { id: "ordrer", navn: "Ordrer", tittel: "Ordrer per fylke", enhet: "ordrer" },
+  { id: "sum_ore", navn: "Ordresum", tittel: "Omsetning per fylke", enhet: "kr" },
+];
+const kr = (ore) => Math.round(ore / 100).toLocaleString("nb-NO") + " kr";
+const kort = (ore) => {
+  const k = ore / 100;
+  if (k >= 1e6) return (k / 1e6).toLocaleString("nb-NO", { maximumFractionDigits: 1 }) + " mill";
+  if (k >= 1e4) return Math.round(k / 1000).toLocaleString("nb-NO") + "k";
+  return Math.round(k).toLocaleString("nb-NO");
+};
+
 function ringer(geometri) {
   return geometri.type === "Polygon" ? [geometri.coordinates] : geometri.coordinates;
 }
@@ -26,6 +41,14 @@ function ringer(geometri) {
 export default function KundeKart({ onFeil }) {
   const [data, setData] = useState(null);
   const [over, setOver] = useState(null);
+  const [mål, setMål] = useState(() => {
+    try { return localStorage.getItem("kundekart.mål") || "kunder"; } catch { return "kunder"; }
+  });
+  const velg = (m) => {
+    setMål(m);
+    try { localStorage.setItem("kundekart.mål", m); } catch {}
+  };
+  const M = MÅL.find((x) => x.id === mål) || MÅL[0];
 
   useEffect(() => {
     api.kunderPerFylke().then(setData).catch(onFeil);
@@ -65,7 +88,10 @@ export default function KundeKart({ onFeil }) {
 
   if (!data) return null;
 
-  const tall = (nr) => data.fylker[nr] || 0;
+  const tall = (nr) => data.fylker[nr]?.[M.id] || 0;
+  const vis = (n) => (M.id === "sum_ore" ? kr(n) : n.toLocaleString("nb-NO"));
+  const visKort = (n) => (M.id === "sum_ore" ? kort(n) : n.toLocaleString("nb-NO"));
+  const ekstra = (x) => x?.[M.id] || 0;
   const verdier = stier.map((s) => tall(s.nr)).filter((n) => n > 0);
   const maks = Math.max(1, ...verdier);
   const min = Math.max(1, Math.min(...(verdier.length ? verdier : [1])));
@@ -78,26 +104,39 @@ export default function KundeKart({ onFeil }) {
   };
   const farge = (n) => (trinn(n) < 0 ? INGEN : FARGER[trinn(n)]);
   const grense = (i) => Math.round(Math.exp(Math.log(min) + ((Math.log(maks) - Math.log(min)) * i) / FARGER.length));
-  const sum = Object.values(data.fylker).reduce((a, b) => a + b, 0);
+  const sum = Object.values(data.fylker).reduce((a, b) => a + (b[M.id] || 0), 0);
   const liste = [...stier].sort((a, b) => tall(b.nr) - tall(a.nr));
 
   return (
     <div className="panel">
       <header>
-        <h3>Kunder per fylke</h3>
-        <span className="dempet" style={{ fontSize: 12.5 }}>
-          {sum.toLocaleString("nb-NO")} kunder med norsk postnummer
-          {data.fylker["21"] ? ` · ${data.fylker["21"]} på Svalbard` : ""}
-          {data.utland ? ` · ${data.utland} i utlandet` : ""}
-          {data.ukjent ? ` · ${data.ukjent} uten gyldig postnummer` : ""}
-        </span>
+        <h3>{M.tittel}</h3>
+        <div className="segment" role="group" aria-label="Hva kartet viser" style={{ display: "inline-flex", gap: 0 }}>
+          {MÅL.map((m, i) => (
+            <button
+              key={m.id}
+              className={mål === m.id ? "knapp primar liten" : "knapp liten"}
+              style={{ borderRadius: i === 0 ? "6px 0 0 6px" : i === MÅL.length - 1 ? "0 6px 6px 0" : 0, marginLeft: i ? -1 : 0 }}
+              aria-pressed={mål === m.id}
+              onClick={() => velg(m.id)}
+            >
+              {m.navn}
+            </button>
+          ))}
+        </div>
       </header>
+      <div className="dempet" style={{ fontSize: 12.5, padding: "0 18px" }}>
+        {M.id === "sum_ore" ? `${kr(sum)} fra kunder med norsk postnummer` : `${sum.toLocaleString("nb-NO")} ${M.enhet} med norsk postnummer`}
+        {tall("21") ? ` · ${vis(tall("21"))} på Svalbard` : ""}
+        {ekstra(data.utland) ? ` · ${vis(ekstra(data.utland))} i utlandet` : ""}
+        {ekstra(data.ukjent) ? ` · ${vis(ekstra(data.ukjent))} uten gyldig postnummer` : ""}
+      </div>
       <div className="krop" style={{ display: "flex", gap: 28, flexWrap: "wrap", alignItems: "flex-start" }}>
         <svg
           viewBox={`-4 -4 ${boks.B + 8} ${boks.H + 8}`}
           style={{ width: "100%", maxWidth: 440, height: "auto", flex: "0 1 440px" }}
           role="img"
-          aria-label="Kart over Norge med antall kunder per fylke"
+          aria-label={`Kart over Norge: ${M.tittel.toLowerCase()}`}
         >
           {stier.map((s) => (
             <path
@@ -110,7 +149,7 @@ export default function KundeKart({ onFeil }) {
               onMouseEnter={() => setOver(s.nr)}
               onMouseLeave={() => setOver(null)}
             >
-              <title>{`${s.navn}: ${tall(s.nr).toLocaleString("nb-NO")} kunder`}</title>
+              <title>{`${s.navn}: ${vis(tall(s.nr))}${M.id === "sum_ore" ? "" : " " + M.enhet}`}</title>
             </path>
           ))}
         </svg>
@@ -129,7 +168,7 @@ export default function KundeKart({ onFeil }) {
                     <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 3, background: farge(tall(s.nr)), border: "1px solid rgb(0 0 0 / 12%)" }} />
                   </td>
                   <td>{s.navn}</td>
-                  <td className="h tall">{tall(s.nr).toLocaleString("nb-NO")}</td>
+                  <td className="h tall">{vis(tall(s.nr))}</td>
                   <td className="h tall dempet" style={{ width: 54, whiteSpace: "nowrap" }}>
                     {sum ? `${Math.round((tall(s.nr) / sum) * 100)} %` : ""}
                   </td>
@@ -143,12 +182,12 @@ export default function KundeKart({ onFeil }) {
               {FARGER.map((f) => <div key={f} style={{ flex: 1, background: f }} />)}
             </div>
             <div className="dempet" style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginTop: 3 }}>
-              <span>{min}</span>
-              <span>{grense(Math.round(FARGER.length / 2))}</span>
-              <span>{maks}</span>
+              <span>{visKort(min)}</span>
+              <span>{visKort(grense(Math.round(FARGER.length / 2)))}</span>
+              <span>{visKort(maks)}</span>
             </div>
             <div className="dempet" style={{ fontSize: 11, marginTop: 6 }}>
-              Logaritmisk skala. Kart: {fylker.kilde || "OpenStreetMap"}.
+              Logaritmisk skala.{M.id !== "kunder" && " Mystore-historikk fra kundeimporten pluss ordrene i den nye butikken, etter postnummer."} Kart: {fylker.kilde || "OpenStreetMap"}.
             </div>
           </div>
         </div>

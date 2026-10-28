@@ -126,15 +126,33 @@ function fylkeFor(postnr: unknown): string | null {
 }
 
 export async function kunderPerFylke() {
-  const r = await db().execute("SELECT postnr, land FROM kunder");
-  const fylker: Record<string, number> = {};
-  let utland = 0, ukjent = 0;
+  // Tre mål per fylke: kunder, ordrer og omsetning. Ordrene er Mystore-
+  // historikken fra kundeimporten (antall og verdi per kunde) pluss ordrene i
+  // den nye butikken, plassert etter leveringsadressens postnummer.
+  const [r, o] = await Promise.all([
+    db().execute("SELECT postnr, land, mystore_ordrer, mystore_ordreverdi_ore FROM kunder"),
+    db().execute(`SELECT postnr, land, kreditt_ore + stripe_ore + COALESCE(gavekort_ore, 0) AS ore
+                    FROM salgsordrer WHERE status IN ('betalt', 'pakket', 'sendt')`),
+  ]);
+  const tom = () => ({ kunder: 0, ordrer: 0, sum_ore: 0 });
+  const fylker: Record<string, { kunder: number; ordrer: number; sum_ore: number }> = {};
+  const utland = tom(), ukjent = tom();
+  const plass = (postnr: unknown, land: unknown) => {
+    if (String(land || "NO").toUpperCase() !== "NO") return utland;
+    const f = postnr ? fylkeFor(postnr) : null;
+    if (!f) return ukjent;
+    return (fylker[f] ||= tom());
+  };
   for (const x of r.rows as any[]) {
-    const land = String(x.land || "NO").toUpperCase();
-    if (land !== "NO") { utland++; continue; }
-    const f = x.postnr ? fylkeFor(x.postnr) : null;
-    if (!f) { ukjent++; continue; }
-    fylker[f] = (fylker[f] || 0) + 1;
+    const m = plass(x.postnr, x.land);
+    m.kunder++;
+    m.ordrer += Number(x.mystore_ordrer || 0);
+    m.sum_ore += Number(x.mystore_ordreverdi_ore || 0);
+  }
+  for (const x of o.rows as any[]) {
+    const m = plass(x.postnr, x.land);
+    m.ordrer++;
+    m.sum_ore += Number(x.ore || 0);
   }
   return { fylker, utland, ukjent, totalt: r.rows.length };
 }
