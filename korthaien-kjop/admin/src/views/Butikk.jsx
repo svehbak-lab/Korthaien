@@ -86,6 +86,12 @@ function hentTilbake() {
 // Lenkene tilbake fra Stripe, Google og «glemt passord»-e-posten lander på
 // butikkens adresse med et spørsmål i URL-en. Det leses én gang og fjernes,
 // så en oppdatering av siden ikke gjør det samme på nytt.
+// Skjermene som kan stå i adressen og hentes fram igjen ved oppdatering.
+// Kassen, kvitteringen og passordskjermene er engangssteg og hører ikke med.
+const BEVAR_SKJERM = ["sett", "sealed", "komplettsett", "tix", "kurv", "konto", "kontakt", "omoss", "kreditt",
+  "bulksok", "vilkar", "personvern", "retur", "frakt", "tilstand"];
+const BUTIKK_ALENE = () => typeof window !== "undefined" && !!window.__butikkAlene;
+
 function lesLenke() {
   const p = new URLSearchParams(window.location.search);
   const ut = {
@@ -98,6 +104,9 @@ function lesLenke() {
     kort: p.get("kort"),
     side: p.get("side"),
     q: p.get("q"),
+    sett: p.get("sett"),
+    fane: p.get("fane"),
+    p: p.get("p"),
     tilbake: p.get("tilbake"),
   };
   // Salgssiden sender kunden hit for å logge inn, og vil ha henne tilbake
@@ -107,8 +116,14 @@ function lesLenke() {
     try { localStorage.setItem(TILBAKE, JSON.stringify({ url: ut.tilbake, t: Date.now() })); } catch {}
     ut.innlogging = ut.innlogging || "1";
   }
-  if (ut.kasse || ut.nyttpassord || ut.innlogging || ut.bekreft || ut.kort || ut.side || ut.q || ut.tilbake) {
-    window.history.replaceState(null, "", window.location.pathname);
+  // Engangslenkene (betaling, passord, innlogging) fjernes, så en oppdatering
+  // ikke gjør det samme på nytt. Hvor kunden står (side, kort, sett, søk)
+  // blir stående — det er det som gjør at en oppdatering lander samme sted.
+  const engang = ["kasse", "ordre", "m", "nyttpassord", "innlogging", "bekreft", "tilbake"];
+  if (engang.some((k) => p.has(k))) {
+    for (const k of engang) p.delete(k);
+    const rest = p.toString();
+    window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
   }
   return ut;
 }
@@ -116,7 +131,7 @@ function lesLenke() {
 function ButikkSider({ onFeil }) {
   const h = useHandel();
   const [lenke] = useState(lesLenke);
-  const [sett, setSett] = useState(null);
+  const [sett, setSett] = useState(() => lenke.sett || null);
   const [alle, setAlle] = useState([]);
   const [data, setData] = useState(null);
   const [laster, setLaster] = useState(false);
@@ -125,12 +140,12 @@ function ButikkSider({ onFeil }) {
   // Fanene er én tilstand, ikke to. «Sealed» og «Om settet» er faner paa
   // linje med de andre for den som ser paa, men de er ikke finish — derfor
   // utledes finish herfra, og spoerringen kan aldri faa «sealed» som finish.
-  const [fane, setFane] = useState("alle");
+  const [fane, setFane] = useState(() => lenke.fane || "alle");
   const finish = KORTFANER.some((x) => x.id === fane) ? fane : "alle";
   const [settinfo, setSettinfo] = useState(null);
   const [sortering, setSortering] = useState("pris_ned");
   const [perSide, setPerSide] = useState(25);
-  const [side, setSide] = useState(1);
+  const [side, setSide] = useState(() => Math.max(1, parseInt(lenke.p || "1", 10) || 1));
   // Trykker man på et settnavn, vil man se settet — ikke søket man kom fra.
   // Filtrene nullstilles (bare kort på lager, som ellers), og fanen går
   // tilbake til «Alle treff».
@@ -157,7 +172,7 @@ function ButikkSider({ onFeil }) {
       : lenke.nyttpassord ? "nyttpassord"
       : lenke.bekreft ? "bekreft"
       : lenke.innlogging ? "konto"
-      : lenke.q ? "liste"
+      : lenke.q || lenke.sett || lenke.side === "liste" ? "liste"
       : ["onskeliste", "minekjop", "minesalg"].includes(lenke.side) ? "konto"
       // Lenkene fra salgssiden (toppen og bunnen der) peker hit.
       : ["vilkar", "personvern", "retur", "frakt", "tilstand", "sett", "sealed", "komplettsett", "tix", "kurv",
@@ -237,7 +252,62 @@ function ButikkSider({ onFeil }) {
 
   // Endrer du et filter, må du tilbake til første side. Ellers står du på side
   // sju i et resultat med to sider og ser ingenting.
-  useEffect(() => setSide(1), [sett, finish, sortering, perSide, f]);
+  // Ny avgrensning, ny side 1 — men ikke ved oppstart, der siden kan komme
+  // fra adressen.
+  const førsteGang = useRef(true);
+  useEffect(() => {
+    if (førsteGang.current) { førsteGang.current = false; return; }
+    setSide(1);
+  }, [sett, finish, sortering, perSide, f]);
+
+  // Adressen følger det kunden ser, så en oppdatering lander samme sted og
+  // tilbakeknappen i nettleseren går til forrige side i butikken. Bare når
+  // butikken står alene på korthaien.no, ikke inne i admin.
+  const fraAdresse = useRef(false);
+  useEffect(() => {
+    if (!BUTIKK_ALENE()) return;
+    if (fraAdresse.current) { fraAdresse.current = false; return; }
+    const p = new URLSearchParams();
+    if (åpentKort) p.set("kort", åpentKort);
+    else if (skjerm === "liste") {
+      if (sett) p.set("sett", sett);
+      if (f.q) p.set("q", f.q);
+      if (!sett && !f.q) p.set("side", "liste");
+      if (fane !== "alle") p.set("fane", fane);
+      if (side > 1) p.set("p", String(side));
+    } else if (BEVAR_SKJERM.includes(skjerm)) p.set("side", skjerm);
+    else if (skjerm === "kasse") p.set("side", "kurv");
+    const ny = window.location.pathname + (p.toString() ? `?${p}` : "");
+    const nå = window.location.pathname + window.location.search;
+    if (ny === nå) return;
+    // Ny skjerm, nytt kort eller nytt sett: et steg i historikken. Søk,
+    // fane og side byttes på stedet.
+    const gammel = new URLSearchParams(window.location.search);
+    const nyttSted = gammel.get("kort") !== p.get("kort") || gammel.get("side") !== p.get("side") || gammel.get("sett") !== p.get("sett");
+    (nyttSted ? window.history.pushState : window.history.replaceState).call(window.history, null, "", ny);
+  }, [skjerm, åpentKort, sett, f.q, fane, side]);
+
+  // Tilbake og frem i nettleseren.
+  useEffect(() => {
+    if (!BUTIKK_ALENE()) return;
+    const vedPop = () => {
+      const p = new URLSearchParams(window.location.search);
+      fraAdresse.current = true;
+      const kort = p.get("kort");
+      const sideNavn = p.get("side");
+      setÅpentKort(kort || null);
+      if (p.get("sett") || p.get("q") || sideNavn === "liste") {
+        setSett(p.get("sett") || null);
+        setF((x) => ({ ...x, q: p.get("q") || "" }));
+        setFane(p.get("fane") || "alle");
+        setSkjerm("liste");
+      } else if (!kort) {
+        setSkjerm(BEVAR_SKJERM.includes(sideNavn) ? sideNavn : "forside");
+      }
+    };
+    window.addEventListener("popstate", vedPop);
+    return () => window.removeEventListener("popstate", vedPop);
+  }, []);
 
   // Hvert søk får et løpenummer. Svarene kan komme i feil rekkefølge — et
   // tregt søk på hele katalogen kan komme etter det raske søket på «egg» —

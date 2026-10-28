@@ -6,6 +6,9 @@ import { kunde } from "./api.js";
 import "./skrifter.js";
 import "./styles.css";
 
+// Butikken står alene (korthaien.no): adressen følger det kunden ser.
+window.__butikkAlene = true;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // BUTIKKEN SOM EGEN SIDE
 // ─────────────────────────────────────────────────────────────────────────────
