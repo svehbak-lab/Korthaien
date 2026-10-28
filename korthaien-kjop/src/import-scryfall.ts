@@ -218,12 +218,28 @@ async function* linjerFra(kropp: any): AsyncGenerator<string> {
 // Arena i ONE #283 finnes bare slik — og uten dette unntaket mangler de i
 // katalogen. Scryfall setter «name» til det engelske navnet uansett hvilken
 // skrift kortet er trykt i, så de er søkbare som alle andre.
-const SPRÅK = new Set(["en", "ph"]);
+//
+// Det samme gjelder alle språk: bulkfilen «default-cards» har engelsk utgave
+// der den finnes, og ellers bare det ene språket kortet er trykt i — som
+// Tarmogoyf i 30th Anniversary-promoene (p30a), som bare finnes på japansk.
+// Filteret slapp før bare gjennom engelsk og phyrexiansk, og da manglet de.
+// Språket står i utgaven («japansk»), så kunden ser hva hen kjøper.
+const SPRÅKNAVN: Record<string, string> = {
+  ja: "japansk", zhs: "kinesisk", zht: "kinesisk (tradisjonell)", ko: "koreansk", ru: "russisk",
+  de: "tysk", fr: "fransk", it: "italiensk", es: "spansk", pt: "portugisisk", la: "latin",
+  he: "hebraisk", ar: "arabisk", grc: "gammelgresk", sa: "sanskrit", qya: "quenya",
+};
+
+function utgaveMedSpråk(k: Rå): string {
+  const v = variantFraScryfall(k);
+  const språk = k.lang && k.lang !== "en" && k.lang !== "ph" ? SPRÅKNAVN[k.lang] || k.lang : null;
+  if (!språk) return v;
+  return v === "vanlig" ? språk : `${v}, ${språk}`;
+}
 
 function brukbart(k: Rå): boolean {
   if (!k?.id || !k.name || !k.set) return false;
   if (k.digital) return false;
-  if (k.lang && !SPRÅK.has(k.lang)) return false;
   if (k.games && !k.games.includes("paper")) return false;
   return true;
 }
@@ -264,7 +280,7 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
         // Hver halvdel for seg, for kort som «Bonecrusher Giant // Stomp».
         k.name.includes("//") ? normaliser(k.name.split("//")[0]) : null,
         k.name.includes("//") ? normaliser(k.name.split("//")[1] || "") || null : null,
-        variantFraScryfall(k),
+        utgaveMedSpråk(k),
         k.set.toLowerCase(),
         k.collector_number || null,
         (k.rarity || "").toLowerCase() || null,

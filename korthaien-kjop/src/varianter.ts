@@ -201,6 +201,12 @@ const UTGAVE: Record<string, string> = {
 };
 export function utgaveNavn(k: { variant?: unknown; er_scroll?: unknown; er_display?: unknown }): string {
   if (Number(k.er_display)) return "Display Commander";
-  const v = UTGAVE[String(k.variant || "")] || "";
+  // Språkutgaver står etter et komma: «showcase, japansk».
+  const v = String(k.variant || "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter((x) => x && x !== "vanlig")
+    .map((x) => UTGAVE[x] || x.charAt(0).toUpperCase() + x.slice(1))
+    .join(", ");
   return Number(k.er_scroll) ? (v === "Showcase" ? "Scroll Showcase" : `${v} Scroll`.trim()) : v;
 }
