@@ -133,6 +133,7 @@ export const api = {
   kategorier: (bareUkoblede, q = "") =>
     kall(`/api/admin/mystore/categories?ukoblede=${bareUkoblede ? 1 : 0}&q=${encodeURIComponent(q)}`),
   søkSett: (q) => kall(`/api/admin/sets/search?q=${encodeURIComponent(q)}`),
+  kategoriProdukter: (id) => kall(`/api/admin/mystore/categories/${encodeURIComponent(id)}/produkter`),
   koblKategori: (id, set_code) =>
     kall(`/api/admin/mystore/categories/${id}`, { method: "PUT", body: { set_code } }),
   søkKort: (q) => kall(`/api/admin/cards/search?q=${encodeURIComponent(q)}`),

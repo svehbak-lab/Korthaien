@@ -148,6 +148,19 @@ function Kategorier({ kat, onFerdig, onFeil, visAlle, setVisAlle, søk, setSøk 
 
 function KategoriRad({ rad, onFerdig, onFeil }) {
   const [q, setQ] = useState("");
+  // Kortene i kategorien, hentet fra Mystore ved behov.
+  const [innhold, setInnhold] = useState(null);
+  const [henter, setHenter] = useState(false);
+  async function visKortene() {
+    if (innhold) return setInnhold(null);
+    setHenter(true);
+    try {
+      setInnhold(await api.kategoriProdukter(rad.category_id));
+    } catch (e) {
+      onFeil(e);
+    }
+    setHenter(false);
+  }
   const [treff, setTreff] = useState([]);
   const [lagrer, setLagrer] = useState(false);
 
@@ -183,6 +196,25 @@ function KategoriRad({ rad, onFerdig, onFeil }) {
         {rad.name || "(uten navn)"}
         {/* ID-en trengs når du skal slå opp kategorien direkte mot Mystore. */}
         <div className="kode dempet" style={{ fontSize: 11 }}>#{rad.category_id}</div>
+        <button className="knapp liten" style={{ marginTop: 5 }} onClick={visKortene} disabled={henter}>
+          {henter ? "Henter…" : innhold ? "Skjul kortene" : "Vis kortene"}
+        </button>
+        {innhold && (
+          <div style={{ marginTop: 6, fontSize: 12.5, maxWidth: 260 }}>
+            <div className="dempet" style={{ marginBottom: 4 }}>
+              {innhold.antall} produkter, {innhold.stk} på lager
+            </div>
+            <div style={{ maxHeight: 260, overflowY: "auto", borderTop: "1px solid var(--strek)" }}>
+              {innhold.produkter.map((p, i) => (
+                <div key={i} className="rad-flex" style={{ justifyContent: "space-between", gap: 8, padding: "2px 0", borderBottom: "1px solid var(--strek)" }}>
+                  <span>{p.navn}</span>
+                  <span className="tall dempet">{p.lager}</span>
+                </div>
+              ))}
+              {innhold.produkter.length === 0 && <div className="dempet">Ingen aktive produkter.</div>}
+            </div>
+          </div>
+        )}
       </td>
       <td className="dempet">{rad.parent_name || <span title="Kategorien har ingen forelder i Mystore">—</span>}</td>
       <td>

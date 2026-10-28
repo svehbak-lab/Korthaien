@@ -1560,6 +1560,20 @@ app.get("/api/admin/sets/search", krevAdmin, fang(async (req: any, res: any) => 
   res.json(r.rows);
 }));
 
+// Produktene i én Mystore-kategori, så du ser hva «Common #49» er før du
+// knytter den til et sett. Bare et oppslag mot Mystore — ingenting lagres.
+app.get("/api/admin/mystore/categories/:id/produkter", krevAdmin, fang(async (req: any, res: any) => {
+  if (!harMystore()) throw new HttpFeil(400, "Mystore er ikke satt opp på serveren.");
+  const { hentProdukter } = await import("./mystore.js");
+  const p = await hentProdukter(String(req.params.id), 6);
+  p.sort((a, b) => b.lager - a.lager || a.navn.localeCompare(b.navn));
+  res.json({
+    produkter: p.slice(0, 300).map((x) => ({ navn: x.navn, lager: x.lager, sku: x.sku })),
+    antall: p.length,
+    stk: p.reduce((n, x) => n + x.lager, 0),
+  });
+}));
+
 app.put("/api/admin/mystore/categories/:id", krevAdmin, fang(async (req: any, res: any) => {
   const setCode = req.body?.set_code ? String(req.body.set_code).toLowerCase() : null;
   if (setCode) {
