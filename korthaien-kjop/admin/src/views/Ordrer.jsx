@@ -192,10 +192,14 @@ function Ordre({ ordre, åpen, onVeksle, onLukk, onEndret, onFeil }) {
                 : "Kortene er ikke lagt inn i beholdningen ennå. Kvoten holdes til de er."}
             </span>
             <div className="rad-flex">
-              <label className="dempet" style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 4 }}>
-                <input type="checkbox" checked={varsle} onChange={(e) => setVarsle(e.target.checked)} />
-                Varsle kunden
-              </label>
+              {/* Gjelder bare «Merk mottatt» og «Kanseller» — det er de to som
+                  sender e-post. Å legge kortene i beholdningen varsler aldri. */}
+              {ordre.status === "pending" && (
+                <label className="dempet" style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 4 }}>
+                  <input type="checkbox" checked={varsle} onChange={(e) => setVarsle(e.target.checked)} />
+                  Varsle kunden
+                </label>
+              )}
               {ordre.status === "pending" && (
                 <>
                   <button className="knapp fare" onClick={() => sett("cancelled")}>Kanseller</button>
