@@ -145,7 +145,9 @@ try {
       await importerScryfall();
       break;
     case "mystore":
-      await synkMystore();
+      // --alle (eller MYSTORE_ALLE=1 på cron-jobben): hent alle sett, ikke
+      // bare dem du kjøper fra. Trengs for etterføringen etter overgangen.
+      await synkMystore(undefined, { alleSett: process.argv.includes("--alle") || process.env.MYSTORE_ALLE === "1" });
       break;
     case "seed":
       await seed();

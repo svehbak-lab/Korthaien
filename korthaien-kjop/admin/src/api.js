@@ -234,6 +234,8 @@ export const api = {
   innstillinger: () => kall("/api/admin/settings"),
   overgang: () => kall("/api/admin/overgang"),
   kjørOvergang: () => kall("/api/admin/overgang", { method: "POST", body: { bekreft: "OVERGANG" } }),
+  etterforing: () => kall("/api/admin/overgang/etterforing"),
+  etterfor: (valgt) => kall("/api/admin/overgang/etterforing", { method: "POST", body: { valgt } }),
   lagreInnstillinger: (felt) => kall("/api/admin/settings", { method: "PUT", body: felt }),
   jobb: (navn) => kall(`/api/admin/jobs/${navn}`, { method: "POST" }),
 };

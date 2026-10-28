@@ -1014,6 +1014,21 @@ app.get("/api/admin/overgang", krevAdmin, fang(async (_req: any, res: any) => {
   res.json(await overgangsstatus());
 }));
 
+// Etterføring etter overgangen: forskjellen mellom en full Mystore-synk og
+// det som ble ført inn. Se etterforing.ts.
+app.get("/api/admin/overgang/etterforing", krevAdmin, fang(async (_req: any, res: any) => {
+  if (lagerkilde() !== "bok") throw new HttpFeil(400, "Etterføringen gjelder etter overgangen.");
+  const { etterføringsforslag } = await import("./etterforing.js");
+  res.json(await etterføringsforslag());
+}));
+app.post("/api/admin/overgang/etterforing", krevAdmin, fang(async (req: any, res: any) => {
+  if (lagerkilde() !== "bok") throw new HttpFeil(400, "Etterføringen gjelder etter overgangen.");
+  const valgt = Array.isArray(req.body?.valgt) ? req.body.valgt : [];
+  if (!valgt.length) throw new HttpFeil(400, "Ingen rader valgt.");
+  const { etterfør } = await import("./etterforing.js");
+  res.json(await etterfør(valgt));
+}));
+
 app.post("/api/admin/overgang", krevAdmin, fang(async (req: any, res: any) => {
   if (String(req.body?.bekreft || "") !== "OVERGANG") throw new HttpFeil(400, "Skriv OVERGANG for å bekrefte.");
   try {

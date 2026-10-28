@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../api.js";
 import Landing, { STANDARD_TITTEL, STANDARD_TEKST } from "./Landing.jsx";
+import Etterforing from "./Etterforing.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OVERGANGEN FRA MYSTORE
@@ -18,6 +19,7 @@ export default function Overgang({ onFeil, onMelding }) {
     <>
       <Landingsside onFeil={onFeil} onMelding={onMelding} />
       <Lagerovergang onFeil={onFeil} onMelding={onMelding} />
+      <Etterforing onFeil={onFeil} onMelding={onMelding} />
       <KrevKonto onFeil={onFeil} onMelding={onMelding} />
       <Rekkefolge />
     </>
