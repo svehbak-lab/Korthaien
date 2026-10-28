@@ -26,7 +26,7 @@ export default function Etterforing({ onFeil, onMelding }) {
     try {
       const d = await api.etterforing();
       setData(d);
-      setValgt(new Set(d.rader.filter((r) => !r.manuelt).map(nøkkel)));
+      setValgt(new Set(d.rader.filter((r) => r.foreslått).map(nøkkel)));
     } catch (e) {
       onFeil(e);
     }
@@ -76,7 +76,18 @@ export default function Etterforing({ onFeil, onMelding }) {
           <>
             <p style={{ margin: "12px 0 8px" }}>
               Mystore sist synket {penTid(data.sist_synket)}. <b>{data.rader.length}</b> kort med forskjell:
-              {" "}+{data.pluss} kort som mangler i lageret, −{data.minus} kort for mye.
+              {" "}+{data.pluss} og −{data.minus}.
+              {data.skjult > 0 && (
+                <span className="dempet">
+                  {" "}{data.skjult} rader er skjult: samme kort på flere numre der bare koblingen har byttet
+                  plass (som Plains med mange samlernumre). De er ikke endret i Mystore og røres ikke.
+                </span>
+              )}
+            </p>
+            <p className="dempet" style={{ fontSize: 12.5, margin: "0 0 10px" }}>
+              Bare <b>mangler</b> er valgt: kort som fantes i Mystore, men ikke kom med i lageret. <b>Flyttet</b> (samme
+              kort på flere numre, både + og −) og <b>færre i Mystore</b> er ikke valgt — sjekk dem mot permen før du
+              eventuelt tar dem med.
             </p>
             {data.rader.length > 0 && (
               <>
@@ -119,7 +130,9 @@ export default function Etterforing({ onFeil, onMelding }) {
                           <td className="h tall" style={{ fontWeight: 700, color: r.endring > 0 ? "var(--ok)" : "var(--feil)" }}>
                             {r.endring > 0 ? `+${r.endring}` : r.endring}
                           </td>
-                          <td>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            {r.type === "flyttet" && <span className="merkelapp m-vent" title="Samme kort i samme sett har både + og − på ulike numre">flyttet?</span>}
+                            {r.type === "færre" && <span className="merkelapp m-av" title="Mystore har færre enn det som ble ført inn">færre i Mystore</span>}{" "}
                             {r.manuelt && (
                               <span className="merkelapp m-av" title="Du har endret dette kortet for hånd etter overgangen — sjekk før du fører inn">
                                 rettet for hånd

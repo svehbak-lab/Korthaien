@@ -25,17 +25,22 @@ type Rad = {
   collector_number: string;
   mystore: number;
   overgang: number;
-  kobling: number;
   etterfort: number;
   endring: number;
   manuelt: boolean;
   produkt: string | null;
+  // mangler: finnes i Mystore, ikke i lageret. flyttet: samme kort på flere
+  // numre har byttet om. færre: Mystore har færre enn det som ble ført inn.
+  type: "mangler" | "flyttet" | "færre";
+  // Valgt som standard: bare det som tydelig mangler.
+  foreslått: boolean;
 };
 
 const nøkkel = (c: string, f: string) => `${c}:${f}`;
 
 export async function etterføringsforslag(): Promise<{
   rader: Rad[];
+  skjult: number;
   pluss: number;
   minus: number;
   sist_synket: string | null;
@@ -80,9 +85,60 @@ export async function etterføringsforslag(): Promise<{
   for (const x of åpning.rows as any[]) hent(String(x.card_id), String(x.finish)).overgang = Number(x.n || 0);
   for (const x of etter.rows as any[]) hent(String(x.card_id), String(x.finish)).etterfort = Number(x.n || 0);
 
-  let endret = [...kart.values()]
+  const rå = [...kart.values()]
     .map((r) => ({ ...r, endring: r.mystore - r.overgang - r.etterfort }))
     .filter((r) => r.endring !== 0);
+
+  // Navn og sett, også for å kjenne igjen samme kort på flere numre.
+  const ider = [...new Set(rå.map((r) => r.card_id))];
+  const navn = new Map<string, any>();
+  for (let i = 0; i < ider.length; i += 400) {
+    const del = ider.slice(i, i + 400);
+    const r = await db().execute({
+      sql: `SELECT c.id, c.name, c.set_code, c.collector_number, COALESCE(s.visningsnavn, s.name) AS set_name
+              FROM cards c LEFT JOIN sets s ON s.code = c.set_code WHERE c.id IN (${del.map(() => "?").join(",")})`,
+      args: del,
+    });
+    for (const x of r.rows as any[]) navn.set(String(x.id), x);
+  }
+  const medNavn = rå.map((r) => {
+    const n = navn.get(r.card_id) || {};
+    return {
+      ...r,
+      name: String(n.name || r.card_id),
+      set_code: String(n.set_code || ""),
+      set_name: String(n.set_name || n.set_code || ""),
+      collector_number: String(n.collector_number || ""),
+    };
+  });
+
+  // Samme kort i samme sett på flere numre (basic lands, alternative
+  // illustrasjoner, showcase og vanlig): har Mystore-produktene byttet kort
+  // seg imellom siden overgangen, ser det ut som −17 på ett nummer og +17 på
+  // et annet. Ingenting har endret seg i Mystore; bare koblingen har flyttet.
+  //   netto 0          → hele gruppen er en flytting, og vises ikke.
+  //   både + og −      → usikkert; vises, men er ikke valgt.
+  //   bare +           → mangler i lageret; valgt.
+  //   bare −           → Mystore har færre; vises, men er ikke valgt.
+  const gruppe = (r: { name: string; set_code: string; finish: string }) => `${r.name}|${r.set_code}|${r.finish}`;
+  const grupper = new Map<string, { netto: number; pluss: boolean; minus: boolean }>();
+  for (const r of medNavn) {
+    const g = grupper.get(gruppe(r)) || { netto: 0, pluss: false, minus: false };
+    g.netto += r.endring;
+    if (r.endring > 0) g.pluss = true; else g.minus = true;
+    grupper.set(gruppe(r), g);
+  }
+  let skjult = 0;
+  let endret = medNavn
+    .filter((r) => {
+      if (grupper.get(gruppe(r))!.netto === 0) { skjult++; return false; }
+      return true;
+    })
+    .map((r) => {
+      const g = grupper.get(gruppe(r))!;
+      const type: "mangler" | "flyttet" | "færre" = g.pluss && g.minus ? "flyttet" : r.endring > 0 ? "mangler" : "færre";
+      return { ...r, type };
+    });
 
   // Færre i Mystore enn det som ble ført inn: kan bare trekkes så langt det
   // finnes NM igjen. Er kortene solgt i mellomtiden, er de allerede borte, og
@@ -90,9 +146,9 @@ export async function etterføringsforslag(): Promise<{
   const negative = endret.filter((r) => r.endring < 0);
   if (negative.length) {
     const nm = new Map<string, number>();
-    const ider = [...new Set(negative.map((r) => r.card_id))];
-    for (let i = 0; i < ider.length; i += 400) {
-      const del = ider.slice(i, i + 400);
+    const nIder = [...new Set(negative.map((r) => r.card_id))];
+    for (let i = 0; i < nIder.length; i += 400) {
+      const del = nIder.slice(i, i + 400);
       const q = await db().execute({
         sql: `SELECT card_id, finish, SUM(antall) AS n FROM lager_bevegelser
                WHERE condition = 'NM' AND card_id IN (${del.map(() => "?").join(",")}) GROUP BY card_id, finish`,
@@ -117,35 +173,17 @@ export async function etterføringsforslag(): Promise<{
     for (const x of m.rows as any[]) manuelt.add(nøkkel(String(x.card_id), String(x.finish)));
   }
 
-  // Navn og sett til lista.
-  const ider = [...new Set(endret.map((r) => r.card_id))];
-  const navn = new Map<string, any>();
-  for (let i = 0; i < ider.length; i += 400) {
-    const del = ider.slice(i, i + 400);
-    const r = await db().execute({
-      sql: `SELECT c.id, c.name, c.set_code, c.collector_number, COALESCE(s.visningsnavn, s.name) AS set_name
-              FROM cards c LEFT JOIN sets s ON s.code = c.set_code WHERE c.id IN (${del.map(() => "?").join(",")})`,
-      args: del,
-    });
-    for (const x of r.rows as any[]) navn.set(String(x.id), x);
-  }
-
   const rader: Rad[] = endret
     .map((r) => {
-      const n = navn.get(r.card_id) || {};
-      return {
-        ...r,
-        name: String(n.name || r.card_id),
-        set_code: String(n.set_code || ""),
-        set_name: String(n.set_name || n.set_code || ""),
-        collector_number: String(n.collector_number || ""),
-        manuelt: manuelt.has(nøkkel(r.card_id, r.finish)),
-      };
+      const erManuelt = manuelt.has(nøkkel(r.card_id, r.finish));
+      return { ...r, manuelt: erManuelt, foreslått: r.type === "mangler" && !erManuelt };
     })
-    .sort((a, b) => a.set_name.localeCompare(b.set_name) || a.name.localeCompare(b.name));
+    .sort((a, b) => a.set_name.localeCompare(b.set_name) || a.name.localeCompare(b.name) ||
+      String(a.collector_number).localeCompare(String(b.collector_number), undefined, { numeric: true }));
 
   return {
     rader,
+    skjult,
     pluss: rader.filter((r) => r.endring > 0).reduce((n, r) => n + r.endring, 0),
     minus: rader.filter((r) => r.endring < 0).reduce((n, r) => n - r.endring, 0),
     sist_synket: (sist.rows[0] as any)?.t ?? null,
