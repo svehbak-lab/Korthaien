@@ -31,7 +31,8 @@ const RARITETER = [
 // Nettleserlagring kan kaste — privat vindu, blokkert lagring — og da skal
 // siden virke likevel. Derfor try/catch begge veier.
 const NOKKEL = "korthaien.hurtig";
-const STANDARD = { sett: "", finish: "nonfoil", conditions: [...CONDITIONS], rariteter: [] };
+const STANDARD = { sett: "", finish: "nonfoil", conditions: [...CONDITIONS], rariteter: [], sortering: { felt: "nr", opp: true } };
+const SORTFELT = ["nr", "navn", "sett", "raritet", ...CONDITIONS];
 
 function lesHusket() {
   try {
@@ -49,6 +50,9 @@ function lesHusket() {
       rariteter: Array.isArray(h.rariteter)
         ? RARITETER.map(([v]) => v).filter((v) => h.rariteter.includes(v))
         : [],
+      sortering: h.sortering && SORTFELT.includes(h.sortering.felt)
+        ? { felt: h.sortering.felt, opp: h.sortering.opp !== false }
+        : STANDARD.sortering,
     };
   } catch {
     return STANDARD;
@@ -70,6 +74,7 @@ export default function Hurtig({ onFeil }) {
   const [finish, setFinish] = useState(start.finish);
   const [conditions, setConditions] = useState(start.conditions);
   const [rariteter, setRariteter] = useState(start.rariteter);
+  const [sortering, setSortering] = useState(start.sortering);
   const [søk, setSøk] = useState("");
 
   const [data, setData] = useState(null);
@@ -80,8 +85,8 @@ export default function Hurtig({ onFeil }) {
   const [historikk, setHistorikk] = useState(null);
 
   useEffect(() => {
-    husk({ sett, finish, conditions, rariteter });
-  }, [sett, finish, conditions, rariteter]);
+    husk({ sett, finish, conditions, rariteter, sortering });
+  }, [sett, finish, conditions, rariteter, sortering]);
 
   useEffect(() => {
     api.sett().then((r) => setAlle(r.sett || [])).catch(onFeil);
@@ -143,12 +148,38 @@ export default function Hurtig({ onFeil }) {
   }
 
   const q = søk.trim().toLowerCase();
+  const RARITETSORDEN = { mythic: 0, rare: 1, uncommon: 2, common: 3, special: 4, bonus: 5 };
+  const nrTall = (k) => {
+    const n = parseInt(String(k.collector_number || ""), 10);
+    return Number.isNaN(n) ? Infinity : n;
+  };
+  const sammenlign = (a, b) => {
+    const f = sortering.felt;
+    let r = 0;
+    if (f === "navn") r = String(a.name).localeCompare(String(b.name), "nb");
+    else if (f === "sett") r = String(a.set_name || a.set_code).localeCompare(String(b.set_name || b.set_code), "nb");
+    else if (f === "raritet") r = (RARITETSORDEN[a.rarity] ?? 9) - (RARITETSORDEN[b.rarity] ?? 9);
+    else if (CONDITIONS.includes(f)) r = (a.lager?.[`${finish}:${f}`] || 0) - (b.lager?.[`${finish}:${f}`] || 0);
+    if (r === 0) r = nrTall(a) - nrTall(b) || String(a.collector_number).localeCompare(String(b.collector_number));
+    if (r === 0) r = String(a.name).localeCompare(String(b.name), "nb");
+    return sortering.opp ? r : -r;
+  };
   const synlige = (data || []).filter((k) => {
     if (finish === "foil" ? !Number(k.has_foil) : !Number(k.has_nonfoil)) return false;
     if (rariteter.length && !rariteter.includes(String(k.rarity || ""))) return false;
     if (q && !alleSett && !String(k.name).toLowerCase().includes(q)) return false;
     return true;
-  });
+  }).sort(sammenlign);
+  // Klikk på en kolonne sorterer på den; klikk igjen snur rekkefølgen.
+  // Antall sorteres med flest først, alt annet fra A/lavest.
+  const sorterPå = (felt) =>
+    setSortering((s) => (s.felt === felt ? { felt, opp: !s.opp } : { felt, opp: !CONDITIONS.includes(felt) }));
+  const Kol = ({ felt, children, ...rest }) => (
+    <th {...rest} style={{ ...(rest.style || {}), cursor: "pointer", userSelect: "none" }} onClick={() => sorterPå(felt)}
+      title={rest.title ? `${rest.title} — klikk for å sortere` : "Klikk for å sortere"}>
+      {children}{sortering.felt === felt ? (sortering.opp ? " ▲" : " ▼") : ""}
+    </th>
+  );
 
   const kolonner = CONDITIONS.filter((c) => conditions.includes(c));
   const iSettet = synlige.reduce(
@@ -292,14 +323,14 @@ export default function Hurtig({ onFeil }) {
           <table>
             <thead>
               <tr>
-                <th style={{ width: 50 }}>Nr.</th>
-                <th>Kort</th>
-                {alleSett && <th>Sett</th>}
-                <th style={{ width: 90 }}>Raritet</th>
+                <Kol felt="nr" style={{ width: 50 }}>Nr.</Kol>
+                <Kol felt="navn">Kort</Kol>
+                {alleSett && <Kol felt="sett">Sett</Kol>}
+                <Kol felt="raritet" style={{ width: 90 }}>Raritet</Kol>
                 {kolonner.map((c) => (
-                  <th key={c} className="h" style={{ width: 74 }} title={CONDITION_NAVN[c]}>
+                  <Kol key={c} felt={c} className="h" style={{ width: 74 }} title={CONDITION_NAVN[c]}>
                     {c}
-                  </th>
+                  </Kol>
                 ))}
                 <th style={{ width: 70 }}></th>
               </tr>
