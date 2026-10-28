@@ -186,6 +186,9 @@ export function knyttTilSett(
   return resultat;
 }
 
+// Settkoden for kategorier med kort fra mange sett.
+export const BLANDET = "*";
+
 // ── produkter i én kategori ──────────────────────────────────────────────────
 export type Produkt = {
   id: string;
@@ -312,7 +315,8 @@ export async function synkMystore(
 
   const skalHentes = løvnoder.filter((k) => {
     const kode = kobling.get(k.id)?.set_code;
-    return kode ? opts.alleSett || aktiveSett.has(kode) : false;
+    // «*» = blandet kategori (Promo, Duel Decks …): hentes alltid.
+    return kode ? kode === BLANDET || opts.alleSett || aktiveSett.has(kode) : false;
   });
 
   logg(`  ${løvnoder.length} produktkategorier — ${løvnoder.length - utenSett} knyttet til et sett, ${utenSett} uten`);
@@ -357,7 +361,6 @@ export async function synkMystore(
   for (let i = 0; i < skalHentes.length; i++) {
     const kat = skalHentes[i];
     const setCode = kobling.get(kat.id)!.set_code!;
-    settSett.add(setCode);
     let produkter: Produkt[];
     try {
       produkter = await hentProdukter(kat.id);
@@ -365,6 +368,19 @@ export async function synkMystore(
       logg(`  ⚠ ${kat.navn} (${kat.id}): ${e.message}`);
       continue;
     }
+    // Blandet kategori: kortene kommer fra mange sett, og navnet sier ikke
+    // hvilket. Ingen gjetting — alt med beholdning går til Kobling, der du
+    // velger utgave for hvert produkt. Det du allerede har koblet eller
+    // merket, hoppes over.
+    if (setCode === BLANDET) {
+      for (const p of produkter) {
+        const lenke = lenker.get(String(p.id));
+        if (lenke?.ignored || lenke?.card_id || p.lager <= 0) continue;
+        uløste.push({ p, kat: `${kat.navn} — blandet kategori`, setCode: null as any });
+      }
+      continue;
+    }
+    settSett.add(setCode);
 
     // Manuelt koblede først. Kollisjonsvakten under lar det første produktet
     // ta kortet, og rekkefølgen kommer fra butikken — den sier ingenting om

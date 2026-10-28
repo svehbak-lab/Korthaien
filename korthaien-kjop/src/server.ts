@@ -1576,7 +1576,7 @@ app.get("/api/admin/mystore/categories/:id/produkter", krevAdmin, fang(async (re
 
 app.put("/api/admin/mystore/categories/:id", krevAdmin, fang(async (req: any, res: any) => {
   const setCode = req.body?.set_code ? String(req.body.set_code).toLowerCase() : null;
-  if (setCode) {
+  if (setCode && setCode !== "*") {
     const finnes = await db().execute({ sql: "SELECT 1 FROM sets WHERE code = ?", args: [setCode] });
     if (!finnes.rows.length) throw new HttpFeil(400, "Ukjent settkode");
   }

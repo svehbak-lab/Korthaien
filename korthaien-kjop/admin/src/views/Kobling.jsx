@@ -218,7 +218,9 @@ function KategoriRad({ rad, onFerdig, onFeil }) {
       </td>
       <td className="dempet">{rad.parent_name || <span title="Kategorien har ingen forelder i Mystore">—</span>}</td>
       <td>
-        {rad.set_name ? (
+        {rad.set_code === "*" ? (
+          <span className="merkelapp m-vent" title="Kortene kobles ett og ett under Enkeltprodukter">Blandet</span>
+        ) : rad.set_name ? (
           <span className="merkelapp m-lager" title={Number(rad.manuell) ? "Satt manuelt" : "Funnet automatisk"}>
             {rad.set_name}
           </span>
@@ -279,6 +281,14 @@ function KategoriRad({ rad, onFerdig, onFeil }) {
           </div>
           <button className="knapp liten" disabled={lagrer} onClick={() => lagre(null)} title="Tilbehør og annet som ikke er kort">
             Ikke kort
+          </button>
+          <button
+            className="knapp liten"
+            disabled={lagrer}
+            onClick={() => lagre("*")}
+            title="Kort fra mange sett (Promo, Duel Decks). Etter neste synk havner hvert produkt under Enkeltprodukter, der du velger utgave."
+          >
+            Blandet
           </button>
         </div>
       </td>
