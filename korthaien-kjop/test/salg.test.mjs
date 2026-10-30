@@ -487,3 +487,58 @@ test("rettelse på kortbetalt ordre: pengedelen refunderes først, og rapporten 
     salg._brukStripe(null);
   }
 });
+
+test("rettelse før sending gir ingen egen e-post; den står øverst i «sendt»-e-posten, én gang", async () => {
+  const a = await kort("aaa", "Ragavan Test", "mythic", 4000, 5);
+  const b = await kort("aaa", "Beholdes Test", "rare", 1000, 5);
+  const kari = await konto.loggInn("selger@eksempel.no", "passord123");
+  await kreditt.leggTil({ email: kari.email, ore: 50000, grunn: "manuell" });
+  const r = await salg.åpneKasse(
+    {
+      ...adresse, email: "", bruk_kreditt: true,
+      linjer: [
+        { card_id: a, finish: "nonfoil", condition: "NM", antall: 1 },
+        { card_id: b, finish: "nonfoil", condition: "NM", antall: 1 },
+      ],
+    },
+    kari
+  );
+  const o = await salg.hentOrdre(r.ordrenr);
+  const la = o.linjer.find((l) => l.card_id === a);
+
+  const sendt = [];
+  const ekte = globalThis.fetch;
+  process.env.RESEND_KEY = "test";
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).includes("api.resend.com")) {
+      sendt.push(JSON.parse(opts.body));
+      return new Response("{}", { status: 200 });
+    }
+    return ekte(url, opts);
+  };
+  try {
+    const ut = await salg.justerOrdre(r.ordrenr, [{ id: la.id, antall: 0 }], { bekreft: true });
+    assert.equal(sendt.length, 0, "ingen e-post ved rettelsen");
+    assert.equal(Number(ut.ordre.uvarslet_retting_ore), 4000);
+
+    await salg.settStatus(r.ordrenr, { status: "sendt", beskjed: "Solgt i butikken samme dag." });
+    assert.equal(sendt.length, 1);
+    const e = sendt[0];
+    const boks = e.html.indexOf("Endring i ordren");
+    assert.ok(boks > -1 && boks < e.html.indexOf("Pakken er på vei"));
+    assert.match(e.html, /Solgt i butikken samme dag\./);
+    assert.match(e.html, /Ragavan Test: 1 → 0 stk\./);
+    assert.match(e.html, /40 kr tilbake som kreditt/);
+    assert.match(e.text, /^ENDRING I ORDREN\nSolgt i butikken/);
+    assert.equal(Number((await salg.hentOrdre(r.ordrenr)).uvarslet_retting_ore), 0);
+
+    // Angre «sendt» og send på nytt: rettelsen kommer ikke en gang til.
+    await salg.settStatus(r.ordrenr, { status: "betalt" });
+    await salg.settStatus(r.ordrenr, { status: "sendt" });
+    assert.equal(sendt.length, 2);
+    assert.doesNotMatch(sendt[1].html, /Endring i ordren/);
+  } finally {
+    globalThis.fetch = ekte;
+    delete process.env.RESEND_KEY;
+  }
+});

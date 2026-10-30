@@ -609,6 +609,10 @@ CREATE TABLE IF NOT EXISTS salgsordre_justeringer (
   uten_mva_ore   INTEGER NOT NULL DEFAULT 0,
   med_mva_ore    INTEGER NOT NULL DEFAULT 0,
   refusjon_id    TEXT,
+  -- Linjene som ble rettet, som JSON: [{card_name, fra, til}]. Til e-posten.
+  linjer_json    TEXT,
+  -- Når kunden fikk vite om rettelsen. NULL: kommer i «sendt»-e-posten.
+  varslet_at     TEXT,
   created_at     TEXT NOT NULL);
 
 CREATE INDEX IF NOT EXISTS idx_salgsjusteringer_ordre ON salgsordre_justeringer (ordre_id);

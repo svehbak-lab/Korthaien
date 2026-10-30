@@ -375,6 +375,15 @@ async function leggTilNyeKolonner(): Promise<void> {
   if (st.size && !st.has("printed_size")) await db().execute("ALTER TABLE sets ADD COLUMN printed_size INTEGER");
   if (st.size && !st.has("ikon")) await db().execute("ALTER TABLE sets ADD COLUMN ikon TEXT");
 
+  // Rettelser varsles nå i «sendt»-e-posten i stedet for i en egen. De som
+  // fantes fra før, fikk sin e-post da de ble gjort.
+  const sj = await kolonner("salgsordre_justeringer");
+  if (sj.size && !sj.has("linjer_json")) await db().execute("ALTER TABLE salgsordre_justeringer ADD COLUMN linjer_json TEXT");
+  if (sj.size && !sj.has("varslet_at")) {
+    await db().execute("ALTER TABLE salgsordre_justeringer ADD COLUMN varslet_at TEXT");
+    await db().execute("UPDATE salgsordre_justeringer SET varslet_at = created_at");
+  }
+
   const sl = await kolonner("salgsordre_linjer");
   if (sl.size && !sl.has("produkt_id")) await db().execute("ALTER TABLE salgsordre_linjer ADD COLUMN produkt_id INTEGER");
   if (sl.size && !sl.has("mva")) await db().execute("ALTER TABLE salgsordre_linjer ADD COLUMN mva INTEGER NOT NULL DEFAULT 0");

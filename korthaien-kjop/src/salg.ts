@@ -861,7 +861,13 @@ const betalingsId = (s: Stripe.Checkout.Session) =>
 export const STATUSER = ["apen", "betalt", "pakket", "sendt", "kansellert", "utlopt"] as const;
 
 export async function hentOrdre(ordrenr: string): Promise<any | null> {
-  const r = await db().execute({ sql: "SELECT * FROM salgsordrer WHERE ordrenr = ?", args: [ordrenr] });
+  const r = await db().execute({
+    sql: `SELECT salgsordrer.*,
+                 (SELECT COALESCE(SUM(refusjon_ore), 0) FROM salgsordre_justeringer j
+                   WHERE j.ordre_id = salgsordrer.id AND j.varslet_at IS NULL) AS uvarslet_retting_ore
+            FROM salgsordrer WHERE ordrenr = ?`,
+    args: [ordrenr],
+  });
   const o: any = r.rows[0];
   if (!o) return null;
   // Samme rekkefølge som kjøpsordrene: sett, raritet, navn. Lista følger
@@ -883,7 +889,7 @@ export async function hentOrdre(ordrenr: string): Promise<any | null> {
 // Det kunden får se. Ingen interne notater.
 export function offentlig(o: any) {
   if (!o) return null;
-  const { admin_notat, stripe_session, kunde_id, ...resten } = o;
+  const { admin_notat, stripe_session, kunde_id, uvarslet_retting_ore, ...resten } = o;
   return resten;
 }
 
@@ -946,6 +952,34 @@ async function loggBeskjed(ordreId: number, hva: string, beskjed: string) {
 }
 const renBeskjed = (b: unknown) => String(b ?? "").trim().slice(0, 2000);
 
+// Rettelser kunden ikke har fått vite om ennå. De står øverst i neste
+// e-post (sendt eller kansellert), og merkes da som varslet.
+async function uvarsledeRettelser(ordreId: number) {
+  const r = await db().execute({
+    sql: `SELECT * FROM salgsordre_justeringer WHERE ordre_id = ? AND varslet_at IS NULL ORDER BY id`,
+    args: [ordreId],
+  });
+  return r.rows.map((x: any) => {
+    let linjer: any[] = [];
+    try { linjer = JSON.parse(String(x.linjer_json || "[]")); } catch {}
+    return {
+      id: Number(x.id),
+      linjer: linjer.length ? linjer : [{ tekst: String(x.beskrivelse) }],
+      refusjon_ore: Number(x.refusjon_ore),
+      til_kort_ore: Number(x.til_kort_ore),
+      til_kreditt_ore: Number(x.til_kreditt_ore),
+      til_gavekort_ore: Number(x.til_gavekort_ore),
+    };
+  });
+}
+async function merkVarslet(ider: number[]) {
+  if (!ider.length) return;
+  await db().execute({
+    sql: `UPDATE salgsordre_justeringer SET varslet_at = ? WHERE id IN (${ider.map(() => "?").join(",")})`,
+    args: [nå(), ...ider],
+  });
+}
+
 export async function settStatus(
   ordrenr: string,
   inn: { status?: string; sporingsnr?: string; admin_notat?: string; beskjed?: string }
@@ -985,8 +1019,10 @@ export async function settStatus(
   if (blirSendt) {
     try {
       const beskjed = renBeskjed(inn.beskjed);
+      const rettelser = await uvarsledeRettelser(Number(o.id));
       const { varsleSendt } = await import("./epost.js");
-      await varsleSendt(o.id, beskjed);
+      const u = await varsleSendt(o.id, beskjed, rettelser);
+      if (u.sendt) await merkVarslet(rettelser.map((r) => r.id));
       if (beskjed) await loggBeskjed(Number(o.id), "sendt", beskjed);
     } catch (e: any) {
       console.error("Varselet om sending feilet:", e?.message);
@@ -1099,14 +1135,17 @@ export async function kanseller(
     tx.close();
   }
   try {
+    const rettelser = await uvarsledeRettelser(Number(o.id));
     const { sendKansellering } = await import("./epost.js");
-    await sendKansellering(Number(o.id), {
+    const u = await sendKansellering(Number(o.id), {
+      rettelser,
       til_kort_ore: tilKort ? kortdel : 0,
       til_kreditt_ore: tilKreditt,
       til_gavekort_ore: tilGavekort,
       betalt_med: erVipps ? "Vipps" : "kort",
       beskjed,
     });
+    if (u.sendt) await merkVarslet(rettelser.map((r) => r.id));
   } catch (e: any) {
     console.error("E-posten om kanselleringen feilet:", e?.message);
   }
@@ -1280,10 +1319,12 @@ export async function justerOrdre(
     await tx.execute({
       sql: `INSERT INTO salgsordre_justeringer
               (ordre_id, beskrivelse, refusjon_ore, til_kort_ore, til_kreditt_ore, til_gavekort_ore,
-               uten_mva_ore, med_mva_ore, refusjon_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               uten_mva_ore, med_mva_ore, refusjon_id, linjer_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [o.id, beskrivelse, refusjon, tilKort, tilKreditt, tilGavekort,
-             før.uten - etter.uten, før.med - etter.med, refusjonsId, tid],
+             før.uten - etter.uten, før.med - etter.med, refusjonsId,
+             JSON.stringify(endret.map((l) => ({ card_name: l.card_name + (l.utgave ? ` (${l.utgave})` : ""), fra: l.gammel, til: l.nytt }))),
+             tid],
     });
     await tx.commit();
   } catch (e) {
@@ -1293,13 +1334,24 @@ export async function justerOrdre(
     tx.close();
   }
 
-  try {
-    const { sendJustering } = await import("./epost.js");
-    await sendJustering(Number(o.id), { ...forslag, beskjed: renBeskjed(valg.beskjed) });
-  } catch (e: any) {
-    console.error("E-posten om rettelsen feilet:", e?.message);
+  // Før sending: ingen e-post nå. Rettelsen står øverst i e-posten kunden
+  // får når ordren merkes som sendt, så det blir én e-post og ikke to.
+  // Er ordren allerede sendt, kommer det ingen e-post senere, så den går nå.
+  if (o.status === "sendt") {
+    try {
+      const { sendJustering } = await import("./epost.js");
+      const u = await sendJustering(Number(o.id), { ...forslag, beskjed: renBeskjed(valg.beskjed) });
+      if (u.sendt) {
+        await db().execute({
+          sql: "UPDATE salgsordre_justeringer SET varslet_at = ? WHERE ordre_id = ? AND varslet_at IS NULL",
+          args: [nå(), o.id],
+        });
+      }
+    } catch (e: any) {
+      console.error("E-posten om rettelsen feilet:", e?.message);
+    }
+    if (renBeskjed(valg.beskjed)) await loggBeskjed(Number(o.id), "rettet", renBeskjed(valg.beskjed));
   }
-  if (renBeskjed(valg.beskjed)) await loggBeskjed(Number(o.id), "rettet", renBeskjed(valg.beskjed));
   return { forslag, ordre: await hentOrdre(ordrenr) };
 }
 

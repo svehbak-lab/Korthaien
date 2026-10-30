@@ -233,7 +233,11 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
       setTilbake(false);
       setRettGrunn("");
       setRettBeskjed("");
-      onMelding(`Ordren er rettet. ${kroner(r.forslag.refusjon_ore)} er sendt tilbake, og kunden har fått e-post.`);
+      onMelding(
+        r.ordre.status === "sendt"
+          ? `Ordren er rettet. ${kroner(r.forslag.refusjon_ore)} er sendt tilbake, og kunden har fått e-post.`
+          : `Ordren er rettet. ${kroner(r.forslag.refusjon_ore)} er sendt tilbake. Kunden får beskjed i e-posten når du merker ordren som sendt.`
+      );
     } catch (e) {
       onFeil(e);
     }
@@ -460,6 +464,11 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                       Sporingsnummer
                       <input value={spor} onChange={(e) => setSpor(e.target.value)} placeholder="Valgfritt" />
                     </label>
+                    {Number(o.uvarslet_retting_ore) > 0 && (
+                      <div className="varsel" style={{ margin: 0, fontSize: 13 }}>
+                        Ordren er rettet ({kroner(o.uvarslet_retting_ore)} tilbake). Det står øverst i e-posten kunden får nå.
+                      </div>
+                    )}
                     <Beskjed verdi={sendtBeskjed} sett={setSendtBeskjed} />
                     <button
                       className="knapp primar"
@@ -512,7 +521,12 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                         {forslag.til_kort_ore > 0 && <div>· {kroner(forslag.til_kort_ore)} til {forslag.betalt_med === "Vipps" ? "Vipps" : "kortet"}</div>}
                         {forslag.til_kreditt_ore > 0 && <div>· {kroner(forslag.til_kreditt_ore)} som kreditt</div>}
                         {forslag.til_gavekort_ore > 0 && <div>· {kroner(forslag.til_gavekort_ore)} på gavekortet</div>}
-                        <div className="dempet" style={{ fontSize: 12 }}>Frakten endres ikke. Kunden får en e-post.</div>
+                        <div className="dempet" style={{ fontSize: 12 }}>
+                          Frakten endres ikke.{" "}
+                          {o.status === "sendt"
+                            ? "Kunden får en e-post nå."
+                            : "Kunden får ingen e-post nå; rettelsen står øverst i e-posten når du merker ordren som sendt."}
+                        </div>
                       </div>
                     )}
                     <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
@@ -523,7 +537,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                       </span>
                     </label>
                     <label>Grunn (bare for deg)<input value={rettGrunn} onChange={(e) => setRettGrunn(e.target.value)} placeholder="F.eks. fant ikke kortet" /></label>
-                    <Beskjed verdi={rettBeskjed} sett={setRettBeskjed} />
+                    {o.status === "sendt" && <Beskjed verdi={rettBeskjed} sett={setRettBeskjed} />}
                     <div className="rad-flex">
                       <button className="knapp" disabled={jobber} onClick={() => { setRetting(null); setForslag(null); setRettFeil(""); }}>
                         Avbryt

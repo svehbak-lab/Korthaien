@@ -470,19 +470,55 @@ function angreskjema(o: any): string {
 // Beskjed fra meg til kunden, skrevet i admin når ordren endres eller
 // sendes. Står øverst i e-posten, i en tydelig boks, så den ikke drukner.
 const beskjedRen = (b: unknown) => String(b ?? "").trim().slice(0, 2000);
-const beskjedHtml = (b: unknown) => {
-  const t = beskjedRen(b);
-  return t
-    ? `<div style="background:#fff6dc;border-left:4px solid #e0a800;border-radius:6px;padding:12px 14px;margin:0 0 18px">
-         <div style="font-size:12px;color:#7a5b00;font-weight:600;margin-bottom:4px">Beskjed fra Korthaien</div>
-         <div style="white-space:pre-line;line-height:1.55">${trygg(t)}</div>
-       </div>`
-    : "";
+// Rettelser som ikke er varslet ennå. Samles fra én eller flere rettelser.
+export type Rettelse = {
+  linjer: { card_name?: string; fra?: number; til?: number; tekst?: string }[];
+  refusjon_ore: number;
+  til_kort_ore: number;
+  til_kreditt_ore: number;
+  til_gavekort_ore: number;
 };
-const beskjedTekst = (b: unknown) => {
-  const t = beskjedRen(b);
-  return t ? `BESKJED FRA KORTHAIEN\n${t}\n\n` : "";
-};
+function rettelseTekst(rettelser: Rettelse[] = [], betaltMed: string) {
+  if (!rettelser.length) return null;
+  const sum = (k: keyof Rettelse) => rettelser.reduce((n, r) => n + (Number(r[k]) || 0), 0);
+  const kort = sum("til_kort_ore"), kreditt = sum("til_kreditt_ore"), gavekort = sum("til_gavekort_ore");
+  const hvor = [
+    kort ? `${kr(kort)} tilbake til ${betaltMed === "Vipps" ? "Vipps" : "kortet du betalte med"}` : "",
+    kreditt ? `${kr(kreditt)} tilbake som kreditt på kontoen din` : "",
+    gavekort ? `${kr(gavekort)} tilbake på gavekortet` : "",
+  ].filter(Boolean);
+  return {
+    linjer: rettelser.flatMap((r) => r.linjer).map((l) => l.tekst ?? `${l.card_name}: ${l.fra} → ${l.til} stk.`),
+    penger: `Du får ${kr(sum("refusjon_ore"))} tilbake: ${hvor.join(", ")}.${kort ? " Det kan ta noen dager før beløpet vises hos banken." : ""}`,
+  };
+}
+
+// Den gule boksen øverst: beskjeden min og/eller rettelsene som ikke er
+// varslet. Tom streng når det ikke er noe å si.
+function boksHtml(beskjed: unknown, rettelser: Rettelse[] | undefined, betaltMed: string) {
+  const t = beskjedRen(beskjed);
+  const r = rettelseTekst(rettelser, betaltMed);
+  if (!t && !r) return "";
+  return `<div style="background:#fff6dc;border-left:4px solid #e0a800;border-radius:6px;padding:12px 14px;margin:0 0 18px;line-height:1.55">
+      <div style="font-size:12px;color:#7a5b00;font-weight:600;margin-bottom:4px">${r ? "Endring i ordren" : "Beskjed fra Korthaien"}</div>
+      ${t ? `<div style="white-space:pre-line;margin-bottom:${r ? 8 : 0}px">${trygg(t)}</div>` : ""}
+      ${r ? `<div>Beklager! Da jeg pakket ordren, manglet jeg noe av det du bestilte:</div>
+        <ul style="margin:4px 0 8px;padding-left:18px">${r.linjer.map((x) => `<li>${trygg(x)}</li>`).join("")}</ul>
+        <div>${trygg(r.penger)}</div>` : ""}
+    </div>`;
+}
+function boksTekst(beskjed: unknown, rettelser: Rettelse[] | undefined, betaltMed: string) {
+  const t = beskjedRen(beskjed);
+  const r = rettelseTekst(rettelser, betaltMed);
+  if (!t && !r) return "";
+  return [
+    r ? "ENDRING I ORDREN" : "BESKJED FRA KORTHAIEN",
+    t,
+    r ? ["Beklager! Da jeg pakket ordren, manglet jeg noe av det du bestilte:", ...r.linjer.map((x) => `- ${x}`), r.penger].join("\n") : "",
+  ].filter(Boolean).join("\n") + "\n\n";
+}
+const betaltMedFor = (o: any) => (o?.betalingsmate === "vipps" ? "Vipps" : "kort");
+const beskjedTekst = (b: unknown) => boksTekst(b, [], "kort");
 
 export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
   const { hentOrdre } = await import("./salg.js");
@@ -534,7 +570,7 @@ export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
 // Ordren er kansellert, og pengene er på vei tilbake.
 export async function sendKansellering(
   ordreId: number,
-  r: { til_kort_ore: number; til_kreditt_ore: number; til_gavekort_ore: number; betalt_med: string; beskjed?: string }
+  r: { til_kort_ore: number; til_kreditt_ore: number; til_gavekort_ore: number; betalt_med: string; beskjed?: string; rettelser?: Rettelse[] }
 ): Promise<Utfall> {
   const q = await db().execute({ sql: "SELECT ordrenr, email FROM salgsordrer WHERE id = ?", args: [ordreId] });
   const o: any = q.rows[0];
@@ -552,13 +588,13 @@ export async function sendKansellering(
     bcc: MIN_ADRESSE(),
     emne: `Ordre ${o.ordrenr} er kansellert — Korthaien`,
     html: RAMME(
-      `${beskjedHtml(r.beskjed)}<h2 style="font-size:20px;margin:0 0 6px">Ordren er kansellert</h2>
+      `${boksHtml(r.beskjed, r.rettelser, r.betalt_med)}<h2 style="font-size:20px;margin:0 0 6px">Ordren er kansellert</h2>
        <p>Ordre <b>${trygg(o.ordrenr)}</b> er kansellert.</p>
        ${penger ? `<p>${trygg(penger)}</p>` : ""}
        <p style="font-size:13px;color:#7a746c">Spørsmål? Svar på denne e-posten.</p>`,
       "Kansellert"
     ),
-    tekst: beskjedTekst(r.beskjed) + [`Ordre ${o.ordrenr} er kansellert.`, penger, "Spørsmål? Svar på denne e-posten."].filter(Boolean).join("\n\n"),
+    tekst: boksTekst(r.beskjed, r.rettelser, r.betalt_med) + [`Ordre ${o.ordrenr} er kansellert.`, penger, "Spørsmål? Svar på denne e-posten."].filter(Boolean).join("\n\n"),
   });
 }
 
@@ -590,7 +626,7 @@ export async function sendJustering(
     bcc: MIN_ADRESSE(),
     emne: `Endring i ordre ${o.ordrenr} — Korthaien`,
     html: RAMME(
-      `${beskjedHtml(j.beskjed)}<h2 style="font-size:20px;margin:0 0 6px">Endring i ordren din</h2>
+      `${boksHtml(j.beskjed, [], j.betalt_med)}<h2 style="font-size:20px;margin:0 0 6px">Endring i ordren din</h2>
        <p>Beklager! Da jeg pakket ordre <b>${trygg(o.ordrenr)}</b>, manglet jeg noe av det du bestilte:</p>
        <ul style="margin:0 0 14px;padding-left:18px">${linjer.map((x) => `<li>${trygg(x)}</li>`).join("")}</ul>
        <p>Du får <b>${kr(j.refusjon_ore)}</b> tilbake: ${trygg(hvor.join(", "))}.${tid}</p>
@@ -607,7 +643,7 @@ export async function sendJustering(
   });
 }
 
-export async function varsleSendt(ordreId: number, beskjed?: string): Promise<Utfall> {
+export async function varsleSendt(ordreId: number, beskjed?: string, rettelser: Rettelse[] = []): Promise<Utfall> {
   const r = await db().execute({ sql: "SELECT * FROM salgsordrer WHERE id = ?", args: [ordreId] });
   const o: any = r.rows[0];
   if (!o) return { sendt: false, grunn: "fant ikke ordren" };
@@ -617,13 +653,14 @@ export async function varsleSendt(ordreId: number, beskjed?: string): Promise<Ut
        <a href="https://sporing.posten.no/sporing/${encodeURIComponent(o.sporingsnr)}">posten.no</a>.</p>`
     : "";
   const b = beskjedRen(beskjed);
+  const bm = betaltMedFor(o);
   return send({
     til: String(o.email),
-    // Med en beskjed får jeg en kopi, så jeg ser hva kunden fikk.
-    ...(b ? { bcc: MIN_ADRESSE() } : {}),
+    // Med en beskjed eller rettelse får jeg en kopi, så jeg ser hva kunden fikk.
+    ...(b || rettelser.length ? { bcc: MIN_ADRESSE() } : {}),
     emne: henting ? `Ordre ${o.ordrenr} er klar til henting — Korthaien` : `Ordre ${o.ordrenr} er sendt — Korthaien`,
     html: RAMME(
-      beskjedHtml(b) + (henting
+      boksHtml(b, rettelser, bm) + (henting
         ? `<h2 style="font-size:20px;margin:0 0 6px">Klar til henting</h2>
        <p>Ordre <b>${trygg(o.ordrenr)}</b> er pakket og klar til å hentes. Svar på denne e-posten for å avtale tidspunkt.</p>`
         : `<h2 style="font-size:20px;margin:0 0 6px">Pakken er på vei</h2>
@@ -631,7 +668,7 @@ export async function varsleSendt(ordreId: number, beskjed?: string): Promise<Ut
        ${spor}`),
       henting ? "Klar til henting" : "Ordren er sendt"
     ),
-    tekst: beskjedTekst(b) + (henting
+    tekst: boksTekst(b, rettelser, bm) + (henting
       ? `Ordre ${o.ordrenr} er klar til henting. Svar på e-posten for å avtale tidspunkt.`
       : `Ordre ${o.ordrenr} er sendt med ${o.frakt_navn}.${o.sporingsnr ? ` Sporingsnummer: ${o.sporingsnr}.` : ""}`),
   });
