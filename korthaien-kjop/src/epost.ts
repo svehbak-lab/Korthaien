@@ -467,6 +467,23 @@ function angreskjema(o: any): string {
   </div>`;
 }
 
+// Beskjed fra meg til kunden, skrevet i admin når ordren endres eller
+// sendes. Står øverst i e-posten, i en tydelig boks, så den ikke drukner.
+const beskjedRen = (b: unknown) => String(b ?? "").trim().slice(0, 2000);
+const beskjedHtml = (b: unknown) => {
+  const t = beskjedRen(b);
+  return t
+    ? `<div style="background:#fff6dc;border-left:4px solid #e0a800;border-radius:6px;padding:12px 14px;margin:0 0 18px">
+         <div style="font-size:12px;color:#7a5b00;font-weight:600;margin-bottom:4px">Beskjed fra Korthaien</div>
+         <div style="white-space:pre-line;line-height:1.55">${trygg(t)}</div>
+       </div>`
+    : "";
+};
+const beskjedTekst = (b: unknown) => {
+  const t = beskjedRen(b);
+  return t ? `BESKJED FRA KORTHAIEN\n${t}\n\n` : "";
+};
+
 export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
   const { hentOrdre } = await import("./salg.js");
   const r = await db().execute({ sql: "SELECT ordrenr FROM salgsordrer WHERE id = ?", args: [ordreId] });
@@ -517,7 +534,7 @@ export async function sendSalgsbekreftelse(ordreId: number): Promise<Utfall> {
 // Ordren er kansellert, og pengene er på vei tilbake.
 export async function sendKansellering(
   ordreId: number,
-  r: { til_kort_ore: number; til_kreditt_ore: number; til_gavekort_ore: number; betalt_med: string }
+  r: { til_kort_ore: number; til_kreditt_ore: number; til_gavekort_ore: number; betalt_med: string; beskjed?: string }
 ): Promise<Utfall> {
   const q = await db().execute({ sql: "SELECT ordrenr, email FROM salgsordrer WHERE id = ?", args: [ordreId] });
   const o: any = q.rows[0];
@@ -535,13 +552,13 @@ export async function sendKansellering(
     bcc: MIN_ADRESSE(),
     emne: `Ordre ${o.ordrenr} er kansellert — Korthaien`,
     html: RAMME(
-      `<h2 style="font-size:20px;margin:0 0 6px">Ordren er kansellert</h2>
+      `${beskjedHtml(r.beskjed)}<h2 style="font-size:20px;margin:0 0 6px">Ordren er kansellert</h2>
        <p>Ordre <b>${trygg(o.ordrenr)}</b> er kansellert.</p>
        ${penger ? `<p>${trygg(penger)}</p>` : ""}
        <p style="font-size:13px;color:#7a746c">Spørsmål? Svar på denne e-posten.</p>`,
       "Kansellert"
     ),
-    tekst: [`Ordre ${o.ordrenr} er kansellert.`, penger, "Spørsmål? Svar på denne e-posten."].filter(Boolean).join("\n\n"),
+    tekst: beskjedTekst(r.beskjed) + [`Ordre ${o.ordrenr} er kansellert.`, penger, "Spørsmål? Svar på denne e-posten."].filter(Boolean).join("\n\n"),
   });
 }
 
@@ -555,6 +572,7 @@ export async function sendJustering(
     til_kreditt_ore: number;
     til_gavekort_ore: number;
     betalt_med: string;
+    beskjed?: string;
   }
 ): Promise<Utfall> {
   const r = await db().execute({ sql: "SELECT ordrenr, email, status FROM salgsordrer WHERE id = ?", args: [ordreId] });
@@ -572,14 +590,14 @@ export async function sendJustering(
     bcc: MIN_ADRESSE(),
     emne: `Endring i ordre ${o.ordrenr} — Korthaien`,
     html: RAMME(
-      `<h2 style="font-size:20px;margin:0 0 6px">Endring i ordren din</h2>
+      `${beskjedHtml(j.beskjed)}<h2 style="font-size:20px;margin:0 0 6px">Endring i ordren din</h2>
        <p>Beklager! Da jeg pakket ordre <b>${trygg(o.ordrenr)}</b>, manglet jeg noe av det du bestilte:</p>
        <ul style="margin:0 0 14px;padding-left:18px">${linjer.map((x) => `<li>${trygg(x)}</li>`).join("")}</ul>
        <p>Du får <b>${kr(j.refusjon_ore)}</b> tilbake: ${trygg(hvor.join(", "))}.${tid}</p>
        ${o.status === "sendt" ? "" : "<p>Resten av ordren sendes som vanlig.</p>"}`,
       "Endring i ordren"
     ),
-    tekst: [
+    tekst: beskjedTekst(j.beskjed) + [
       `Beklager! Da jeg pakket ordre ${o.ordrenr}, manglet jeg noe av det du bestilte:`,
       ...linjer.map((x) => `- ${x}`),
       "",
@@ -589,7 +607,7 @@ export async function sendJustering(
   });
 }
 
-export async function varsleSendt(ordreId: number): Promise<Utfall> {
+export async function varsleSendt(ordreId: number, beskjed?: string): Promise<Utfall> {
   const r = await db().execute({ sql: "SELECT * FROM salgsordrer WHERE id = ?", args: [ordreId] });
   const o: any = r.rows[0];
   if (!o) return { sendt: false, grunn: "fant ikke ordren" };
@@ -598,21 +616,24 @@ export async function varsleSendt(ordreId: number): Promise<Utfall> {
     ? `<p>Sporingsnummer: <b>${trygg(o.sporingsnr)}</b>. Du kan følge pakken på
        <a href="https://sporing.posten.no/sporing/${encodeURIComponent(o.sporingsnr)}">posten.no</a>.</p>`
     : "";
+  const b = beskjedRen(beskjed);
   return send({
     til: String(o.email),
+    // Med en beskjed får jeg en kopi, så jeg ser hva kunden fikk.
+    ...(b ? { bcc: MIN_ADRESSE() } : {}),
     emne: henting ? `Ordre ${o.ordrenr} er klar til henting — Korthaien` : `Ordre ${o.ordrenr} er sendt — Korthaien`,
     html: RAMME(
-      henting
+      beskjedHtml(b) + (henting
         ? `<h2 style="font-size:20px;margin:0 0 6px">Klar til henting</h2>
        <p>Ordre <b>${trygg(o.ordrenr)}</b> er pakket og klar til å hentes. Svar på denne e-posten for å avtale tidspunkt.</p>`
         : `<h2 style="font-size:20px;margin:0 0 6px">Pakken er på vei</h2>
        <p>Ordre <b>${trygg(o.ordrenr)}</b> er levert til posten med ${trygg(String(o.frakt_navn || "").toLowerCase())}.</p>
-       ${spor}`,
+       ${spor}`),
       henting ? "Klar til henting" : "Ordren er sendt"
     ),
-    tekst: henting
+    tekst: beskjedTekst(b) + (henting
       ? `Ordre ${o.ordrenr} er klar til henting. Svar på e-posten for å avtale tidspunkt.`
-      : `Ordre ${o.ordrenr} er sendt med ${o.frakt_navn}.${o.sporingsnr ? ` Sporingsnummer: ${o.sporingsnr}.` : ""}`,
+      : `Ordre ${o.ordrenr} er sendt med ${o.frakt_navn}.${o.sporingsnr ? ` Sporingsnummer: ${o.sporingsnr}.` : ""}`),
   });
 }
 

@@ -1080,7 +1080,7 @@ app.patch("/api/admin/salg/ordrer/:nr", krevAdmin, fang(async (req: any, res: an
 
 app.post("/api/admin/salg/ordrer/:nr/kanseller", krevAdmin, fang(async (req: any, res: any) => {
   const måte = req.body?.maate === "kreditt" ? "kreditt" : "kort";
-  res.json({ ordre: await medBilderOgLager(await kanseller(String(req.params.nr), String(req.body?.grunn || ""), måte)) });
+  res.json({ ordre: await medBilderOgLager(await kanseller(String(req.params.nr), String(req.body?.grunn || ""), måte, req.body?.beskjed)) });
 }));
 
 // Rett antallet på en betalt ordre. Uten bekreft: bare beløpet som ville
@@ -1091,6 +1091,7 @@ app.post("/api/admin/salg/ordrer/:nr/juster", krevAdmin, fang(async (req: any, r
     tilbakePåLager: b.tilbake_paa_lager === true,
     grunn: String(b.grunn || "").slice(0, 300),
     bekreft: b.bekreft === true,
+    beskjed: typeof b.beskjed === "string" ? b.beskjed : "",
   });
   res.json(r.ordre ? { ...r, ordre: await medBilderOgLager(r.ordre) } : r);
 }));

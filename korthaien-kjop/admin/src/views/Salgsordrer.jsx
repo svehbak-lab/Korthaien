@@ -200,6 +200,8 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
   const [rettFeil, setRettFeil] = useState("");
   const [tilbake, setTilbake] = useState(false);
   const [rettGrunn, setRettGrunn] = useState("");
+  const [rettBeskjed, setRettBeskjed] = useState("");
+  const [sendtBeskjed, setSendtBeskjed] = useState("");
 
   const rettLinjer = retting
     ? Object.entries(retting).map(([id, v]) => ({ id: Number(id), antall: v === "" ? NaN : Number(v) }))
@@ -223,13 +225,14 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
   async function lagreRetting() {
     setJobber(true);
     try {
-      const r = await api.justerSalgsordre(nr, { linjer: rettLinjer, bekreft: true, tilbake_paa_lager: tilbake, grunn: rettGrunn });
+      const r = await api.justerSalgsordre(nr, { linjer: rettLinjer, bekreft: true, tilbake_paa_lager: tilbake, grunn: rettGrunn, beskjed: rettBeskjed });
       setO(r.ordre);
       setNotat(r.ordre.admin_notat || "");
       setRetting(null);
       setForslag(null);
       setTilbake(false);
       setRettGrunn("");
+      setRettBeskjed("");
       onMelding(`Ordren er rettet. ${kroner(r.forslag.refusjon_ore)} er sendt tilbake, og kunden har fått e-post.`);
     } catch (e) {
       onFeil(e);
@@ -257,11 +260,16 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
     try {
       const r = await api.endreSalgsordre(nr, felt);
       setO(r.ordre);
+      // En beskjed til kunden føres i notatet på serveren.
+      if (felt.beskjed) setNotat(r.ordre.admin_notat || "");
       if (melding) onMelding(melding);
+      setJobber(false);
+      return true;
     } catch (e) {
       onFeil(e);
     }
     setJobber(false);
+    return false;
   }
 
   if (!o) return <p className="dempet">Henter…</p>;
@@ -452,10 +460,15 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                       Sporingsnummer
                       <input value={spor} onChange={(e) => setSpor(e.target.value)} placeholder="Valgfritt" />
                     </label>
+                    <Beskjed verdi={sendtBeskjed} sett={setSendtBeskjed} />
                     <button
                       className="knapp primar"
                       disabled={jobber}
-                      onClick={() => endre({ status: "sendt", sporingsnr: spor }, "Merket som sendt. Kunden har fått e-post.")}
+                      onClick={async () => {
+                        if (await endre({ status: "sendt", sporingsnr: spor, beskjed: sendtBeskjed }, "Merket som sendt. Kunden har fått e-post.")) {
+                          setSendtBeskjed("");
+                        }
+                      }}
                     >
                       Merk som sendt
                     </button>
@@ -510,6 +523,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                       </span>
                     </label>
                     <label>Grunn (bare for deg)<input value={rettGrunn} onChange={(e) => setRettGrunn(e.target.value)} placeholder="F.eks. fant ikke kortet" /></label>
+                    <Beskjed verdi={rettBeskjed} sett={setRettBeskjed} />
                     <div className="rad-flex">
                       <button className="knapp" disabled={jobber} onClick={() => { setRetting(null); setForslag(null); setRettFeil(""); }}>
                         Avbryt
@@ -535,7 +549,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
           </div>
 
           {["betalt", "pakket"].includes(o.status) && (
-            <Kanseller o={o} onFerdig={(ny) => { setO(ny); onMelding("Ordren er kansellert."); }} onFeil={onFeil} />
+            <Kanseller o={o} onFerdig={(ny) => { setO(ny); setNotat(ny.admin_notat || ""); onMelding("Ordren er kansellert."); }} onFeil={onFeil} />
           )}
         </div>
       </div>
@@ -550,6 +564,7 @@ function Kanseller({ o, onFerdig, onFeil }) {
   const [åpen, setÅpen] = useState(false);
   const [måte, setMåte] = useState(Number(o.stripe_ore) > 0 ? "kort" : "kreditt");
   const [grunn, setGrunn] = useState("");
+  const [beskjed, setBeskjed] = useState("");
   const [jobber, setJobber] = useState(false);
   const gavekort = Number(o.gavekort_ore) || 0;
   const totalt = Number(o.kreditt_ore) + Number(o.stripe_ore);
@@ -588,6 +603,7 @@ function Kanseller({ o, onFerdig, onFeil }) {
           </span>
         </label>
         <label>Grunn (bare for deg)<input value={grunn} onChange={(e) => setGrunn(e.target.value)} /></label>
+        <Beskjed verdi={beskjed} sett={setBeskjed} />
         <div className="rad-flex">
           <button className="knapp" onClick={() => setÅpen(false)} disabled={jobber}>Avbryt</button>
           <button
@@ -596,7 +612,7 @@ function Kanseller({ o, onFerdig, onFeil }) {
             onClick={async () => {
               setJobber(true);
               try {
-                const r = await api.kansellerSalgsordre(o.ordrenr, grunn, måte);
+                const r = await api.kansellerSalgsordre(o.ordrenr, grunn, måte, beskjed);
                 onFerdig(r.ordre);
               } catch (e) {
                 onFeil(e);
@@ -609,6 +625,23 @@ function Kanseller({ o, onFerdig, onFeil }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// Beskjed til kunden. Står øverst i e-posten kunden får, i en gul boks, og
+// føres i notatet på ordren med dato.
+function Beskjed({ verdi, sett }) {
+  return (
+    <label>
+      Beskjed til kunden
+      <textarea
+        rows={3}
+        maxLength={2000}
+        value={verdi}
+        onChange={(e) => sett(e.target.value)}
+        placeholder="Valgfritt. Står øverst i e-posten, f.eks. «Fant dessverre ikke Ragavan, beklager!»"
+      />
+    </label>
   );
 }
 

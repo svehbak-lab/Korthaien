@@ -209,8 +209,8 @@ export const api = {
   salgsordrer: (status) => kall(`/api/admin/salg/ordrer?status=${status}`),
   salgsordre: (nr) => kall(`/api/admin/salg/ordrer/${encodeURIComponent(nr)}`),
   endreSalgsordre: (nr, felt) => kall(`/api/admin/salg/ordrer/${encodeURIComponent(nr)}`, { method: "PATCH", body: felt }),
-  kansellerSalgsordre: (nr, grunn, maate) =>
-    kall(`/api/admin/salg/ordrer/${encodeURIComponent(nr)}/kanseller`, { method: "POST", body: { grunn, maate } }),
+  kansellerSalgsordre: (nr, grunn, maate, beskjed) =>
+    kall(`/api/admin/salg/ordrer/${encodeURIComponent(nr)}/kanseller`, { method: "POST", body: { grunn, maate, beskjed } }),
   justerSalgsordre: (nr, felt) =>
     kall(`/api/admin/salg/ordrer/${encodeURIComponent(nr)}/juster`, { method: "POST", body: felt }),
   salgsstatistikk: () => kall("/api/admin/salg/statistikk"),

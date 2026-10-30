@@ -935,9 +935,20 @@ export async function adminOrdrer(status: string) {
   return { ordrer: r.rows, antall };
 }
 
+// En beskjed til kunden (fra admin) står øverst i e-posten. Den føres også i
+// notatet på ordren, med dato, så det står igjen hva kunden fikk vite.
+async function loggBeskjed(ordreId: number, hva: string, beskjed: string) {
+  const dato = new Date().toLocaleDateString("nb-NO", { timeZone: "Europe/Oslo" });
+  await db().execute({
+    sql: `UPDATE salgsordrer SET admin_notat = substr(trim(COALESCE(admin_notat, '') || char(10) || ?), 1, 4000) WHERE id = ?`,
+    args: [`Beskjed til kunden (${hva}, ${dato}): ${beskjed}`, ordreId],
+  });
+}
+const renBeskjed = (b: unknown) => String(b ?? "").trim().slice(0, 2000);
+
 export async function settStatus(
   ordrenr: string,
-  inn: { status?: string; sporingsnr?: string; admin_notat?: string }
+  inn: { status?: string; sporingsnr?: string; admin_notat?: string; beskjed?: string }
 ): Promise<any> {
   const o = await hentOrdre(ordrenr);
   if (!o) throw new SalgFeil(404, "Fant ikke ordren.");
@@ -973,8 +984,10 @@ export async function settStatus(
   }
   if (blirSendt) {
     try {
+      const beskjed = renBeskjed(inn.beskjed);
       const { varsleSendt } = await import("./epost.js");
-      await varsleSendt(o.id);
+      await varsleSendt(o.id, beskjed);
+      if (beskjed) await loggBeskjed(Number(o.id), "sendt", beskjed);
     } catch (e: any) {
       console.error("Varselet om sending feilet:", e?.message);
     }
@@ -993,7 +1006,13 @@ export async function settStatus(
 // Refusjonen hos Stripe gjøres før noe endres her, med en fast
 // idempotensnøkkel: feiler den, er ingenting endret; feiler det som kommer
 // etter, gir et nytt forsøk den samme refusjonen og ikke en til.
-export async function kanseller(ordrenr: string, grunn: string, måte: "kort" | "kreditt" = "kort"): Promise<any> {
+export async function kanseller(
+  ordrenr: string,
+  grunn: string,
+  måte: "kort" | "kreditt" = "kort",
+  beskjedInn?: string
+): Promise<any> {
+  const beskjed = renBeskjed(beskjedInn);
   const o = await hentOrdre(ordrenr);
   if (!o) throw new SalgFeil(404, "Fant ikke ordren.");
   if (!["betalt", "pakket"].includes(String(o.status))) {
@@ -1086,10 +1105,12 @@ export async function kanseller(ordrenr: string, grunn: string, måte: "kort" | 
       til_kreditt_ore: tilKreditt,
       til_gavekort_ore: tilGavekort,
       betalt_med: erVipps ? "Vipps" : "kort",
+      beskjed,
     });
   } catch (e: any) {
     console.error("E-posten om kanselleringen feilet:", e?.message);
   }
+  if (beskjed) await loggBeskjed(Number(o.id), "kansellert", beskjed);
   return hentOrdre(ordrenr);
 }
 
@@ -1105,7 +1126,7 @@ export async function kanseller(ordrenr: string, grunn: string, måte: "kort" | 
 export async function justerOrdre(
   ordrenr: string,
   endringer: { id: number; antall: number }[],
-  valg: { tilbakePåLager?: boolean; grunn?: string; bekreft?: boolean } = {}
+  valg: { tilbakePåLager?: boolean; grunn?: string; bekreft?: boolean; beskjed?: string } = {}
 ): Promise<any> {
   const o = await hentOrdre(ordrenr);
   if (!o) throw new SalgFeil(404, "Fant ikke ordren.");
@@ -1274,10 +1295,11 @@ export async function justerOrdre(
 
   try {
     const { sendJustering } = await import("./epost.js");
-    await sendJustering(Number(o.id), forslag);
+    await sendJustering(Number(o.id), { ...forslag, beskjed: renBeskjed(valg.beskjed) });
   } catch (e: any) {
     console.error("E-posten om rettelsen feilet:", e?.message);
   }
+  if (renBeskjed(valg.beskjed)) await loggBeskjed(Number(o.id), "rettet", renBeskjed(valg.beskjed));
   return { forslag, ordre: await hentOrdre(ordrenr) };
 }
 
