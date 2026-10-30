@@ -880,8 +880,11 @@ export async function hentOrdre(ordrenr: string): Promise<any | null> {
             FROM salgsordre_linjer WHERE ordre_id = ? ORDER BY (produkt_id IS NOT NULL), ${SORTERING}, collector_number, finish, condition`,
     args: [o.id],
   });
+  let ventende: any = null;
+  try { ventende = o.ventende_retting ? JSON.parse(String(o.ventende_retting)) : null; } catch {}
   return {
     ...o,
+    ventende,
     linjer: l.rows.map((x: any) => (x.produkt_id != null ? { ...x, produkt: true, utgave: "" } : { ...x, utgave: utgaveNavn(x) })),
   };
 }
@@ -889,7 +892,7 @@ export async function hentOrdre(ordrenr: string): Promise<any | null> {
 // Det kunden får se. Ingen interne notater.
 export function offentlig(o: any) {
   if (!o) return null;
-  const { admin_notat, stripe_session, kunde_id, uvarslet_retting_ore, ...resten } = o;
+  const { admin_notat, stripe_session, kunde_id, uvarslet_retting_ore, ventende_retting, ventende, ...resten } = o;
   return resten;
 }
 
@@ -986,6 +989,12 @@ export async function settStatus(
 ): Promise<any> {
   const o = await hentOrdre(ordrenr);
   if (!o) throw new SalgFeil(404, "Fant ikke ordren.");
+  // En rettelse som venter, gjennomføres når ordren merkes som sendt: alle
+  // linjene samlet, med én refusjon. Feiler refusjonen, merkes ordren ikke
+  // som sendt, og rettelsen står fortsatt og venter.
+  if (inn.status === "sendt" && o.status !== "sendt" && o.ventende) {
+    await justerOrdre(ordrenr, o.ventende.linjer || [], { bekreft: true, grunn: o.ventende.grunn || "" });
+  }
   const felt: string[] = [];
   const args: any[] = [];
   if (inn.sporingsnr !== undefined) {
@@ -1150,7 +1159,45 @@ export async function kanseller(
     console.error("E-posten om kanselleringen feilet:", e?.message);
   }
   if (beskjed) await loggBeskjed(Number(o.id), "kansellert", beskjed);
+  // Hele ordren er refundert; en rettelse som ventet, har ingenting å gjøre.
+  await db().execute({ sql: "UPDATE salgsordrer SET ventende_retting = NULL WHERE id = ?", args: [o.id] });
   return hentOrdre(ordrenr);
+}
+
+// Rettelse som venter til ordren merkes som sendt. Ingenting refunderes og
+// ingenting endres i ordren nå; bare planen lagres, så du kan rette flere
+// linjer underveis i pakkingen og kunden får én refusjon og én e-post.
+// Lagres hele planen på nytt hver gang. Ingen endrede linjer fjerner den.
+export async function lagreVentendeRetting(
+  ordrenr: string,
+  endringer: { id: number; antall: number }[],
+  valg: { tilbakePåLager?: boolean; grunn?: string } = {}
+): Promise<any> {
+  const o = await hentOrdre(ordrenr);
+  if (!o) throw new SalgFeil(404, "Fant ikke ordren.");
+  if (!["betalt", "pakket"].includes(String(o.status))) {
+    throw new SalgFeil(400, "Bare ordrer som ikke er sendt, kan få en rettelse som venter.");
+  }
+  const før = new Map((o.linjer as any[]).map((l) => [Number(l.id), Number(l.antall)]));
+  const endret = (endringer || []).filter((e) => før.has(Number(e.id)) && Number(e.antall) !== før.get(Number(e.id)));
+  if (!endret.length) {
+    await db().execute({ sql: "UPDATE salgsordrer SET ventende_retting = NULL WHERE id = ?", args: [o.id] });
+    return { forslag: null, ordre: await hentOrdre(ordrenr) };
+  }
+  // Samme kontroll og utregning som når rettelsen gjøres.
+  const { forslag } = await justerOrdre(ordrenr, endret);
+  const plan = {
+    linjer: endret.map((e) => ({ id: Number(e.id), antall: Number(e.antall), tilbake: !!valg.tilbakePåLager })),
+    grunn: String(valg.grunn || "").trim().slice(0, 300),
+    refusjon_ore: forslag.refusjon_ore,
+    tekst: forslag.linjer.map((l: any) => `${l.card_name} ${l.fra} → ${l.til}`).join(", "),
+    lagret_at: nå(),
+  };
+  await db().execute({
+    sql: "UPDATE salgsordrer SET ventende_retting = ? WHERE id = ?",
+    args: [JSON.stringify(plan), o.id],
+  });
+  return { forslag, ordre: await hentOrdre(ordrenr) };
 }
 
 // Rettelse etter betaling: færre av et kort enn ordren sa, fordi beholdningen
@@ -1164,7 +1211,7 @@ export async function kanseller(
 // ordren fordi kortet ikke fantes, og da er lageret riktig som det er.
 export async function justerOrdre(
   ordrenr: string,
-  endringer: { id: number; antall: number }[],
+  endringer: { id: number; antall: number; tilbake?: boolean }[],
   valg: { tilbakePåLager?: boolean; grunn?: string; bekreft?: boolean; beskjed?: string } = {}
 ): Promise<any> {
   const o = await hentOrdre(ordrenr);
@@ -1173,7 +1220,9 @@ export async function justerOrdre(
     throw new SalgFeil(400, "Bare betalte ordrer kan rettes.");
   }
   const ny = new Map<number, number>();
+  const tilLager = new Map<number, boolean>();
   for (const e of endringer || []) {
+    if (typeof e?.tilbake === "boolean") tilLager.set(Number(e.id), e.tilbake);
     const n = Number(e?.antall);
     if (!Number.isInteger(n) || n < 0) throw new SalgFeil(400, "Antallet må være et helt tall, null eller mer.");
     ny.set(Number(e.id), n);
@@ -1278,7 +1327,8 @@ export async function justerOrdre(
       sql: `UPDATE salgsordrer
                SET varer_ore = ?, rabatt_ore = ?, mva_varer_ore = ?, antall_kort = ?,
                    stripe_ore = stripe_ore - ?, kreditt_ore = kreditt_ore - ?, gavekort_ore = gavekort_ore - ?,
-                   admin_notat = trim(COALESCE(admin_notat, '') || ' ' || ?)
+                   admin_notat = trim(COALESCE(admin_notat, '') || ' ' || ?),
+                   ventende_retting = NULL
              WHERE id = ? AND varer_ore = ? AND stripe_ore = ? AND kreditt_ore = ?
                AND status IN ('betalt', 'pakket', 'sendt')`,
       args: [nyVarer, nyRabatt, nyMvaVarer, kortIgjen, tilKort, tilKreditt, tilGavekort, notat,
@@ -1288,7 +1338,7 @@ export async function justerOrdre(
     for (const l of endret) {
       if (l.nytt === 0) await tx.execute({ sql: "DELETE FROM salgsordre_linjer WHERE id = ?", args: [l.id] });
       else await tx.execute({ sql: "UPDATE salgsordre_linjer SET antall = ? WHERE id = ?", args: [l.nytt, l.id] });
-      if (!valg.tilbakePåLager) continue;
+      if (!(tilLager.get(Number(l.id)) ?? valg.tilbakePåLager)) continue;
       const tilbake = l.gammel - l.nytt;
       if (erProdukt(l.card_id)) {
         await tx.execute({

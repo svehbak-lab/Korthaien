@@ -488,9 +488,10 @@ test("rettelse på kortbetalt ordre: pengedelen refunderes først, og rapporten 
   }
 });
 
-test("rettelse før sending gir ingen egen e-post; den står øverst i «sendt»-e-posten, én gang", async () => {
+test("rettelse før sending venter: ingenting refunderes før «sendt», da samlet og i én e-post", async () => {
   const a = await kort("aaa", "Ragavan Test", "mythic", 4000, 5);
-  const b = await kort("aaa", "Beholdes Test", "rare", 1000, 5);
+  const b = await kort("aaa", "Bolas Test", "mythic", 3000, 5);
+  const c = await kort("aaa", "Beholdes Test", "rare", 1000, 5);
   const kari = await konto.loggInn("selger@eksempel.no", "passord123");
   await kreditt.leggTil({ email: kari.email, ore: 50000, grunn: "manuell" });
   const r = await salg.åpneKasse(
@@ -498,13 +499,16 @@ test("rettelse før sending gir ingen egen e-post; den står øverst i «sendt»
       ...adresse, email: "", bruk_kreditt: true,
       linjer: [
         { card_id: a, finish: "nonfoil", condition: "NM", antall: 1 },
-        { card_id: b, finish: "nonfoil", condition: "NM", antall: 1 },
+        { card_id: b, finish: "nonfoil", condition: "NM", antall: 2 },
+        { card_id: c, finish: "nonfoil", condition: "NM", antall: 1 },
       ],
     },
     kari
   );
   const o = await salg.hentOrdre(r.ordrenr);
   const la = o.linjer.find((l) => l.card_id === a);
+  const lb = o.linjer.find((l) => l.card_id === b);
+  const saldo = await kreditt.saldo(kari.email);
 
   const sendt = [];
   const ekte = globalThis.fetch;
@@ -517,28 +521,60 @@ test("rettelse før sending gir ingen egen e-post; den står øverst i «sendt»
     return ekte(url, opts);
   };
   try {
-    const ut = await salg.justerOrdre(r.ordrenr, [{ id: la.id, antall: 0 }], { bekreft: true });
-    assert.equal(sendt.length, 0, "ingen e-post ved rettelsen");
-    assert.equal(Number(ut.ordre.uvarslet_retting_ore), 4000);
+    // To runder under pakkingen; den siste planen gjelder.
+    await salg.lagreVentendeRetting(r.ordrenr, [{ id: la.id, antall: 0 }]);
+    const v = await salg.lagreVentendeRetting(r.ordrenr, [{ id: la.id, antall: 0 }, { id: lb.id, antall: 1 }], { grunn: "fant ikke" });
+    assert.equal(v.ordre.ventende.refusjon_ore, 4000 + 3000);
+    assert.equal(sendt.length, 0, "ingen e-post");
+    assert.equal(await kreditt.saldo(kari.email), saldo, "ingenting refundert ennå");
+    assert.equal(v.ordre.linjer.length, 3, "ordren er ikke endret ennå");
+    await assert.rejects(salg.lagreVentendeRetting(r.ordrenr, [{ id: la.id, antall: 2 }]), /bare settes ned/);
 
     await salg.settStatus(r.ordrenr, { status: "sendt", beskjed: "Solgt i butikken samme dag." });
-    assert.equal(sendt.length, 1);
+    assert.equal(await kreditt.saldo(kari.email), saldo + 7000, "én refusjon, samlet");
+    const etter = await salg.hentOrdre(r.ordrenr);
+    assert.equal(etter.ventende, null);
+    assert.equal(etter.linjer.length, 2);
+    const j = await db().execute({ sql: "SELECT COUNT(*) AS n FROM salgsordre_justeringer WHERE ordre_id = ?", args: [etter.id] });
+    assert.equal(Number(j.rows[0].n), 1);
+
+    assert.equal(sendt.length, 1, "én e-post");
     const e = sendt[0];
     const boks = e.html.indexOf("Endring i ordren");
     assert.ok(boks > -1 && boks < e.html.indexOf("Pakken er på vei"));
     assert.match(e.html, /Solgt i butikken samme dag\./);
     assert.match(e.html, /Ragavan Test: 1 → 0 stk\./);
-    assert.match(e.html, /40 kr tilbake som kreditt/);
-    assert.match(e.text, /^ENDRING I ORDREN\nSolgt i butikken/);
-    assert.equal(Number((await salg.hentOrdre(r.ordrenr)).uvarslet_retting_ore), 0);
+    assert.match(e.html, /Bolas Test: 2 → 1 stk\./);
+    assert.match(e.html, /70 kr tilbake som kreditt/);
 
-    // Angre «sendt» og send på nytt: rettelsen kommer ikke en gang til.
+    // Angre «sendt» og send på nytt: ingen ny refusjon, ingen gjentatt endring.
     await salg.settStatus(r.ordrenr, { status: "betalt" });
     await salg.settStatus(r.ordrenr, { status: "sendt" });
-    assert.equal(sendt.length, 2);
+    assert.equal(await kreditt.saldo(kari.email), saldo + 7000);
     assert.doesNotMatch(sendt[1].html, /Endring i ordren/);
   } finally {
     globalThis.fetch = ekte;
     delete process.env.RESEND_KEY;
   }
+});
+
+test("ventende rettelse forsvinner ved kansellering, og kan fjernes", async () => {
+  const a = await kort("aaa", "Fjernes Test", "rare", 2000, 5);
+  const kari = await konto.loggInn("selger@eksempel.no", "passord123");
+  await kreditt.leggTil({ email: kari.email, ore: 50000, grunn: "manuell" });
+  const r = await salg.åpneKasse(
+    { ...adresse, email: "", bruk_kreditt: true, linjer: [{ card_id: a, finish: "nonfoil", condition: "NM", antall: 2 }] },
+    kari
+  );
+  const la = (await salg.hentOrdre(r.ordrenr)).linjer[0];
+  await salg.lagreVentendeRetting(r.ordrenr, [{ id: la.id, antall: 1 }]);
+  const tom = await salg.lagreVentendeRetting(r.ordrenr, []);
+  assert.equal(tom.ordre.ventende, null);
+  await salg.lagreVentendeRetting(r.ordrenr, [{ id: la.id, antall: 1 }]);
+  const saldo = await kreditt.saldo(kari.email);
+  const før = await salg.hentOrdre(r.ordrenr);
+  const k = await salg.kanseller(r.ordrenr, "Angret", "kreditt");
+  assert.equal(k.ventende, null);
+  // Hele ordren tilbake, ikke bare det som var igjen etter rettelsen.
+  assert.equal(await kreditt.saldo(kari.email), saldo + Number(før.kreditt_ore) + Number(før.stripe_ore));
 });

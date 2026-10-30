@@ -222,8 +222,51 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
     return () => { avbrutt = true; clearTimeout(t); };
   }, [rettNøkkel]);
 
+  // Før sending venter rettelsen til ordren merkes som sendt: da refunderes
+  // alt samlet, én gang. Etter sending gjøres den med en gang.
+  const rettVenter = o && o.status !== "sendt";
+
+  function startRetting() {
+    const v = o.ventende;
+    setRetting(v ? Object.fromEntries(v.linjer.map((l) => [l.id, String(l.antall)])) : {});
+    setTilbake(!!v?.linjer?.some((l) => l.tilbake));
+    setRettGrunn(v?.grunn || "");
+    setPlukket(new Set());
+  }
+
+  async function fjernVentende() {
+    setJobber(true);
+    try {
+      const r = await api.justerSalgsordre(nr, { linjer: [], vent: true });
+      setO(r.ordre);
+      onMelding("Rettelsen er fjernet.");
+    } catch (e) {
+      onFeil(e);
+    }
+    setJobber(false);
+  }
+
   async function lagreRetting() {
     setJobber(true);
+    if (rettVenter) {
+      try {
+        const r = await api.justerSalgsordre(nr, { linjer: rettLinjer, vent: true, tilbake_paa_lager: tilbake, grunn: rettGrunn });
+        setO(r.ordre);
+        setRetting(null);
+        setForslag(null);
+        setTilbake(false);
+        setRettGrunn("");
+        onMelding(
+          r.ordre.ventende
+            ? `Rettelsen er lagret. ${kroner(r.ordre.ventende.refusjon_ore)} refunderes når du merker ordren som sendt.`
+            : "Ingen endringer å lagre."
+        );
+      } catch (e) {
+        onFeil(e);
+      }
+      setJobber(false);
+      return;
+    }
     try {
       const r = await api.justerSalgsordre(nr, { linjer: rettLinjer, bekreft: true, tilbake_paa_lager: tilbake, grunn: rettGrunn, beskjed: rettBeskjed });
       setO(r.ordre);
@@ -233,11 +276,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
       setTilbake(false);
       setRettGrunn("");
       setRettBeskjed("");
-      onMelding(
-        r.ordre.status === "sendt"
-          ? `Ordren er rettet. ${kroner(r.forslag.refusjon_ore)} er sendt tilbake, og kunden har fått e-post.`
-          : `Ordren er rettet. ${kroner(r.forslag.refusjon_ore)} er sendt tilbake. Kunden får beskjed i e-posten når du merker ordren som sendt.`
-      );
+      onMelding(`Ordren er rettet. ${kroner(r.forslag.refusjon_ore)} er sendt tilbake, og kunden har fått e-post.`);
     } catch (e) {
       onFeil(e);
     }
@@ -361,9 +400,18 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                       ) : (
                       <span className="rad-flex" style={{ gap: 8 }}>
                         <input type="checkbox" checked={ok} readOnly />
-                        <span className="tall" style={{ fontSize: 15, fontWeight: Number(l.antall) > 1 ? 800 : 500 }}>
-                          {l.antall}
-                        </span>
+                        {(() => {
+                          const v = o.ventende?.linjer?.find((x) => x.id === l.id);
+                          return v ? (
+                            <span className="tall" style={{ fontSize: 15 }} title="Rettelse som venter til ordren merkes som sendt">
+                              <s className="dempet">{l.antall}</s> <b style={{ color: "var(--feil)" }}>{v.antall}</b>
+                            </span>
+                          ) : (
+                            <span className="tall" style={{ fontSize: 15, fontWeight: Number(l.antall) > 1 ? 800 : 500 }}>
+                              {l.antall}
+                            </span>
+                          );
+                        })()}
                       </span>
                       )}
                     </td>
@@ -464,17 +512,25 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                       Sporingsnummer
                       <input value={spor} onChange={(e) => setSpor(e.target.value)} placeholder="Valgfritt" />
                     </label>
-                    {Number(o.uvarslet_retting_ore) > 0 && (
+                    {o.ventende ? (
+                      <div className="varsel" style={{ margin: 0, fontSize: 13 }}>
+                        Når du merker ordren som sendt, refunderes {kroner(o.ventende.refusjon_ore)} samlet ({o.ventende.tekst}),
+                        og endringen står øverst i e-posten.
+                      </div>
+                    ) : Number(o.uvarslet_retting_ore) > 0 ? (
                       <div className="varsel" style={{ margin: 0, fontSize: 13 }}>
                         Ordren er rettet ({kroner(o.uvarslet_retting_ore)} tilbake). Det står øverst i e-posten kunden får nå.
                       </div>
-                    )}
+                    ) : null}
                     <Beskjed verdi={sendtBeskjed} sett={setSendtBeskjed} />
                     <button
                       className="knapp primar"
                       disabled={jobber}
                       onClick={async () => {
-                        if (await endre({ status: "sendt", sporingsnr: spor, beskjed: sendtBeskjed }, "Merket som sendt. Kunden har fått e-post.")) {
+                        const melding = o.ventende
+                          ? `Merket som sendt. ${kroner(o.ventende.refusjon_ore)} er refundert, og kunden har fått én e-post.`
+                          : "Merket som sendt. Kunden har fått e-post.";
+                        if (await endre({ status: "sendt", sporingsnr: spor, beskjed: sendtBeskjed }, melding)) {
                           setSendtBeskjed("");
                         }
                       }}
@@ -501,14 +557,31 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
               <header><h3>Rett antall</h3></header>
               <div className="krop skjema">
                 {!retting ? (
+                  o.ventende ? (
+                    <>
+                      <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+                        <b>Venter til sending:</b> {o.ventende.tekst}.
+                        <div className="dempet" style={{ fontSize: 12 }}>
+                          {kroner(o.ventende.refusjon_ore)} refunderes når du merker ordren som sendt. Ingenting er refundert ennå.
+                        </div>
+                      </div>
+                      <div className="rad-flex">
+                        <button className="knapp" disabled={jobber} onClick={startRetting}>Endre…</button>
+                        <button className="knapp liten" disabled={jobber} onClick={fjernVentende}>Fjern rettelsen</button>
+                      </div>
+                    </>
+                  ) : (
                   <>
                     <span className="dempet" style={{ fontSize: 12.5 }}>
-                      Mangler du et kort? Sett ned antallet, så får kunden mellomlegget tilbake.
+                      {rettVenter
+                        ? "Mangler du et kort? Sett ned antallet. Kunden får mellomlegget tilbake når du merker ordren som sendt."
+                        : "Mangler du et kort? Sett ned antallet, så får kunden mellomlegget tilbake."}
                     </span>
-                    <button className="knapp" disabled={jobber} onClick={() => { setRetting({}); setPlukket(new Set()); }}>
+                    <button className="knapp" disabled={jobber} onClick={startRetting}>
                       Rett antall…
                     </button>
                   </>
+                  )
                 ) : (
                   <>
                     <span className="dempet" style={{ fontSize: 12.5 }}>
@@ -517,7 +590,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                     {rettFeil && <div className="varsel feil" style={{ margin: 0 }}>{rettFeil}</div>}
                     {forslag && (
                       <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>
-                        Tilbake til kunden: <b>{kroner(forslag.refusjon_ore)}</b>
+                        {rettVenter ? "Tilbake til kunden ved sending" : "Tilbake til kunden"}: <b>{kroner(forslag.refusjon_ore)}</b>
                         {forslag.til_kort_ore > 0 && <div>· {kroner(forslag.til_kort_ore)} til {forslag.betalt_med === "Vipps" ? "Vipps" : "kortet"}</div>}
                         {forslag.til_kreditt_ore > 0 && <div>· {kroner(forslag.til_kreditt_ore)} som kreditt</div>}
                         {forslag.til_gavekort_ore > 0 && <div>· {kroner(forslag.til_gavekort_ore)} på gavekortet</div>}
@@ -525,7 +598,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                           Frakten endres ikke.{" "}
                           {o.status === "sendt"
                             ? "Kunden får en e-post nå."
-                            : "Kunden får ingen e-post nå; rettelsen står øverst i e-posten når du merker ordren som sendt."}
+                            : "Ingenting refunderes nå. Det skjer samlet når du merker ordren som sendt, og står øverst i e-posten."}
                         </div>
                       </div>
                     )}
@@ -543,7 +616,7 @@ function Ordre({ nr, onLukk, onFeil, onMelding }) {
                         Avbryt
                       </button>
                       <button className="knapp primar" disabled={jobber || !forslag || forslag.refusjon_ore <= 0} onClick={lagreRetting}>
-                        {jobber ? "Lagrer…" : forslag ? `Lagre og refunder ${kroner(forslag.refusjon_ore)}` : "Lagre"}
+                        {jobber ? "Lagrer…" : rettVenter ? "Lagre rettelsen" : forslag ? `Lagre og refunder ${kroner(forslag.refusjon_ore)}` : "Lagre"}
                       </button>
                     </div>
                   </>

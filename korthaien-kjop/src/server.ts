@@ -52,7 +52,7 @@ import {
 } from "./kunder.js";
 import {
   SalgFeil, prisKurv, åpneKasse, avbrytKasse, stripeHendelse, hentOrdre as hentSalgsordre, lagerForPlukk, offentlig, kundensOrdrer,
-  tilhørerKunde, riktigMerke, tilgjengeligKreditt, adminOrdrer, settStatus, kanseller, justerOrdre,
+  tilhørerKunde, riktigMerke, tilgjengeligKreditt, adminOrdrer, settStatus, kanseller, justerOrdre, lagreVentendeRetting,
   salgsstatistikk, utløpGamle, harStripe, oppdaterVippsOrdre, butikkUrl, RESERVASJON_MIN,
 } from "./salg.js";
 import { bevegelser as kredittBevegelser } from "./kreditt.js";
@@ -1087,6 +1087,15 @@ app.post("/api/admin/salg/ordrer/:nr/kanseller", krevAdmin, fang(async (req: any
 // gått tilbake, så admin ser det før noe skjer.
 app.post("/api/admin/salg/ordrer/:nr/juster", krevAdmin, fang(async (req: any, res: any) => {
   const b = req.body || {};
+  // Før sending: lagre rettelsen som venter til ordren merkes som sendt.
+  if (b.vent === true) {
+    const r = await lagreVentendeRetting(String(req.params.nr), Array.isArray(b.linjer) ? b.linjer : [], {
+      tilbakePåLager: b.tilbake_paa_lager === true,
+      grunn: String(b.grunn || "").slice(0, 300),
+    });
+    res.json({ ...r, ordre: await medBilderOgLager(r.ordre) });
+    return;
+  }
   const r = await justerOrdre(String(req.params.nr), Array.isArray(b.linjer) ? b.linjer : [], {
     tilbakePåLager: b.tilbake_paa_lager === true,
     grunn: String(b.grunn || "").slice(0, 300),
