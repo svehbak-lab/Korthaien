@@ -561,13 +561,16 @@ export function erFalskMystoreKunde(r: Record<string, string>): boolean {
 }
 
 export async function importerMystoreKunder(tekst: string): Promise<{
-  rader: number; nye: number; oppdatert: number; falske: number; ugyldige: number;
+  rader: number; nye: number; oppdatert: number; falske: number; ugyldige: number; slettet: number;
 }> {
   const rader = lesCsv(tekst);
   if (rader.length && !("E-post" in rader[0])) {
     throw new KontoFeil(400, "Fant ikke kolonnen «E-post». Er dette kundeeksporten fra Mystore?");
   }
-  let nye = 0, oppdatert = 0, falske = 0, ugyldige = 0;
+  let nye = 0, oppdatert = 0, falske = 0, ugyldige = 0, slettet = 0;
+  const slettede = new Set(
+    ((await db().execute("SELECT email_hash FROM slettede_kontoer")).rows as any[]).map((x) => String(x.email_hash))
+  );
   const sett = new Set<string>();
   const setninger: { sql: string; args: any[] }[] = [];
   const nå = new Date().toISOString();
@@ -576,6 +579,8 @@ export async function importerMystoreKunder(tekst: string): Promise<{
     // Ugyldig adresse, eller samme adresse to ganger i lista.
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || sett.has(email)) { ugyldige++; continue; }
     if (erFalskMystoreKunde(r)) { falske++; continue; }
+    // Kunden har slettet kontoen selv. Den skal ikke komme tilbake med importen.
+    if (slettede.has(hash(email))) { slettet++; continue; }
     sett.add(email);
     const navn = [r["Fornavn"], r["Etternavn"]].filter(Boolean).join(" ").trim().slice(0, 120);
     const land = LANDKODE[(r["Land"] || "").toLowerCase()] || "NO";
@@ -610,7 +615,70 @@ export async function importerMystoreKunder(tekst: string): Promise<{
   const etter = await db().execute("SELECT COUNT(*) AS n FROM kunder");
   nye = Number(etter.rows[0].n) - Number(før.rows[0].n);
   oppdatert = setninger.length - nye;
-  return { rader: rader.length, nye, oppdatert, falske, ugyldige };
+  return { rader: rader.length, nye, oppdatert, falske, ugyldige, slettet };
+}
+
+// ── slett konto ─────────────────────────────────────────────────────────────
+// Kunden sletter kontoen selv fra Min side. Det som slettes: innloggingen
+// (passord, Google-kobling, sesjoner, engangslenker), navn, telefon og
+// adresse, ønskelista, nyhetsbrevet og besøkene.
+//
+// Det som står igjen, fordi bokføringsloven krever det: ordrene (med navn og
+// adresse slik de var da ordren ble lagt) og kredittboken. Kreditten følger
+// e-postadressen, ikke kontoen, og forsvinner ikke: lager kunden konto igjen
+// med samme adresse, er den der.
+//
+// En ordre som ikke er ferdig, stopper slettingen — den må kunne sendes og
+// gjøres opp, og kunden må kunne følge den.
+export async function slettKonto(id: number, inn: { passord?: string; bekreft?: string }) {
+  const r = await db().execute({ sql: "SELECT * FROM kunder WHERE id = ?", args: [id] });
+  const k: any = r.rows[0];
+  if (!k) throw new KontoFeil(404, "Fant ikke kontoen.");
+  if (k.passord_hash) {
+    if (!(await riktigPassord(String(inn.passord || ""), String(k.passord_hash)))) {
+      throw new KontoFeil(400, "Passordet stemmer ikke.");
+    }
+  } else if (String(inn.bekreft || "").trim().toUpperCase() !== "SLETT") {
+    throw new KontoFeil(400, "Skriv SLETT for å bekrefte.");
+  }
+  const email = String(k.email);
+  const salg = await db().execute({
+    sql: `SELECT ordrenr FROM salgsordrer WHERE (kunde_id = ? OR email = ?) AND status IN ('betalt', 'pakket')
+           ORDER BY id LIMIT 3`,
+    args: [id, email],
+  });
+  if (salg.rows.length) {
+    const nr = salg.rows.map((x: any) => x.ordrenr).join(", ");
+    throw new KontoFeil(400, `Du har en bestilling som ikke er sendt ennå (${nr}). Kontoen kan slettes når den er sendt.`);
+  }
+  const kjøp = await db().execute({
+    sql: `SELECT order_no FROM orders WHERE email = ? AND status IN ('pending', 'received')
+           ORDER BY id LIMIT 3`,
+    args: [email],
+  });
+  if (kjøp.rows.length) {
+    const nr = kjøp.rows.map((x: any) => x.order_no).join(", ");
+    throw new KontoFeil(400, `Du har kort sendt inn til oss som ikke er gjort opp ennå (${nr}). Kontoen kan slettes når de er det.`);
+  }
+  const { saldo } = await import("./kreditt.js");
+  const kreditt = await saldo(email);
+  const nå = new Date().toISOString();
+  await db().batch(
+    [
+      {
+        sql: "INSERT INTO slettede_kontoer (email_hash, slettet_at) VALUES (?, ?) ON CONFLICT(email_hash) DO UPDATE SET slettet_at = excluded.slettet_at",
+        args: [hash(email), nå],
+      },
+      { sql: "UPDATE salgsordrer SET kunde_id = NULL WHERE kunde_id = ?", args: [id] },
+      { sql: "DELETE FROM kunde_sesjoner WHERE kunde_id = ?", args: [id] },
+      { sql: "DELETE FROM kunde_tokens WHERE kunde_id = ?", args: [id] },
+      { sql: "DELETE FROM onskeliste WHERE kunde_id = ?", args: [id] },
+      { sql: "DELETE FROM kunde_besok WHERE kunde_id = ?", args: [id] },
+      { sql: "DELETE FROM kunder WHERE id = ?", args: [id] },
+    ],
+    "write"
+  );
+  return { email, navn: String(k.navn || ""), kreditt_ore: kreditt };
 }
 
 // ── oversikt i admin ────────────────────────────────────────────────────────

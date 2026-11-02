@@ -308,6 +308,7 @@ export const kunde = {
   loggUt: () => kundekall("/api/konto/logg-ut", { method: "POST" }),
   profil: (felt) => kundekall("/api/konto/profil", { method: "PUT", body: felt }),
   passord: (gammelt, nytt) => kundekall("/api/konto/passord", { method: "PUT", body: { gammelt, nytt } }),
+  slettKonto: (felt) => kundekall("/api/konto/slett", { method: "POST", body: felt }),
   glemt: (email) => kundekall("/api/konto/glemt", { method: "POST", body: { email } }),
   nyttPassord: (token, passord) => kundekall("/api/konto/nytt-passord", { method: "POST", body: { token, passord } }),
   bekreft: (token) => kundekall("/api/konto/bekreft", { method: "POST", body: { token } }),

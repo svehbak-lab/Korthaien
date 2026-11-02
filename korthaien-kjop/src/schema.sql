@@ -683,6 +683,12 @@ CREATE TABLE IF NOT EXISTS kunde_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_kunde_sesjoner_kunde ON kunde_sesjoner (kunde_id);
 
+-- Kontoer kunden selv har slettet. Bare et hash av e-postadressen, så en ny
+-- import av kundelista fra Mystore ikke lager kontoen på nytt.
+CREATE TABLE IF NOT EXISTS slettede_kontoer (
+  email_hash  TEXT PRIMARY KEY,
+  slettet_at  TEXT NOT NULL);
+
 CREATE INDEX IF NOT EXISTS idx_salgsordrer_betalt ON salgsordrer (status, betalt_at);
 
 -- ─────────────────────────────────────────────────────────────────────────

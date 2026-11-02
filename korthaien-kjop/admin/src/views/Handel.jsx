@@ -1035,7 +1035,7 @@ export function MinSide({ onUt, startfane = "ordrer" }) {
       {fane === "onskeliste" && <Ønskeliste />}
       {fane === "salg" && <MineSalg />}
       {fane === "kreditt" && <KundeKreditt />}
-      {fane === "profil" && <Profil />}
+      {fane === "profil" && <Profil onUt={onUt} />}
     </>
   );
 }
@@ -1216,7 +1216,7 @@ function KundeKreditt() {
   );
 }
 
-function Profil() {
+function Profil({ onUt }) {
   const h = useHandel();
   const k = h.kunde;
   const [p, setP] = useState({
@@ -1293,6 +1293,88 @@ function Profil() {
           <button className="knapp">Lagre passord</button>
         </div>
       </form>
+
+      <SlettKonto onUt={onUt} />
+    </div>
+  );
+}
+
+// Kunden sletter kontoen selv. Ordrene står igjen (bokføringsloven), og
+// kreditten følger e-postadressen — det står her før noe skjer.
+function SlettKonto({ onUt }) {
+  const h = useHandel();
+  const k = h.kunde;
+  const [åpen, setÅpen] = useState(false);
+  const [passord, setPassord] = useState("");
+  const [bekreft, setBekreft] = useState("");
+  const [feil, setFeil] = useState("");
+  const [jobber, setJobber] = useState(false);
+  const [ferdig, setFerdig] = useState(false);
+
+  if (ferdig) {
+    return (
+      <div className="panel">
+        <header><h3>Kontoen er slettet</h3></header>
+        <div className="krop">Du er logget ut, og får en bekreftelse på e-post.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="panel" style={åpen ? { borderColor: "var(--feil)" } : undefined}>
+      <header><h3>Slett kontoen</h3></header>
+      <div className="krop skjema">
+        {!åpen ? (
+          <>
+            <p className="dempet" style={{ margin: 0, fontSize: 13 }}>
+              Sletter innloggingen, adressen, telefonnummeret og ønskelista di.
+            </p>
+            <button type="button" className="knapp fare" onClick={() => setÅpen(true)}>Slett kontoen…</button>
+          </>
+        ) : (
+          <form
+            className="skjema"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setFeil("");
+              setJobber(true);
+              try {
+                await kapi.slettKonto(k.har_passord ? { passord } : { bekreft });
+                setFerdig(true);
+                await h.oppdaterKonto();
+                onUt?.();
+              } catch (e2) {
+                setFeil(e2.message);
+              }
+              setJobber(false);
+            }}
+          >
+            {feil && <div className="varsel feil" style={{ margin: 0 }}>{feil}</div>}
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.55 }}>
+              <li>Innloggingen, adressen, telefonnummeret og ønskelista slettes. Du logges ut overalt.</li>
+              <li>Ordrene dine oppbevares i fem år, fordi bokføringsloven krever det.</li>
+              {h.kreditt_ore > 0 && (
+                <li>
+                  Du har <b>{kroner(h.kreditt_ore)}</b> i kreditt. Den står igjen på e-postadressen, og er der hvis du
+                  lager konto igjen med samme adresse. Vil du heller bruke den først, gjør det før du sletter.
+                </li>
+              )}
+            </ul>
+            {k.har_passord ? (
+              <label>Passordet ditt, for å bekrefte
+                <input type="password" autoComplete="current-password" required value={passord} onChange={(e) => setPassord(e.target.value)} />
+              </label>
+            ) : (
+              <label>Skriv SLETT for å bekrefte
+                <input value={bekreft} required onChange={(e) => setBekreft(e.target.value)} />
+              </label>
+            )}
+            <div className="rad-flex">
+              <button type="button" className="knapp" disabled={jobber} onClick={() => { setÅpen(false); setFeil(""); }}>Avbryt</button>
+              <button className="knapp fare" disabled={jobber}>{jobber ? "Sletter…" : "Slett kontoen for godt"}</button>
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

@@ -731,7 +731,8 @@ export function Personvern() {
         <H>Hvor lenge</H>
         <p>
           Ordrer og betalinger oppbevares i fem år etter regnskapsåret, fordi bokføringsloven krever det. Kundekontoen
-          beholdes til du ber oss slette den. Ønskelista og lagrede adresser slettes sammen med kontoen.
+          beholdes til du sletter den selv under Min side → Profil, eller ber oss om det. Innloggingen, ønskelista og
+          lagrede adresser slettes sammen med kontoen. Kreditt står igjen på e-postadressen, så den ikke går tapt.
         </p>
 
         <H>Hvem som behandler opplysningene for oss</H>

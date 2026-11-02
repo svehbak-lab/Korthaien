@@ -246,6 +246,7 @@ export default function Kunder({ onFeil, onMelding }) {
             <p style={{ marginBottom: 0 }}>
               {resultat.rader} rader: <b>{resultat.nye} nye</b>, {resultat.oppdatert} fantes fra før,{" "}
               {resultat.falske} falske hoppet over, {resultat.ugyldige} med ugyldig eller dobbel e-post.
+              {resultat.slettet > 0 && ` ${resultat.slettet} har slettet kontoen sin selv og ble ikke tatt inn.`}
             </p>
           )}
         </div>

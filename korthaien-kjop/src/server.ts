@@ -47,7 +47,7 @@ import { ordreStatistikk, lagerrapport, lagerhistorikk, lagreLagermåling } from
 import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./rapporter.js";
 import {
   COOKIE as KUNDE_COOKIE, KontoFeil, registrer, loggInn, nySesjon, avsluttSesjon, settKundeCookie,
-  fjernKundeCookie, kundeValgfri, krevKunde, oppdaterProfil, byttPassord, lagTilbakestilling,
+  fjernKundeCookie, kundeValgfri, krevKunde, oppdaterProfil, byttPassord, slettKonto, lagTilbakestilling,
   brukTilbakestilling, harGoogle, googleUrl, googleKunde, lagBekreftelse, bekreftEpost, importerMystoreKunder, kundeoversikt,
 } from "./kunder.js";
 import {
@@ -754,6 +754,20 @@ app.put("/api/konto/profil", krevKunde, fang(async (req: any, res: any) => {
 app.put("/api/konto/passord", krevKunde, grense(REGLER.konto), fang(async (req: any, res: any) => {
   await byttPassord(req.kunde.id, req.body?.gammelt, req.body?.nytt, req.cookies?.[KUNDE_COOKIE]);
   res.json({ ok: true });
+}));
+
+// Kunden sletter kontoen selv. Passord kreves når kontoen har et; ellers
+// (bare Google) skriver kunden SLETT.
+app.post("/api/konto/slett", krevKunde, grense(REGLER.konto), fang(async (req: any, res: any) => {
+  const r = await slettKonto(req.kunde.id, { passord: req.body?.passord, bekreft: req.body?.bekreft });
+  fjernKundeCookie(res);
+  try {
+    const { sendKontoSlettet } = await import("./epost.js");
+    await sendKontoSlettet(r.email, r.kreditt_ore);
+  } catch (e: any) {
+    console.error("E-posten om slettet konto feilet:", e?.message);
+  }
+  res.json({ ok: true, kreditt_ore: r.kreditt_ore });
 }));
 
 // Svarer det samme enten adressen finnes eller ikke. Ellers kunne hvem som

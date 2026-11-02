@@ -674,6 +674,29 @@ export async function varsleSendt(ordreId: number, beskjed?: string, rettelser: 
   });
 }
 
+// Bekreftelse på at kontoen er slettet, med det som står igjen og hvorfor.
+export async function sendKontoSlettet(email: string, kredittØre: number): Promise<Utfall> {
+  const kreditt = kredittØre > 0
+    ? `Du hadde ${kr(kredittØre)} i kreditt. Den forsvinner ikke: den står på e-postadressen din, og er der igjen hvis du lager en ny konto med samme adresse.`
+    : "";
+  const lagret = "Ordrene dine oppbevares i fem år etter regnskapsåret, fordi bokføringsloven krever det. Alt annet — innlogging, adresse, telefon og ønskeliste — er slettet.";
+  return send({
+    til: email,
+    bcc: MIN_ADRESSE(),
+    emne: "Kontoen din er slettet — Korthaien",
+    html: RAMME(
+      `<h2 style="font-size:20px;margin:0 0 6px">Kontoen din er slettet</h2>
+       <p style="line-height:1.6">Kontoen for ${trygg(email)} på korthaien.no er slettet, og du er logget ut overalt.</p>
+       <p style="line-height:1.6">${trygg(lagret)}</p>
+       ${kreditt ? `<p style="line-height:1.6">${trygg(kreditt)}</p>` : ""}
+       <p style="line-height:1.6">Takk for at du handlet hos oss. Du er alltid velkommen tilbake.</p>`,
+      "Konto slettet"
+    ),
+    tekst: [`Kontoen for ${email} på korthaien.no er slettet, og du er logget ut overalt.`, lagret, kreditt,
+      "Takk for at du handlet hos oss. Du er alltid velkommen tilbake."].filter(Boolean).join("\n\n"),
+  });
+}
+
 export async function sendTilbakestilling(email: string, lenke: string): Promise<Utfall> {
   return send({
     til: email,

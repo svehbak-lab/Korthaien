@@ -31,7 +31,7 @@ test("import: nye kontoer uten passord, falske og ugyldige hoppes over", async (
   // Kari finnes fra før med eget navn; det skal ikke overskrives.
   await db().execute({ sql: "INSERT INTO kunder (email, navn, created_at) VALUES ('kari@eksempel.no', 'Kari Selv', '2026-10-01T00:00:00Z')" });
   const r = await konto.importerMystoreKunder(CSV);
-  assert.deepEqual(r, { rader: 5, nye: 1, oppdatert: 1, falske: 1, ugyldige: 2 });
+  assert.deepEqual(r, { rader: 5, nye: 1, oppdatert: 1, falske: 1, ugyldige: 2, slettet: 0 });
   const ola = (await db().execute("SELECT * FROM kunder WHERE email = 'ola@eksempel.no'")).rows[0];
   assert.equal(ola.navn, "Ola Nordmann");
   assert.equal(ola.passord_hash, null);
