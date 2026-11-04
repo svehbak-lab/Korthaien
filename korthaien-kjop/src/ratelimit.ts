@@ -170,12 +170,62 @@ export function grense(regel: Regel) {
   };
 }
 
+// ── kortkvote for katalogen ─────────────────────────────────────────────────
+// Forespørsler sier lite om katalogen: et navnesøk gir tre kort, en side
+// med hele katalogen gir hundre. Derfor telles kortene hver adresse får se.
+//
+// En kunde som søker og blar, ser noen hundre kort i timen. En skraper som
+// henter hele lageret (19 500 kort i november 2026), ser alt på et kvarter.
+// Med kvoten under tar det samme flere døgn fra én adresse.
+//
+// Innloggede kunder med bekreftet e-post, og adresser som har sendt inn en
+// ordre, får fire ganger så mye. En skraper som logger inn, har dessuten
+// fortalt hvem den er.
+export const KORTKVOTE = { perTime: 3000, perDøgn: 10000 };
+const TIME = 60 * 60_000;
+const kortTime = new Map<string, Vindu>();
+const kortDøgn = new Map<string, Vindu>();
+
+function vindu(kart: Map<string, Vindu>, nøkkel: string, varighet: number): Vindu {
+  const nå = Date.now();
+  let v = kart.get(nøkkel);
+  if (!v || v.utløper <= nå) {
+    if (kart.size >= MAKS_NØKLER) rydd(kart, nå);
+    v = { antall: 0, utløper: nå + varighet };
+    kart.set(nøkkel, v);
+  }
+  return v;
+}
+
+// Har adressen brukt opp kvoten? Gir meldingen kunden skal se, eller null.
+export function kortkvoteBrukt(ip: string, innlogget: boolean): { feil: string; sekunder: number } | null {
+  const faktor = innlogget || erKunde(ip) ? KUNDE_FAKTOR : 1;
+  const t = vindu(kortTime, ip, TIME);
+  const d = vindu(kortDøgn, ip, DØGN);
+  const full = d.antall >= KORTKVOTE.perDøgn * faktor ? d : t.antall >= KORTKVOTE.perTime * faktor ? t : null;
+  if (!full) return null;
+  return {
+    sekunder: sekunderIgjen(full),
+    feil:
+      `Du har sett svært mange kort på kort tid. Søk etter kortnavn, eller prøv igjen kl. ${klokkeslett(full)}.` +
+      (innlogget ? "" : " Logger du inn, får du se mer."),
+  };
+}
+
+export function brukKortkvote(ip: string, antall: number): void {
+  if (!(antall > 0)) return;
+  vindu(kortTime, ip, TIME).antall += antall;
+  vindu(kortDøgn, ip, DØGN).antall += antall;
+}
+
 // Bare for tester — grensene er i minnet, og en test skal ikke arve tellingen
 // fra den forrige.
 export function nullstill() {
   korte.clear();
   lange.clear();
   kunder.clear();
+  kortTime.clear();
+  kortDøgn.clear();
 }
 
 export function status() {

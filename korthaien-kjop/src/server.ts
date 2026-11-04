@@ -42,7 +42,7 @@ import {
   totpStatus, startTotp, bekreftTotp, slåAvTotp, sjekkAndreTrinn,
 } from "./auth.js";
 import { byggIndeks, foreslå } from "./settnavn.js";
-import { grense, REGLER } from "./ratelimit.js";
+import { grense, REGLER, hentIp, kortkvoteBrukt, brukKortkvote } from "./ratelimit.js";
 import { katalogMedKø, glemKatalog } from "./katalogkø.js";
 import { ordreStatistikk, lagerrapport, lagerhistorikk, lagreLagermåling } from "./statistikk.js";
 import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./rapporter.js";
@@ -914,7 +914,18 @@ app.get("/api/butikk/foretak", grense(REGLER.butikk), fang(async (req: any, res:
   });
 }));
 
-app.get("/api/butikk/katalog", grense(REGLER.butikk), fang(async (req: any, res: any) => {
+app.get("/api/butikk/katalog", grense(REGLER.butikk), kundeValgfri, fang(async (req: any, res: any) => {
+  // Kortkvoten: hvor mange kort adressen har fått se. Stopper skraping av
+  // hele lageret uten å merkes for den som søker og blar (ratelimit.ts).
+  // Admin (du selv) telles ikke.
+  const ip = hentIp(req);
+  const telles = !erAdmin(req);
+  const brukt = telles ? kortkvoteBrukt(ip, !!req.kunde?.bekreftet) : null;
+  if (brukt) {
+    res.setHeader("Retry-After", String(brukt.sekunder));
+    res.status(429).json({ feil: brukt.feil, kortkvote: true });
+    return;
+  }
   const sett = String(req.query.sett || "").toLowerCase();
   const tall = (v: any) => (v === undefined || v === "" ? undefined : Number(v));
   const filter = {
@@ -934,7 +945,9 @@ app.get("/api/butikk/katalog", grense(REGLER.butikk), fang(async (req: any, res:
       perSide: tall(req.query.perSide) === undefined ? undefined : Math.min(100, tall(req.query.perSide)!),
       utenTokens: String(req.query.utenTokens || "") === "1",
   };
-  res.json(await katalogMedKø(filter, () => butikkvisning(filter)));
+  const svar: any = await katalogMedKø(filter, () => butikkvisning(filter));
+  if (telles) brukKortkvote(ip, Array.isArray(svar?.kort) ? svar.kort.length : 0);
+  res.json(svar);
 }));
 
 app.get("/api/butikk/nyeste", grense(REGLER.butikk), fang(async (req: any, res: any) => {
