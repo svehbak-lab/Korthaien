@@ -43,6 +43,9 @@ export type BulkLinje = {
   foil: boolean;
   condHint: Condition | null;
   feil?: string;
+  // «5× Animate Dead (2 GD, 3 PL)»: antall per tilstand. Linjen deles i én
+  // linje per tilstand i parseBulk. null i cond betyr «ikke vurdert».
+  fordeling?: { qty: number; cond: Condition | null }[];
 };
 
 export const MAX_LINJER = 100;
@@ -94,7 +97,49 @@ export function parseBulk(tekst: string, maks = MAX_LINJER): BulkLinje[] {
     .filter((l) => !OVERSKRIFT.test(l))
     .slice(0, maks);
 
-  return linjer.map((rå, i) => tolkLinje(rå, i + 1));
+  // En linje med fordeling på tilstander blir én linje per tilstand, så hver
+  // får sin egen pris. Linjenumrene telles på nytt etterpå; de er nøkkelen
+  // kjøpssiden bruker for hver rad.
+  const ut: BulkLinje[] = [];
+  for (const [i, rå] of linjer.entries()) {
+    const l = tolkLinje(rå, i + 1);
+    if (!l.fordeling || l.feil) { ut.push(l); continue; }
+    const { fordeling, ...uten } = l;
+    let igjen = l.qty;
+    for (const d of fordeling) {
+      ut.push({ ...uten, qty: d.qty, condHint: d.cond ?? l.condHint });
+      igjen -= d.qty;
+    }
+    // Står det flere kort enn fordelingen dekker, blir resten en egen linje
+    // uten tilstand.
+    if (igjen > 0) ut.push({ ...uten, qty: igjen });
+  }
+  return ut.map((l, i) => ({ ...l, linje: i + 1 }));
+}
+
+// «(2 GD, 3 PL, 1 ikke vurdert)»: antall foran hver tilstand, skilt med komma.
+// Godtas bare når hver eneste del er et tall og en kjent tilstand — ellers
+// er det et settnavn eller noe annet i parentesen.
+const IKKE_VURDERT = /^(ikke\s*vurdert|uvurdert|ukjent|unrated|ungraded|not\s*graded|unknown|\?)$/i;
+function tolkFordeling(inni: string): { qty: number; cond: Condition | null }[] | null {
+  const deler = inni.split(/\s*[,;/+]\s*/).filter(Boolean);
+  if (!deler.length) return null;
+  const ut: { qty: number; cond: Condition | null }[] = [];
+  for (const d of deler) {
+    const m = d.match(/^(\d{1,3})\s*[x×]?\s+(.+)$/i);
+    if (!m) return null;
+    const qty = parseInt(m[1], 10);
+    const tekst = m[2].trim();
+    if (IKKE_VURDERT.test(tekst)) { ut.push({ qty, cond: null }); continue; }
+    const cond = tolkCondition(tekst);
+    if (!cond) return null;
+    ut.push({ qty, cond });
+  }
+  // EX og LP er samme trinn på min skala (det samme gjelder GD/MP og PL/HP).
+  // Slås sammen, så «1 EX, 4 LP» blir én linje med fem, ikke to.
+  const samlet = new Map<Condition | null, number>();
+  for (const d of ut) if (d.qty > 0) samlet.set(d.cond, (samlet.get(d.cond) || 0) + d.qty);
+  return samlet.size ? [...samlet].map(([cond, qty]) => ({ qty, cond })) : null;
 }
 
 function tolkLinje(rå: string, nr: number): BulkLinje {
@@ -133,6 +178,17 @@ function tolkLinje(rå: string, nr: number): BulkLinje {
   // linjenummeret, ikke antallet — «3.» og «3)» leses derfor ikke som tre
   // eksemplarer, mens «3 Bolt» og «3x Bolt» gjør det.
   s = s.replace(/^\s*(?:[-–—*•·]|\d{1,3}[.)])\s+/, "");
+
+  // Fordeling på tilstander i parentes: «(2 GD, 3 PL)». Tas ut før settkoden
+  // under, som ellers ville lest den som et settnavn.
+  for (const m of s.matchAll(/\(([^()]{1,80})\)/g)) {
+    const f = tolkFordeling(m[1]);
+    if (f) {
+      r.fordeling = f;
+      s = s.replace(m[0], " ");
+      break;
+    }
+  }
 
   // Settkode eller settnavn i parentes/klamme: «(M10) 146», «[Magic 2010]».
   const iKlamme = s.match(
@@ -268,19 +324,20 @@ function trekkUtCondition(s: string, r: BulkLinje): string {
 
 function trekkUtAntall(s: string, r: BulkLinje): string {
   // Foran: «4 Bolt», «4x Bolt», «4 x Bolt», «4 stk Bolt».
-  const foran = s.match(/^\s*(\d{1,3})\s*(?:[xX*]|stk|pcs)?\s+/);
+  // × (gangetegnet) like gjerne som x: «1× Air Elemental».
+  const foran = s.match(/^\s*(\d{1,3})\s*(?:[xX×✕*]|stk|pcs)?\s+/);
   if (foran) {
     r.qty = parseInt(foran[1], 10);
     return s.slice(foran[0].length);
   }
   // «4x Bolt» uten mellomrom etter x.
-  const tett = s.match(/^\s*(\d{1,3})[xX]\s*/);
+  const tett = s.match(/^\s*(\d{1,3})[xX×✕]\s*/);
   if (tett) {
     r.qty = parseInt(tett[1], 10);
     return s.slice(tett[0].length);
   }
   // Bak: «Bolt x4», «Bolt (4)».
-  const bak = s.match(/[\s,]+[xX*]\s*(\d{1,3})\s*$/) || s.match(/\s+\((\d{1,3})\)\s*$/);
+  const bak = s.match(/[\s,]+[xX×✕*]\s*(\d{1,3})\s*$/) || s.match(/\s+\((\d{1,3})\)\s*$/);
   if (bak) {
     r.qty = parseInt(bak[1], 10);
     return s.slice(0, bak.index);

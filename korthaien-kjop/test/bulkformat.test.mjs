@@ -114,3 +114,20 @@ test("tomme og ugyldige linjer merkes i stedet for å forsvinne", () => {
   assert.equal(parseBulk("\n\n   \n").length, 0);
   assert.ok(én("500 Lightning Bolt").feil);
 });
+
+test("× som gangetegn, og fordeling på tilstander i parentes", () => {
+  const l = parseBulk("21× Control Magic (1 EX, 2 GD, 4 LP, 5 PL, 9 ikke vurdert)\tAlpha");
+  // EX og LP er samme trinn og slås sammen: 1 + 4 = 5 EX.
+  assert.deepEqual(l.map((x) => [x.qty, x.condHint, x.navn]), [
+    [5, "EX", "Control Magic"], [2, "VG", "Control Magic"],
+    [5, "G", "Control Magic"], [9, null, "Control Magic"],
+  ]);
+  // Fordelingen er ikke et settnavn.
+  assert.ok(l.every((x) => x.settNavnHint === null));
+  // Flere kort enn fordelingen dekker: resten blir en egen linje.
+  const rest = parseBulk("3 Sol Ring (1 NM)");
+  assert.deepEqual(rest.map((x) => [x.qty, x.condHint]), [[1, "NM"], [2, null]]);
+  // Settnavn i parentes er fortsatt settnavn.
+  assert.equal(parseBulk("1× Lightning Bolt (Magic 2010)")[0].settNavnHint, "Magic 2010");
+  assert.equal(parseBulk("1× Lightning Bolt (Magic 2010)")[0].qty, 1);
+});

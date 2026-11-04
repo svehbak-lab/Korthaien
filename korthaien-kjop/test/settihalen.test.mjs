@@ -94,3 +94,24 @@ test("ukjent kort er fortsatt ukjent", async () => {
   const r = await én("finnes ikke innistrad");
   assert.equal(r.status, "ukjent");
 });
+
+test("lista fra et regneark: «5× Kort (2 GD, 3 PL)<tab>Alpha» deles per tilstand og finner Alpha", async () => {
+  await db().execute(`INSERT INTO sets (code,name,released_at,card_count,parent_code) VALUES ('lea','Limited Edition Alpha','1993-08-05',295,NULL)`);
+  await db().execute({
+    sql: `INSERT INTO set_rules (set_code,enabled,wanted_default,wanted_foil,conditions,ladder,buy_pct,updated_at)
+          VALUES ('lea',1,30,0,?,?,NULL,'2026-01-01')`,
+    args: [JSON.stringify(["NM", "EX", "VG", "G"]), JSON.stringify({ NM: 100, EX: 80, VG: 60, G: 40 })],
+  });
+  await kort("cm-lea", "Control Magic", "lea", "52", 300);
+  await kort("cm-leb", "Control Magic", "leb", "52", 200);
+
+  const r = await løsBulk(parseBulk("5× Control Magic (2 GD, 3 PL)\tAlpha\n1× Control Magic\tAlpha"));
+  assert.equal(r.length, 3);
+  assert.deepEqual(r.map((x) => x.linje), [1, 2, 3]);
+  assert.deepEqual(r.map((x) => [x.qty, x.condHint]), [[2, "VG"], [3, "G"], [1, null]]);
+  for (const x of r) {
+    assert.equal(x.status, "løst");
+    assert.equal(x.valg[0].set_code, "lea");
+    assert.equal(x.navn, "Control Magic");
+  }
+});

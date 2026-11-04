@@ -174,6 +174,9 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
   // Indeksen bygges først når en linje trenger den, og bare én gang.
   let indeks: Awaited<ReturnType<typeof settIndeks>> | null = null;
   const hentIndeks = async () => (indeks ??= await settIndeks());
+  let koder: Set<string> | null = null;
+  const hentKoder = async () =>
+    (koder ??= new Set((await db().execute("SELECT code FROM sets")).rows.map((x: any) => String(x.code).toLowerCase())));
   const ut: BulkResultat[] = [];
 
   for (const l of linjer) {
@@ -184,6 +187,13 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
     }
 
     let settHint = l.settHint;
+    // Et kort ord i egen kolonne kan være et settnavn og ikke en kode:
+    // «Alpha», «Beta», «Ice». Finnes ikke koden, slås ordet opp som navn —
+    // og finnes det heller ikke, droppes det, så navnet alene får prøve.
+    if (settHint && !(await hentKoder()).has(settHint)) {
+      const t = finnSett(settHint, await hentIndeks());
+      settHint = t ? t.code : null;
+    }
     // «[Magic 2010]» er et settnavn, ikke en kode. Vi godtar bare entydige
     // treff — to mulige sett er verre enn ingen, for da gjetter vi feil pris.
     if (!settHint && l.settNavnHint) {
