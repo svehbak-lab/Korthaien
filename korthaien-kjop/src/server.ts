@@ -43,6 +43,7 @@ import {
 } from "./auth.js";
 import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER } from "./ratelimit.js";
+import { katalogMedKø, glemKatalog } from "./katalogkø.js";
 import { ordreStatistikk, lagerrapport, lagerhistorikk, lagreLagermåling } from "./statistikk.js";
 import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./rapporter.js";
 import {
@@ -63,6 +64,17 @@ const app = express();
 // Render setter X-Forwarded-For. Uten dette ser alle brukere ut som én
 // adresse, og rate limiting ville rammet alle samtidig.
 app.set("trust proxy", 1);
+// Katalogsvar huskes et minutt (katalogkø.ts). Enhver endring på serveren —
+// salg, betaling, innlegging, retting i admin — glemmer dem, så butikken
+// alltid viser lageret som det er. Handlekurv og innlogging endrer ikke
+// lageret og lar dem stå.
+const ENDRER_IKKE_LAGER = /^\/api\/(butikk\/kurv|konto\/|bulk|quote)/;
+app.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS" && !ENDRER_IKKE_LAGER.test(req.path)) {
+    res.on("finish", () => glemKatalog());
+  }
+  next();
+});
 // Stripe signerer den rå kroppen. Webhooken må derfor få den før
 // JSON-tolkingen under gjør den om til et objekt.
 app.post("/api/stripe/webhook", express.raw({ type: "application/json", limit: "1mb" }), async (req: any, res: any) => {
@@ -905,8 +917,7 @@ app.get("/api/butikk/foretak", grense(REGLER.butikk), fang(async (req: any, res:
 app.get("/api/butikk/katalog", grense(REGLER.butikk), fang(async (req: any, res: any) => {
   const sett = String(req.query.sett || "").toLowerCase();
   const tall = (v: any) => (v === undefined || v === "" ? undefined : Number(v));
-  res.json(
-    await butikkvisning({
+  const filter = {
       sett,
       q: req.query.q ? String(req.query.q) : undefined,
       tekst: req.query.tekst ? String(req.query.tekst) : undefined,
@@ -922,8 +933,8 @@ app.get("/api/butikk/katalog", grense(REGLER.butikk), fang(async (req: any, res:
       side: tall(req.query.side),
       perSide: tall(req.query.perSide) === undefined ? undefined : Math.min(100, tall(req.query.perSide)!),
       utenTokens: String(req.query.utenTokens || "") === "1",
-    })
-  );
+  };
+  res.json(await katalogMedKø(filter, () => butikkvisning(filter)));
 }));
 
 app.get("/api/butikk/nyeste", grense(REGLER.butikk), fang(async (req: any, res: any) => {

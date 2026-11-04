@@ -325,13 +325,30 @@ export const kunde = {
   oppsett: () => kundekall("/api/butikk/oppsett"),
   // Det offentlige butikkvinduet: katalog, kortsider, sett og sealed uten innlogging.
   foretak: () => kundekall("/api/butikk/foretak"),
-  katalog: (f) => {
+  // Søket gis opp etter 20 sekunder, så siden aldri blir stående på
+  // «Henter…». signal lar et nytt søk avbryte det forrige.
+  katalog: async (f, signal) => {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries(f)) {
       if (v === "" || v === null || v === undefined || v === false) continue;
       p.set(k, v === true ? "1" : String(v));
     }
-    return kundekall(`/api/butikk/katalog?${p}`);
+    const ctl = new AbortController();
+    const tid = setTimeout(() => ctl.abort("tid"), 20000);
+    signal?.addEventListener("abort", () => ctl.abort("avbrutt"));
+    try {
+      return await kundekall(`/api/butikk/katalog?${p}`, { signal: ctl.signal });
+    } catch (e) {
+      if (ctl.signal.aborted) {
+        const feil = new Error(ctl.signal.reason === "tid" ? "Søket tok for lang tid." : "Avbrutt.");
+        feil.tidsavbrudd = ctl.signal.reason === "tid";
+        feil.avbrutt = ctl.signal.reason !== "tid";
+        throw feil;
+      }
+      throw e;
+    } finally {
+      clearTimeout(tid);
+    }
   },
   kort: (id) => kundekall(`/api/butikk/kort/${encodeURIComponent(id)}`),
   nyesteSett: (antall) => kundekall(`/api/butikk/nyeste?antall=${antall || 5}`),

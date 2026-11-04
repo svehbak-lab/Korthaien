@@ -135,6 +135,10 @@ function ButikkSider({ onFeil }) {
   const [alle, setAlle] = useState([]);
   const [data, setData] = useState(null);
   const [laster, setLaster] = useState(false);
+  // Søket ga opp (tok over 20 sekunder). Da vises «Prøv igjen», ikke et
+  // evig «Henter…».
+  const [tregt, setTregt] = useState(false);
+  const [forsøk, setForsøk] = useState(0);
   const [visning, setVisning] = useState("detalj");
   const [visFiltre, setVisFiltre] = useState(false);
   // Fanene er én tilstand, ikke to. «Sealed» og «Om settet» er faner paa
@@ -315,18 +319,25 @@ function ButikkSider({ onFeil }) {
   const søkNr = useRef(0);
   useEffect(() => {
     setLaster(true);
+    setTregt(false);
     const nr = ++søkNr.current;
+    const avbryt = new AbortController();
     const t = setTimeout(() => {
       kapi.katalog({
         sett: sett || "", finish, sortering, side, perSide, ...f,
         rarity: f.rarity.join(","), farge: f.farge.join(","), type: f.type.join(","),
-      })
+      }, avbryt.signal)
         .then((d) => { if (nr === søkNr.current) setData(d); })
-        .catch((e) => { if (nr === søkNr.current) onFeil(e); })
+        .catch((e) => {
+          if (nr !== søkNr.current || e.avbrutt) return;
+          if (e.tidsavbrudd) setTregt(true);
+          else onFeil(e);
+        })
         .finally(() => { if (nr === søkNr.current) setLaster(false); });
     }, 250);
-    return () => clearTimeout(t);
-  }, [sett, finish, sortering, side, perSide, f]);
+    // Et nytt søk avbryter det forrige, så et tregt svar ikke holder igjen.
+    return () => { clearTimeout(t); avbryt.abort(); };
+  }, [sett, finish, sortering, side, perSide, f, forsøk]);
 
   const synlige = useMemo(() => {
     if (!data) return [];
@@ -705,8 +716,14 @@ function ButikkSider({ onFeil }) {
               {fane === "om" && <OmSettet info={settinfo} onSett={velgSett} />}
 
               {KORTFANER.some((x) => x.id === fane) && laster && <p className="dempet">Henter…</p>}
+              {KORTFANER.some((x) => x.id === fane) && !laster && tregt && (
+                <div className="varsel" style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <span>Søket tok uvanlig lang tid.</span>
+                  <button className="knapp liten" onClick={() => setForsøk((n) => n + 1)}>Prøv igjen</button>
+                </div>
+              )}
 
-              {KORTFANER.some((x) => x.id === fane) && !laster && data && (
+              {KORTFANER.some((x) => x.id === fane) && !laster && !tregt && data && (
                 <>
                   {/* Kort uten pris vises ikke. Listen over dem ligger under
                       Lagerrapport, ikke her der kundene ser det. */}
