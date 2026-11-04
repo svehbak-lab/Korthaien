@@ -44,6 +44,7 @@ import {
 import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER, hentIp, kortkvoteBrukt, brukKortkvote } from "./ratelimit.js";
 import { katalogMedKø, glemKatalog } from "./katalogkø.js";
+import { stengSkrapere } from "./skrapere.js";
 import { ordreStatistikk, lagerrapport, lagerhistorikk, lagreLagermåling } from "./statistikk.js";
 import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./rapporter.js";
 import {
@@ -69,6 +70,8 @@ app.set("trust proxy", 1);
 // alltid viser lageret som det er. Handlekurv og innlogging endrer ikke
 // lageret og lar dem stå.
 const ENDRER_IKKE_LAGER = /^\/api\/(butikk\/kurv|konto\/|bulk|quote)/;
+// Kjente skrapere får en melding i stedet for butikkens katalog (skrapere.ts).
+app.use("/api/butikk", stengSkrapere);
 app.use((req, res, next) => {
   if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS" && !ENDRER_IKKE_LAGER.test(req.path)) {
     res.on("finish", () => glemKatalog());
