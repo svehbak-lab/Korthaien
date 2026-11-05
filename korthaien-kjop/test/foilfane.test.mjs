@@ -125,3 +125,27 @@ test("det foil-bare kortet kommer med sin foilpris, ikke uten pris", async () =>
   assert.equal(k.varianter[0].finish, "foil");
   assert.ok(k.varianter[0].tilstander.length > 0);
 });
+
+test("Alle treff er alle vanlige pluss alle foils: et kort i begge utførelser står to ganger", async () => {
+  // Bestemt 5. november: «Alle» skal være summen av de to andre fanene.
+  await db().execute(`INSERT INTO lager_bevegelser (card_id,finish,condition,antall,grunn,created_at)
+                      VALUES ('begge','foil','NM',1,'manuell','2026-01-02T00:00:00Z')`);
+  const [alle, vanlig, foil] = await Promise.all([fane("alle"), fane("nonfoil"), fane("foil")]);
+  assert.equal(alle.antall.alle, vanlig.antall.nonfoil + foil.antall.foil);
+  assert.equal(alle.totalt, 4);
+  assert.equal(alle.kort.length, 4);
+  const begge = alle.kort.filter((k) => k.id === "begge");
+  assert.deepEqual(begge.map((k) => k.vis_finish).sort(), ["foil", "nonfoil"]);
+  for (const k of begge) {
+    assert.equal(k.varianter.length, 1, "hver rad er én utførelse");
+    assert.equal(k.varianter[0].finish, k.vis_finish);
+  }
+  // Sortert på pris: foil (4 $) før vanlig (2 $).
+  const d = await butikkvisning({ finish: "alle", baresalg: true, perSide: 50, sortering: "pris_ned" });
+  assert.equal(d.kort[0].vis_finish, "foil");
+  // Sidedeling over radene, ikke over kortene.
+  const s1 = await butikkvisning({ finish: "alle", baresalg: true, perSide: 3, side: 1 });
+  const s2 = await butikkvisning({ finish: "alle", baresalg: true, perSide: 3, side: 2 });
+  assert.equal(s1.kort.length + s2.kort.length, 4);
+  assert.equal(s1.sider, 2);
+});

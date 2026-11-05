@@ -449,24 +449,38 @@ export async function butikkvisning(opts: ButikkFilter) {
   const foilFørst = opts.finish === "foil";
 
   // «Prisen som gjelder» i sorteringen: din egen først, så markedets.
-  const SORTPRIS = foilFørst
+  const sortpris = (f: "foil" | "nonfoil") => f === "foil"
     ? `COALESCE((SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='foil'),
                 c.usd_foil, c.usd, 0)`
     : `COALESCE((SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='nonfoil'),
                 c.usd, c.usd_foil, 0)`;
+  const SORTPRIS = sortpris(foilFørst ? "foil" : "nonfoil");
+  // Sist lagt inn. Bare bevegelser som la noe TIL teller — en linje som tok
+  // kort ut av hylla gjør ikke kortet nytt i butikken.
+  const sistInn = (f?: string) => `(SELECT MAX(b.created_at) FROM (${butikklagerSql()}) b
+               WHERE b.card_id = c.id AND b.antall > 0${f ? ` AND b.finish = '${f}'` : ""})`;
 
   const ORDNING = {
     pris_ned: `${SORTPRIS} DESC, c.name`,
     pris_opp: `${SORTPRIS} ASC, c.name`,
     navn: "c.name COLLATE NOCASE ASC",
     navn_ned: "c.name COLLATE NOCASE DESC",
-    // Sist lagt inn. Bare bevegelser som la noe TIL teller — en linje som
-    // tok kort ut av hylla gjør ikke kortet nytt i butikken.
-    nyeste: `(SELECT MAX(b.created_at) FROM (${butikklagerSql()}) b
-               WHERE b.card_id = c.id AND b.antall > 0) DESC, c.name`,
+    nyeste: `${sistInn()} DESC, c.name`,
   }[String(opts.sortering || "")] || (opts.sett
     ? "CAST(c.collector_number AS INTEGER), c.collector_number"
     : "c.name COLLATE NOCASE ASC");
+  // Samme rekkefølge for «Alle treff», der hver rad er ett kort i én
+  // utførelse. Kolonnene regnes per rad (sortpris, sist_inn), så ORDER BY kan
+  // stå utenfor UNION-en. Vanlig før foil når alt annet er likt.
+  const ORDNING_RADER = {
+    pris_ned: "sortpris DESC, name, vis_finish DESC",
+    pris_opp: "sortpris ASC, name, vis_finish DESC",
+    navn: "name COLLATE NOCASE ASC, vis_finish DESC",
+    navn_ned: "name COLLATE NOCASE DESC, vis_finish DESC",
+    nyeste: "sist_inn DESC, name, vis_finish DESC",
+  }[String(opts.sortering || "")] || (opts.sett
+    ? "CAST(collector_number AS INTEGER), collector_number, vis_finish DESC"
+    : "name COLLATE NOCASE ASC, vis_finish DESC");
 
   // ── hva hver fane viser ────────────────────────────────────────────────
   // Regelen skrives ett sted og brukes to ganger: til radene og til tallet i
@@ -518,6 +532,13 @@ export async function butikkvisning(opts: ButikkFilter) {
     nonfoil: Number(tellinger.rows[0]?.nonfoil || 0),
     foil: Number(tellinger.rows[0]?.foil || 0),
   };
+  // «Alle treff» er alle vanlige pluss alle foils (bestemt 5. november): et
+  // kort du har i begge utførelser, står to ganger, én rad for hver. Tallet
+  // i fanen er da summen av de to andre.
+  // Oppslag på bestemte kort (ider: forsiden, ønskelista) vil ha én rad per
+  // kort med begge utførelser, som før.
+  const alleRader = !opts.ider?.length && opts.finish !== "foil" && opts.finish !== "nonfoil";
+  if (alleRader) antall.alle = antall.nonfoil + antall.foil;
   // Totalen er fanens egen, siden den styrer sidetallet.
   const totalt =
     opts.finish === "foil"
@@ -526,18 +547,36 @@ export async function butikkvisning(opts: ButikkFilter) {
         ? antall.nonfoil
         : antall.alle;
 
-  const r = await db().execute({
-    sql: `SELECT c.id, c.name, c.collector_number, c.rarity, c.variant,
+  const KOLONNER = `c.id, c.name, c.collector_number, c.rarity, c.variant,
                  c.usd, c.usd_foil, c.has_nonfoil, c.has_foil, c.er_token,
                  c.image_uri, c.type_line, c.oracle_text, c.mana_cost,
                  c.power, c.toughness, c.loyalty, c.colors, c.artist, c.set_code,
-                 COALESCE(s.visningsnavn, s.name) AS set_name
-            FROM cards c LEFT JOIN sets s ON s.code = c.set_code
-           WHERE ${hvorMedFinish.join(" AND ")}
-           ORDER BY ${ORDNING}
-           LIMIT ? OFFSET ?`,
-    args: [...args, perSide, (side - 1) * perSide],
-  });
+                 COALESCE(s.visningsnavn, s.name) AS set_name`;
+  const r = alleRader
+    ? await db().execute({
+        sql: `SELECT * FROM (
+                SELECT ${KOLONNER}, 'nonfoil' AS vis_finish,
+                       ${sortpris("nonfoil")} AS sortpris, ${sistInn("nonfoil")} AS sist_inn
+                  FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+                 WHERE ${[...hvor, VISES.nonfoil].join(" AND ")}
+                UNION ALL
+                SELECT ${KOLONNER}, 'foil' AS vis_finish,
+                       ${sortpris("foil")} AS sortpris, ${sistInn("foil")} AS sist_inn
+                  FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+                 WHERE ${[...hvor, VISES.foil].join(" AND ")}
+              )
+              ORDER BY ${ORDNING_RADER}
+              LIMIT ? OFFSET ?`,
+        args: [...args, ...args, perSide, (side - 1) * perSide],
+      })
+    : await db().execute({
+        sql: `SELECT ${KOLONNER}
+                FROM cards c LEFT JOIN sets s ON s.code = c.set_code
+               WHERE ${hvorMedFinish.join(" AND ")}
+               ORDER BY ${ORDNING}
+               LIMIT ? OFFSET ?`,
+        args: [...args, perSide, (side - 1) * perSide],
+      });
 
   const ider = (r.rows as any[]).map((x) => String(x.id));
   const manuelleSalg = await hentManuellSalg(ider);
@@ -550,6 +589,8 @@ export async function butikkvisning(opts: ButikkFilter) {
     for (const finish of ["nonfoil", "foil"]) {
       if (finish === "nonfoil" && !Number(k.has_nonfoil)) continue;
       if (finish === "foil" && !Number(k.has_foil)) continue;
+      // I «Alle treff» er raden én utførelse.
+      if (k.vis_finish && finish !== k.vis_finish) continue;
 
       const manuell = manuelleSalg.get(`${k.id}:${finish}`) ?? null;
       const manuellKjøp = manuelleKjøp.get(`${k.id}:${finish}`) ?? null;
@@ -567,14 +608,17 @@ export async function butikkvisning(opts: ButikkFilter) {
       if (!tilstander.length) continue;
       varianter.push({ finish, manuell, tilstander, påLager });
     }
-    if (varianter.length) ut.push({ ...k, name: tokenNavn(k.name, k.er_token), varianter });
+    if (varianter.length) {
+      const { sortpris: _sp, sist_inn: _si, ...kort } = k;
+      ut.push({ ...kort, name: tokenNavn(k.name, k.er_token), varianter });
+    }
   }
 
   // Prisintervallet kan først anvendes når prisene er regnet ut, og de finnes
   // bare for denne siden. Det filtrerer derfor innenfor siden.
   const filtrert = ut.filter((k) => {
     if (opts.prisFra === undefined && opts.prisTil === undefined) return true;
-    const finish = foilFørst ? "foil" : "nonfoil";
+    const finish = k.vis_finish || (foilFørst ? "foil" : "nonfoil");
     const p = k.varianter.find((v: any) => v.finish === finish)?.tilstander?.[0]?.ore ?? -1;
     if (p < 0) return true;
     if (opts.prisFra !== undefined && p < opts.prisFra * 100) return false;

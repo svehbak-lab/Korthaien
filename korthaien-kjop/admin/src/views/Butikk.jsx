@@ -165,6 +165,8 @@ function ButikkSider({ onFeil }) {
   const [f, setF] = useState(() => (lenke.q ? { ...TOMT, q: lenke.q } : TOMT));
   // ?kort=<id> fra e-posten om ønskelista åpner kortet direkte.
   const [åpentKort, setÅpentKort] = useState(() => lenke.kort || null);
+  // Utførelsen raden man trykket på, så en foil-rad åpner kortet i foil.
+  const [åpenFinish, setÅpenFinish] = useState(null);
   const [minSideFane, setMinSideFane] = useState(() =>
     lenke.side === "onskeliste" ? "onskeliste" : lenke.side === "minesalg" ? "salg" : "ordrer"
   );
@@ -347,12 +349,12 @@ function ButikkSider({ onFeil }) {
         // I «Vanlig» og «Foil» er det den utførelsen og ingen annen — står
         // du i foil-fanen, skal du ikke få et kort uten foilmerke.
         //
-        // I «Alle treff» vises kortet én gang. Da er det den vanlige
-        // utgaven, for det er den folk flest leter etter, og foil hvis den
-        // er den eneste som finnes. Begge prisene står uansett på kortsiden.
+        // I «Alle treff» er hver rad én utførelse (vis_finish): et kort du
+        // har både vanlig og i foil, står to ganger. Fanen er da summen av
+        // Vanlig og Foil.
         valgt:
           finish === "alle"
-            ? k.varianter.find((v) => v.finish === "nonfoil") || k.varianter[0] || null
+            ? k.varianter.find((v) => v.finish === k.vis_finish) || k.varianter[0] || null
             : k.varianter.find((v) => v.finish === finish) || null,
       }))
       .filter((k) => k.valgt?.tilstander.length);
@@ -415,6 +417,7 @@ function ButikkSider({ onFeil }) {
     return skall(
       <Kortside
         id={åpentKort}
+        startFinish={åpenFinish}
         onLukk={() => { setÅpentKort(null); setSkjerm("liste"); }}
         onÅpne={setÅpentKort}
         onSett={velgSett}
@@ -734,9 +737,9 @@ function ButikkSider({ onFeil }) {
                     <div className="b-galleri">
                       {synlige.map((k) => (
                         <Galleriflis
-                          key={k.id}
+                          key={`${k.id}:${k.valgt.finish}`}
                           kort={k}
-                          onÅpne={() => setÅpentKort(k.id)}
+                          onÅpne={() => { setÅpenFinish(k.valgt.finish); setÅpentKort(k.id); }}
                           onSett={() => velgSett(k.set_code)}
                         />
                       ))}
@@ -744,18 +747,18 @@ function ButikkSider({ onFeil }) {
                   ) : visning === "tekst" ? (
                     synlige.map((k) => (
                       <Tekstrad
-                        key={k.id}
+                        key={`${k.id}:${k.valgt.finish}`}
                         kort={k}
-                        onÅpne={() => setÅpentKort(k.id)}
+                        onÅpne={() => { setÅpenFinish(k.valgt.finish); setÅpentKort(k.id); }}
                         onSett={() => velgSett(k.set_code)}
                       />
                     ))
                   ) : (
                     synlige.map((k) => (
                       <Detaljrad
-                        key={k.id}
+                        key={`${k.id}:${k.valgt.finish}`}
                         kort={k}
-                        onÅpne={() => setÅpentKort(k.id)}
+                        onÅpne={() => { setÅpenFinish(k.valgt.finish); setÅpentKort(k.id); }}
                         onSett={() => velgSett(k.set_code)}
                       />
                     ))
@@ -1387,7 +1390,7 @@ function Galleriflis({ kort, onÅpne, onSett }) {
 // Alt om ett trykk, og de andre utgavene av samme kort. «Samme kort» er
 // Scryfalls oracle_id, ikke navnet — den holder også når navnet er skrevet
 // ulikt mellom utgivelser.
-function Kortside({ id, onLukk, onÅpne, onSett, onFeil, onLoggInn }) {
+function Kortside({ id, startFinish, onLukk, onÅpne, onSett, onFeil, onLoggInn }) {
   const [data, setData] = useState(null);
   const [finish, setFinish] = useState("nonfoil");
   const [valgt, setValgt] = useState(null);
@@ -1397,7 +1400,7 @@ function Kortside({ id, onLukk, onÅpne, onSett, onFeil, onLoggInn }) {
     kapi.kort(id)
       .then((d) => {
         setData(d);
-        const første = d.kort.varianter[0];
+        const første = d.kort.varianter.find((v) => v.finish === startFinish) || d.kort.varianter[0];
         setFinish(første?.finish || "nonfoil");
         setValgt(
           (første?.tilstander.find((t) => t.lager > 0) || første?.tilstander[0])?.condition || "NM"
