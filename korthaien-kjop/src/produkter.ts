@@ -142,6 +142,57 @@ export async function settStørrelser(koder: string[]): Promise<Map<string, numb
   return ut;
 }
 
+// Hva et komplett sett koster om kunden kjøper hvert kort enkeltvis i
+// butikken: summen av din salgspris i Near Mint for hvert nummer i
+// hovedsettet (1 til settets størrelse), vanlig utgave, uten tokens. Brukes
+// i admin til å sette prisen på settet med en rabatt mot det.
+//
+// Kort uten pris telles for seg. Da er summen for lav, og det skal synes.
+export async function enkeltvisVerdi(
+  sett: { set_code: string; foil: boolean; antall: number }[]
+): Promise<Map<string, { sum_ore: number; med_pris: number; uten_pris: number }>> {
+  const ut = new Map<string, { sum_ore: number; med_pris: number; uten_pris: number }>();
+  if (!sett.length) return ut;
+  const { hentSalgsOppsett, salgsprisØre } = await import("./salgspris.js");
+  const opp = await hentSalgsOppsett();
+  const koder = [...new Set(sett.map((s) => s.set_code))];
+  const r = await db().execute({
+    sql: `SELECT c.id, c.set_code, c.collector_number, c.usd, c.usd_foil, c.rarity,
+                 sn.nm_ore AS manuell_nonfoil, sf.nm_ore AS manuell_foil,
+                 pn.usd AS usd_manuell_nonfoil, pf.usd AS usd_manuell_foil
+            FROM cards c
+            LEFT JOIN card_sale_prices sn ON sn.card_id = c.id AND sn.finish = 'nonfoil'
+            LEFT JOIN card_sale_prices sf ON sf.card_id = c.id AND sf.finish = 'foil'
+            LEFT JOIN card_prices pn ON pn.card_id = c.id AND pn.finish = 'nonfoil'
+            LEFT JOIN card_prices pf ON pf.card_id = c.id AND pf.finish = 'foil'
+           WHERE c.set_code IN (${koder.map(() => "?").join(",")})
+             AND c.variant = 'vanlig' AND c.er_token = 0 AND c.er_serialized = 0
+             AND c.collector_number NOT GLOB '*[^0-9]*' AND c.collector_number <> ''`,
+    args: koder,
+  });
+  for (const s of sett) {
+    const finish = s.foil ? "foil" : "nonfoil";
+    // Ett kort per nummer. Finnes det flere (sjeldent), tas det billigste.
+    const perNr = new Map<number, number>();
+    for (const x of r.rows as any[]) {
+      if (String(x.set_code) !== s.set_code) continue;
+      const nr = Number(x.collector_number);
+      if (nr < 1 || nr > s.antall) continue;
+      const pris = salgsprisØre(
+        x, finish, "NM" as any, opp,
+        Number(x[`manuell_${finish}`]) || null,
+        Number(x[`usd_manuell_${finish}`]) || null
+      );
+      const før = perNr.get(nr);
+      perNr.set(nr, før == null ? pris : !pris ? før : !før ? pris : Math.min(før, pris));
+    }
+    let sum = 0, med = 0;
+    for (const p of perNr.values()) if (p > 0) { sum += p; med++; }
+    ut.set(`${s.set_code}:${finish}`, { sum_ore: sum, med_pris: med, uten_pris: s.antall - med });
+  }
+  return ut;
+}
+
 export async function hentProdukt(id: number): Promise<Produkt | null> {
   const r = await db().execute({ sql: "SELECT * FROM produkter WHERE id = ?", args: [id] });
   return r.rows.length ? rad(r.rows[0]) : null;

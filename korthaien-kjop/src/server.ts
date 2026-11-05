@@ -20,7 +20,7 @@ import {
 import { hentFrakt, leggTilFrakt, endreFrakt, slåAvFrakt } from "./frakt.js";
 import {
   hentProdukter, hentProdukt, leggTilProdukt, endreProdukt, slåAvProdukt,
-  antallPerType, erType,
+  antallPerType, erType, enkeltvisVerdi,
 } from "./produkter.js";
 import { settinfo } from "./settinfo.js";
 import { HOLDER_KVOTE, frigiKvote } from "./quota.js";
@@ -1912,12 +1912,22 @@ app.get("/api/admin/butikk/sett/:kode", krevAdmin, fang(async (req: any, res: an
 // kortene har.
 app.get("/api/admin/produkter", krevAdmin, fang(async (req: any, res: any) => {
   const type = String(req.query.type || "");
+  const produkter = await hentProdukter({
+    type: erType(type) ? type : undefined,
+    set_code: String(req.query.sett || "") || undefined,
+    barePåLager: String(req.query.bareLager || "") === "1",
+    bareAktive: String(req.query.alle || "") !== "1",
+  });
+  // Komplette sett: hva kortene ville kostet enkeltvis, så prisen på settet
+  // kan settes med en rabatt mot det.
+  const sett = produkter
+    .filter((p) => p.type === "komplettsett" && p.set_code && p.set_antall)
+    .map((p) => ({ set_code: p.set_code!, foil: p.foil, antall: p.set_antall! }));
+  const verdi = await enkeltvisVerdi(sett);
   res.json({
-    produkter: await hentProdukter({
-      type: erType(type) ? type : undefined,
-      set_code: String(req.query.sett || "") || undefined,
-      barePåLager: String(req.query.bareLager || "") === "1",
-      bareAktive: String(req.query.alle || "") !== "1",
+    produkter: produkter.map((p) => {
+      const v = p.set_code ? verdi.get(`${p.set_code}:${p.foil ? "foil" : "nonfoil"}`) : undefined;
+      return v ? { ...p, enkeltvis_ore: v.sum_ore, enkeltvis_uten_pris: v.uten_pris } : p;
     }),
     antall: await antallPerType(),
   });

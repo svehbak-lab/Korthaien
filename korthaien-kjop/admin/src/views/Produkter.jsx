@@ -32,6 +32,14 @@ export default function Produkter({ onFeil, onMelding }) {
   const [ny, setNy] = useState(TOM);
   const [redigerer, setRedigerer] = useState(null);
   const [jobber, setJobber] = useState(false);
+  // Rabatt på komplette sett mot å kjøpe kortene enkeltvis. Huskes.
+  const [rabattKr, setRabattKr] = useState(() => {
+    try { return localStorage.getItem("komplettsett.rabatt") || "200"; } catch { return "200"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("komplettsett.rabatt", rabattKr); } catch {}
+  }, [rabattKr]);
+  const forslagØre = (p) => Math.max(0, Math.round((p.enkeltvis_ore - tilØre(rabattKr)) / 100) * 100);
 
   async function last() {
     try {
@@ -216,6 +224,16 @@ export default function Produkter({ onFeil, onMelding }) {
             <header>
               <h3>{t.navn}</h3>
               <span className="dempet">{mine.length} produkter</span>
+              {t.id === "komplettsett" && (
+                <label className="dempet" style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+                  Rabatt mot enkeltvis
+                  <input
+                    type="text" inputMode="numeric" value={rabattKr} style={{ width: 70 }}
+                    onChange={(e) => setRabattKr(e.target.value.replace(/[^\d]/g, ""))}
+                  />
+                  kr
+                </label>
+              )}
             </header>
 
             {mine.length === 0 ? (
@@ -230,7 +248,7 @@ export default function Produkter({ onFeil, onMelding }) {
                     <th style={{ width: 60 }}>Rekke</th>
                     <th>Navn</th>
                     <th style={{ width: 70 }}>Sett</th>
-                    <th className="h" style={{ width: 100 }}>Pris per stk</th>
+                    <th className="h" style={{ width: 130 }}>Pris per stk</th>
                     <th className="h" style={{ width: 80 }}>Antall</th>
                     <th>Beskrivelse</th>
                     <th style={{ width: 150 }}></th>
@@ -329,7 +347,32 @@ export default function Produkter({ onFeil, onMelding }) {
                           )}
                         </td>
                         <td className="dempet">{p.set_code || "—"}</td>
-                        <td className="h tall">{kroner(p.pris_ore)}</td>
+                        <td className="h tall">
+                          {kroner(p.pris_ore)}
+                          {p.enkeltvis_ore > 0 && (
+                            <div style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.45, marginTop: 2 }}>
+                              <div className="dempet" title="Summen av din NM-pris for hvert kort i hovedsettet">
+                                enkeltvis {kroner(p.enkeltvis_ore)}
+                              </div>
+                              {p.enkeltvis_uten_pris > 0 && (
+                                <div style={{ color: "var(--feil)" }} title="Disse kortene har ingen pris, så summen er for lav">
+                                  {p.enkeltvis_uten_pris} kort uten pris
+                                </div>
+                              )}
+                              {forslagØre(p) !== p.pris_ore && (
+                                <button
+                                  className="knapp liten"
+                                  style={{ marginTop: 3, fontSize: 11.5 }}
+                                  disabled={jobber}
+                                  title={`Enkeltvis minus ${rabattKr} kr, rundet til hele kroner`}
+                                  onClick={() => lagre({ ...p, pris_kr: tilKr(forslagØre(p)) })}
+                                >
+                                  Sett {kroner(forslagØre(p))}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
                         <td className="h tall">{p.antall}</td>
                         <td className="dempet">{p.beskrivelse || "—"}</td>
                         <td>
