@@ -503,7 +503,7 @@ function Andre({ onFeil }) {
           style={{ width: 170 }}
         >
           {[0, 20, 30, 40, 50, 60].map((n) => (
-            <option key={n} value={n}>{n ? `Minst ${n} % under` : "Alle treff"}</option>
+            <option key={n} value={n}>{n ? `Minst ${n} % under marked` : "Alle treff"}</option>
           ))}
         </select>
         <label style={{ fontSize: 13 }}>
@@ -532,8 +532,8 @@ function Andre({ onFeil }) {
               <th>Kort</th>
               <th>Butikk</th>
               <th style={{ textAlign: "right", width: 100 }}>Deres pris</th>
-              <th style={{ textAlign: "right", width: 100 }}>Din pris</th>
-              <th style={{ textAlign: "right", width: 80 }}>Under</th>
+              <th style={{ textAlign: "right", width: 100 }}>Markedspris</th>
+              <th style={{ textAlign: "right", width: 90 }} title="Hvor langt under markedsprisen (Scryfall × dollarkurs) tilbudet ligger">Under marked</th>
               <th style={{ textAlign: "right", width: 100 }}>Ligget</th>
             </tr>
           </thead>
@@ -576,10 +576,12 @@ function Andre({ onFeil }) {
                 </td>
                 <td style={{ textAlign: "right", fontWeight: 600 }}>{kroner(t.pris_ore)}</td>
                 <td style={{ textAlign: "right" }}>
-                  {kroner(t.salg_ore)}
-                  <div className="dempet" style={{ fontSize: 11 }}>marked {kroner(t.marked_ore)}</div>
+                  {kroner(t.marked_ore)}
+                  <div className="dempet" style={{ fontSize: 11 }}>din pris {kroner(t.salg_ore)}</div>
                 </td>
-                <td style={{ textAlign: "right", fontWeight: 600 }}>{t.avvik_pct} %</td>
+                <td style={{ textAlign: "right", fontWeight: 600 }}>
+                  {t.avvik_pct < 0 ? `${-t.avvik_pct} % over` : `${t.avvik_pct} %`}
+                </td>
                 <td style={{ textAlign: "right" }} className="dempet">
                   {t.borte_at ? (
                     <span title={`Borte ${dag(t.borte_at)}`}>solgt</span>
