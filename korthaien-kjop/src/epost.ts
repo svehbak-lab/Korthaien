@@ -656,8 +656,7 @@ export async function varsleSendt(ordreId: number, beskjed?: string, rettelser: 
   const bm = betaltMedFor(o);
   return send({
     til: String(o.email),
-    // Med en beskjed eller rettelse får jeg en kopi, så jeg ser hva kunden fikk.
-    ...(b || rettelser.length ? { bcc: MIN_ADRESSE() } : {}),
+    // Ingen kopi til meg: e-posten går bare til kunden (bestemt 5. november).
     emne: henting ? `Ordre ${o.ordrenr} er klar til henting — Korthaien` : `Ordre ${o.ordrenr} er sendt — Korthaien`,
     html: RAMME(
       boksHtml(b, rettelser, bm) + (henting

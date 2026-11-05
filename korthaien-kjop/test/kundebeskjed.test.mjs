@@ -34,17 +34,17 @@ const r = await db().execute({
 });
 const id = Number(r.lastInsertRowid);
 
-test("beskjeden står øverst, unnsluppet, og gir meg kopi ved sending", async () => {
+test("beskjeden står øverst, unnsluppet; sendt-e-posten går bare til kunden", async () => {
   sendt.length = 0;
   await varsleSendt(id, "Fant ikke <Ragavan>.\nBeklager!");
   const e = sendt[0];
-  assert.deepEqual(e.bcc, ["meg@korthaien.no"]);
+  assert.equal(e.bcc, undefined);
   assert.ok(e.html.indexOf("Beskjed fra Korthaien") < e.html.indexOf("Pakken er på vei"));
   assert.match(e.html, /Fant ikke &lt;Ragavan&gt;/);
   assert.match(e.text, /^BESKJED FRA KORTHAIEN\nFant ikke <Ragavan>/);
 });
 
-test("uten beskjed: ingen boks og ingen kopi", async () => {
+test("uten beskjed: ingen boks", async () => {
   sendt.length = 0;
   await varsleSendt(id, "   ");
   assert.equal(sendt[0].bcc, undefined);
