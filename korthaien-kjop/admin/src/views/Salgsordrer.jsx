@@ -186,7 +186,8 @@ function Tall({ merke, m }) {
 }
 
 // ── én ordre ────────────────────────────────────────────────────────────────
-function Ordre({ nr, onLukk, onFeil, onMelding }) {
+// Brukes også fra kundesiden, for å åpne en ordre uten å gå via lista.
+export function Ordre({ nr, onLukk, onFeil, onMelding }) {
   const [o, setO] = useState(null);
   const [plukket, setPlukket] = useState(new Set());
   const [spor, setSpor] = useState("");

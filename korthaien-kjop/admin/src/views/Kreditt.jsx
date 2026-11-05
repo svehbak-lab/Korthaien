@@ -127,7 +127,8 @@ export default function Kreditt({ onFeil }) {
 }
 
 // Én kunde: saldoen, boka, og de to måtene å endre den på.
-export function Konto({ epost, onLukk, onFeil, tilbake = "← Alle kontoer", navn }) {
+// innebygd: står nederst på kundesiden, uten egen tilbakeknapp og overskrift.
+export function Konto({ epost, onLukk, onFeil, tilbake = "← Alle kontoer", navn, innebygd = false }) {
   const [adresse, setAdresse] = useState(epost);
   const [data, setData] = useState(null);
   const [modus, setModus] = useState("legg");
@@ -175,14 +176,16 @@ export function Konto({ epost, onLukk, onFeil, tilbake = "← Alle kontoer", nav
 
   return (
     <>
-      <div className="rad-flex" style={{ marginBottom: 12 }}>
-        <button className="knapp liten" onClick={onLukk}>{tilbake}</button>
-      </div>
+      {!innebygd && (
+        <div className="rad-flex" style={{ marginBottom: 12 }}>
+          <button className="knapp liten" onClick={onLukk}>{tilbake}</button>
+        </div>
+      )}
 
       <div className="panel">
         <header>
           <h3>
-            {navn ? <>{navn} <span className="dempet" style={{ fontWeight: 400 }}>{adresse}</span></> : adresse || "Ny kreditt"}
+            {innebygd ? "Kreditt" : navn ? <>{navn} <span className="dempet" style={{ fontWeight: 400 }}>{adresse}</span></> : adresse || "Ny kreditt"}
           </h3>
           {data && (
             <span className="sum" style={{ marginLeft: "auto" }}>

@@ -50,7 +50,7 @@ import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./ra
 import {
   COOKIE as KUNDE_COOKIE, KontoFeil, registrer, loggInn, nySesjon, avsluttSesjon, settKundeCookie,
   fjernKundeCookie, kundeValgfri, krevKunde, oppdaterProfil, byttPassord, slettKonto, lagTilbakestilling,
-  brukTilbakestilling, harGoogle, googleUrl, googleKunde, lagBekreftelse, bekreftEpost, importerMystoreKunder, kundeoversikt,
+  brukTilbakestilling, harGoogle, googleUrl, googleKunde, lagBekreftelse, bekreftEpost, importerMystoreKunder, kundeoversikt, kundeDetalj,
 } from "./kunder.js";
 import {
   SalgFeil, prisKurv, åpneKasse, avbrytKasse, stripeHendelse, hentOrdre as hentSalgsordre, lagerForPlukk, offentlig, kundensOrdrer,
@@ -2014,6 +2014,12 @@ app.get("/api/admin/kunder", krevAdmin, fang(async (req: any, res: any) => {
     String(req.query.q || ""), Math.max(0, Number(req.query.side) || 0),
     String(req.query.sort || "sist_inne"), String(req.query.opp || "") === "1",
   ));
+}));
+
+app.get("/api/admin/kunder/detalj", krevAdmin, fang(async (req: any, res: any) => {
+  const epost = String(req.query.epost || "").trim();
+  if (!epost) throw new HttpFeil(400, "Mangler e-postadresse.");
+  res.json(await kundeDetalj(epost));
 }));
 
 app.get("/api/admin/kunder/fylker", krevAdmin, fang(async (_req: any, res: any) => {

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { api, kroner, dato, importerKunder } from "../api.js";
 import { Konto } from "./Kreditt.jsx";
 import KundeKart from "./KundeKart.jsx";
+import KundeSide from "./KundeSide.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KUNDER
@@ -66,6 +67,19 @@ export default function Kunder({ onFeil, onMelding }) {
     }
   }
 
+  // En kunde i lista åpner kundesiden. «Ny kreditt» (tom adresse) går rett
+  // til kredittboka, for der finnes det ingen kunde å vise ennå.
+  if (åpen !== null && åpen.email) {
+    return (
+      <KundeSide
+        epost={åpen.email}
+        navn={åpen.navn}
+        onLukk={() => { setÅpen(null); last(); }}
+        onFeil={onFeil}
+        onMelding={onMelding}
+      />
+    );
+  }
   if (åpen !== null) {
     return (
       <Konto
@@ -156,7 +170,7 @@ export default function Kunder({ onFeil, onMelding }) {
           </button>
         </header>
         <div className="krop dempet" style={{ fontSize: 13, paddingTop: 8, paddingBottom: 8 }}>
-          Trykk på en kunde for å se og endre kreditten. Selgere fra kjøpssiden som har kreditt men ikke konto, står også her.
+          Trykk på en kunde for å se kontoen, ordrene og kreditten. Selgere fra kjøpssiden som har kreditt men ikke konto, står også her.
         </div>
         <table>
           <thead>

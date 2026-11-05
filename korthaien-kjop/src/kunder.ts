@@ -681,6 +681,104 @@ export async function slettKonto(id: number, inn: { passord?: string; bekreft?: 
   return { email, navn: String(k.navn || ""), kreditt_ore: kreditt };
 }
 
+// ── én kunde i admin ────────────────────────────────────────────────────────
+// Alt om én e-postadresse: kontoen (om den finnes), kjøpene fra butikken,
+// kortene hen har solgt til butikken, og ønskelista. Kreditten hentes for
+// seg av kredittvisningen.
+//
+// Adressen er nøkkelen, ikke konto-id-en: ordrer lagt som gjest og salg fra
+// kjøpssiden før kontoen fantes, ligger bare på adressen.
+export async function kundeDetalj(epostInn: string) {
+  const email = normaliserEpost(epostInn);
+  const k = await db().execute({ sql: "SELECT * FROM kunder WHERE email = ?", args: [email] });
+  const rad: any = k.rows[0] ?? null;
+  const id = rad ? Number(rad.id) : -1;
+
+  // Åpne og utløpte kasser er forlatte handlekurver, ikke kjøp.
+  const salg = await db().execute({
+    sql: `SELECT o.ordrenr, o.created_at, o.betalt_at, o.sendt_at, o.kansellert_at, o.status,
+                 o.antall_kort, o.varer_ore, o.frakt_ore, o.stripe_ore, o.kreditt_ore,
+                 COALESCE(o.gavekort_ore, 0) AS gavekort_ore, o.betalingsmate, o.frakt_navn,
+                 o.adresse, o.postnr, o.poststed,
+                 (SELECT COALESCE(SUM(j.refusjon_ore), 0) FROM salgsordre_justeringer j WHERE j.ordre_id = o.id) AS rettet_ore
+            FROM salgsordrer o
+           WHERE (lower(trim(o.email)) = ? OR o.kunde_id = ?)
+             AND o.status NOT IN ('apen', 'utlopt')
+           ORDER BY o.created_at DESC`,
+    args: [email, id],
+  });
+  const kjøp = await db().execute({
+    sql: `SELECT o.order_no, o.created_at, o.received_at, o.credit_sent_at, o.status,
+                 o.quoted_ore, o.total_ore, o.discount_code, o.salgsverdi_ore,
+                 (SELECT COALESCE(SUM(l.qty), 0) FROM order_lines l WHERE l.order_id = o.id AND l.fjernet_at IS NULL) AS kort
+            FROM orders o
+           WHERE lower(trim(o.email)) = ?
+           ORDER BY o.created_at DESC`,
+    args: [email],
+  });
+  const ønsker = rad
+    ? await db().execute({
+        sql: "SELECT navn, finish, created_at, varslet_at FROM onskeliste WHERE kunde_id = ? ORDER BY created_at DESC",
+        args: [id],
+      })
+    : { rows: [] as any[] };
+
+  const salgsordrer = (salg.rows as any[]).map((x) => ({
+    ordrenr: String(x.ordrenr),
+    created_at: String(x.created_at),
+    betalt_at: x.betalt_at ? String(x.betalt_at) : null,
+    sendt_at: x.sendt_at ? String(x.sendt_at) : null,
+    status: String(x.status),
+    antall_kort: Number(x.antall_kort || 0),
+    // Det kunden betalte, alle kilder, minus det som er rettet bort.
+    sum_ore: Number(x.stripe_ore) + Number(x.kreditt_ore) + Number(x.gavekort_ore),
+    stripe_ore: Number(x.stripe_ore),
+    kreditt_ore: Number(x.kreditt_ore),
+    gavekort_ore: Number(x.gavekort_ore),
+    rettet_ore: Number(x.rettet_ore || 0),
+    betalingsmate: x.betalingsmate ? String(x.betalingsmate) : null,
+    frakt_navn: x.frakt_navn ? String(x.frakt_navn) : null,
+    adresse: [x.adresse, [x.postnr, x.poststed].filter(Boolean).join(" ")].filter(Boolean).join(", ") || null,
+  }));
+  const kjøpsordrer = (kjøp.rows as any[]).map((x) => ({
+    order_no: String(x.order_no),
+    created_at: String(x.created_at),
+    received_at: x.received_at ? String(x.received_at) : null,
+    oppgjort_at: x.credit_sent_at ? String(x.credit_sent_at) : null,
+    status: String(x.status),
+    quoted_ore: Number(x.quoted_ore || 0),
+    total_ore: Number(x.total_ore || 0),
+    discount_code: x.discount_code ? String(x.discount_code) : null,
+    kort: Number(x.kort || 0),
+  }));
+
+  const levert = salgsordrer.filter((o) => o.status !== "kansellert");
+  const oppgjort = kjøpsordrer.filter((o) => o.oppgjort_at || o.discount_code);
+  return {
+    email,
+    kunde: rad ? { ...tilKunde(rad), kilde: String(rad.kilde), nyhetsbrev: !!Number(rad.nyhetsbrev),
+      sist_inne_at: rad.sist_inne_at ? String(rad.sist_inne_at) : null,
+      epost_bekreftet_at: rad.epost_bekreftet_at ? String(rad.epost_bekreftet_at) : null,
+      mystore_ordrer: rad.mystore_ordrer == null ? null : Number(rad.mystore_ordrer),
+      mystore_ordreverdi_ore: rad.mystore_ordreverdi_ore == null ? null : Number(rad.mystore_ordreverdi_ore),
+      mystore_sist_inne: rad.mystore_sist_inne ? String(rad.mystore_sist_inne) : null } : null,
+    tall: {
+      kjøpt_ordrer: levert.length,
+      kjøpt_ore: levert.reduce((n, o) => n + o.sum_ore - o.rettet_ore, 0),
+      kjøpt_kort: levert.reduce((n, o) => n + o.antall_kort, 0),
+      solgt_ordrer: oppgjort.length,
+      solgt_ore: oppgjort.reduce((n, o) => n + o.total_ore, 0),
+      solgt_kort: oppgjort.reduce((n, o) => n + o.kort, 0),
+    },
+    salgsordrer,
+    kjøpsordrer,
+    ønskeliste: (ønsker.rows as any[]).map((x) => ({
+      navn: String(x.navn), finish: String(x.finish), created_at: String(x.created_at),
+      varslet_at: x.varslet_at ? String(x.varslet_at) : null,
+    })),
+  };
+}
+
 // ── oversikt i admin ────────────────────────────────────────────────────────
 // Alle med konto, pluss de som har kreditt uten konto (selgere fra
 // kjøpssiden som ikke har logget inn). Kreditten følger e-postadressen, så de
