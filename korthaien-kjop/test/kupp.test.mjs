@@ -210,14 +210,3 @@ test("foil og vanlig av samme kort roterer hver for seg", () => {
   const sist = new Map([["a:nonfoil", "2026-10-14T00:00:00Z"]]);
   assert.deepEqual(nesteBolk(liste, sist, 1), [{ card_id: "a", finish: "foil" }]);
 });
-
-test("prosenten i kupplista er under markedsprisen, ikke under din salgspris", async () => {
-  const { underMarkedPct } = await import("../src/kupp.ts");
-  // Marked 100 kr, din pris 130 kr. Et tilbud på 80 kr er 20 % under marked
-  // (og 38 % under din pris).
-  assert.equal(underMarkedPct(8000, 10000), 20);
-  // Over markedet, men under din pris: negativt.
-  assert.equal(underMarkedPct(11000, 10000), -10);
-  // Uten markedspris finnes det ingen fasit.
-  assert.equal(underMarkedPct(8000, 0), null);
-});

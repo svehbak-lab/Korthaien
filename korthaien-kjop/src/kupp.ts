@@ -409,47 +409,18 @@ async function merkSjekket(kort: VaktKort, status: string, nå: string): Promise
 
 // ── visning ──────────────────────────────────────────────────────────────────
 
-// Prosenten i lista er avstanden til MARKEDSPRISEN (Scryfall i dollar ganger
-// dollarkursen), ikke til din egen salgspris. Salgsprisen har påslaget ditt i
-// seg, så «30 % under din pris» kunne være omtrent markedspris — ikke noe
-// kupp. Mot markedet betyr 30 % under det samme for alle kort.
-//
-// Hvilke treff som lagres, styres fortsatt av grensen mot din salgspris
-// (kuppgrenseØre). Den er rausere, så lista har alt markedsfilteret trenger.
-export const underMarkedPct = (prisØre: number, markedØre: number): number | null =>
-  markedØre > 0 ? Math.round((1 - prisØre / markedØre) * 100) : null;
-
 export async function kuppliste(opts: { visBorte?: boolean; minAvvik?: number } = {}) {
-  const salg = await hentSalgsOppsett();
   const r = await db().execute({
-    sql: `SELECT t.*, c.name, c.set_code, c.rarity, c.image_uri, c.usd, c.usd_foil,
+    sql: `SELECT t.*, c.name, c.set_code, c.rarity, c.image_uri,
                  COALESCE(s.visningsnavn, s.name) AS set_name
             FROM kupp_treff t
             JOIN cards c ON c.id = t.card_id
             LEFT JOIN sets s ON s.code = c.set_code
-           WHERE (? OR t.borte_at IS NULL)`,
-    args: [opts.visBorte ? 1 : 0],
+           WHERE (? OR t.borte_at IS NULL) AND t.avvik_pct >= ?
+           ORDER BY t.borte_at IS NOT NULL, t.avvik_pct DESC, t.sist_sett DESC
+           LIMIT 500`,
+    args: [opts.visBorte ? 1 : 0, opts.minAvvik ?? 0],
   });
-  // Markedsprisen fra da treffet ble funnet. Mangler den (eldre treff),
-  // brukes dagens.
-  const markedFor = (x: any) => {
-    const lagret = Number(x.marked_ore || 0);
-    if (lagret > 0) return lagret;
-    const usd = Number((String(x.finish) === "foil" ? x.usd_foil : x.usd) || 0);
-    return Math.round(usd * salg.usd_nok * 100);
-  };
-  const rader = (r.rows as any[])
-    .map((x) => ({ x, marked: markedFor(x) }))
-    .map((y) => ({ ...y, pct: underMarkedPct(Number(y.x.pris_ore), y.marked) }))
-    // Uten markedspris finnes det ingen fasit, og treffet kan ikke rangeres.
-    // «Alle treff» (0) viser også tilbud over markedet — de er under din pris.
-    .filter((y) => y.pct != null && (!opts.minAvvik || y.pct >= opts.minAvvik))
-    .sort((a, b) =>
-      Number(!!a.x.borte_at) - Number(!!b.x.borte_at) ||
-      b.pct! - a.pct! ||
-      String(b.x.sist_sett).localeCompare(String(a.x.sist_sett))
-    )
-    .slice(0, 500);
 
   const sjekk = await db().execute(
     `SELECT COUNT(*) AS n, MAX(sist_sjekket) AS siste,
@@ -465,7 +436,7 @@ export async function kuppliste(opts: { visBorte?: boolean; minAvvik?: number } 
       aldri_sjekket: Number(s.usjekket || 0),
       sist_kjørt: s.siste ? String(s.siste) : null,
     },
-    treff: rader.map(({ x, marked, pct }) => ({
+    treff: (r.rows as any[]).map((x) => ({
       card_id: String(x.card_id),
       finish: String(x.finish),
       name: String(x.name),
@@ -481,11 +452,8 @@ export async function kuppliste(opts: { visBorte?: boolean; minAvvik?: number } 
       condition: x.condition ? String(x.condition) : null,
       collector_number: x.collector_number ? String(x.collector_number) : null,
       salg_ore: Number(x.salg_ore),
-      marked_ore: marked,
-      // Under markedsprisen. Negativt = over markedet (men under din pris).
-      avvik_pct: pct!,
-      // Under din egen salgspris, som før.
-      under_din_pct: Number(x.avvik_pct),
+      marked_ore: Number(x.marked_ore || 0),
+      avvik_pct: Number(x.avvik_pct),
       usikker: !!Number(x.usikker),
       url: x.url ? String(x.url) : null,
       forst_sett: String(x.forst_sett),
