@@ -166,29 +166,34 @@ export async function enkeltvisVerdi(
             LEFT JOIN card_prices pn ON pn.card_id = c.id AND pn.finish = 'nonfoil'
             LEFT JOIN card_prices pf ON pf.card_id = c.id AND pf.finish = 'foil'
            WHERE c.set_code IN (${koder.map(() => "?").join(",")})
-             AND c.variant = 'vanlig' AND c.er_token = 0 AND c.er_serialized = 0
-             AND c.collector_number NOT GLOB '*[^0-9]*' AND c.collector_number <> ''`,
+             AND c.er_token = 0 AND c.er_serialized = 0`,
     args: koder,
   });
+  // Samme utvalg som grunnsettet i Lagerrapport (statistikk.ts), så de to
+  // tallene alltid er like: alle kort med nummer 1 til settets siste, uansett
+  // variantmerking — Scryfall merker enkelte kort i hovedsettet som varianter.
+  // Ett kort per nummer; korteste nummer vinner, så «7» slår «7†».
   for (const s of sett) {
     const finish = s.foil ? "foil" : "nonfoil";
-    // Ett kort per nummer. Finnes det flere (sjeldent), tas det billigste.
-    const perNr = new Map<number, number>();
+    const valgt = new Map<number, any>();
     for (const x of r.rows as any[]) {
       if (String(x.set_code) !== s.set_code) continue;
-      const nr = Number(x.collector_number);
-      if (nr < 1 || nr > s.antall) continue;
+      const cn = String(x.collector_number || "");
+      const nr = parseInt(cn, 10);
+      if (!Number.isFinite(nr) || nr < 1 || nr > s.antall) continue;
+      const før = valgt.get(nr);
+      if (!før || cn.length < String(før.collector_number).length) valgt.set(nr, x);
+    }
+    let sum = 0, med = 0;
+    for (const x of valgt.values()) {
       const pris = salgsprisØre(
         x, finish, "NM" as any, opp,
         Number(x[`manuell_${finish}`]) || null,
         Number(x[`usd_manuell_${finish}`]) || null
       );
-      const før = perNr.get(nr);
-      perNr.set(nr, før == null ? pris : !pris ? før : !før ? pris : Math.min(før, pris));
+      if (pris > 0) { sum += pris; med++; }
     }
-    let sum = 0, med = 0;
-    for (const p of perNr.values()) if (p > 0) { sum += p; med++; }
-    ut.set(`${s.set_code}:${finish}`, { sum_ore: sum, med_pris: med, uten_pris: s.antall - med });
+    ut.set(`${s.set_code}:${finish}`, { sum_ore: sum, med_pris: med, uten_pris: valgt.size - med });
   }
   return ut;
 }

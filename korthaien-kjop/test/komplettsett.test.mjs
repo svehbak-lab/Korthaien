@@ -48,3 +48,14 @@ test("egen salgspris på et kort brukes", async () => {
   assert.equal(v.uten_pris, 0);
   assert.ok(v.sum_ore >= 50000);
 });
+
+test("samme tall som grunnsettet i Lagerrapport, også når et kort i hovedsettet er merket som variant", async () => {
+  await kort("f", "6", 7, { variant: "showcase" }); // i hovedsettet, men merket variant
+  await db().execute(`INSERT INTO set_rules (set_code,enabled,wanted_default,wanted_foil,conditions,ladder,buy_pct,updated_at,grunnsett_til)
+                      VALUES ('tst',1,4,0,'["NM"]','{"NM":100}',NULL,'2026-01-01',6)`);
+  const { lagerrapport } = await import("../src/statistikk.ts");
+  const g = (await lagerrapport()).sett.find((s) => s.set_code === "tst").grunnsett;
+  const v = (await enkeltvisVerdi([{ set_code: "tst", foil: false, antall: 6 }])).get("tst:nonfoil");
+  assert.equal(v.sum_ore, g.salg_ore);
+  assert.equal(v.uten_pris, g.uten_pris);
+});
