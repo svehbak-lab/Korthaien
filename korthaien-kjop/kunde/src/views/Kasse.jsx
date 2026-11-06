@@ -385,8 +385,7 @@ export function Skjema({ kurv, sender, config, meg, onTilbake, onSend, onVilkår
           <li>Oppgjøret er butikkreditt på korthaien.no, ikke kontanter.</li>
           {config?.order_expiry_days && (
             <li>
-              Pakken må være sendt innen {config.order_expiry_days} dager. Etter det
-              frigjøres kortene til andre selgere.
+              Pakken må være sendt innen {config.order_expiry_days} dager.
             </li>
           )}
         </ul>

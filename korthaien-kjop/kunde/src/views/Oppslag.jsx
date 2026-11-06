@@ -63,7 +63,7 @@ export default function Oppslag({ onFeil, onTilbake }) {
 }
 
 const STATUS = {
-  pending: ["Venter på kortene", "Send pakken innen fristen, ellers frigjøres kvoten."],
+  pending: ["Venter på kortene", "Send pakken innen fristen."],
   received: ["Mottatt og under kontroll", "Kortene er kommet fram. Jeg går gjennom dem nå."],
   stocked: ["Ferdig behandlet", "Kortene er lagerført."],
   cancelled: ["Kansellert", "Denne ordren er avsluttet."],

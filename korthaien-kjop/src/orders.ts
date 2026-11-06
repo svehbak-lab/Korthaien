@@ -198,7 +198,7 @@ export function instruksjoner(ordreNr: string, adresse: string, utløp: Date) {
     "SORTER KORTENE i nøyaktig samme rekkefølge som kortlista under. Lista går sett for sett, og innenfor hvert sett fra de sjeldneste kortene til de vanligste. Dette er det viktigste punktet: en usortert bunke tar mange ganger så lang tid å gå gjennom, og oppgjøret ditt blir tilsvarende forsinket.",
     "Legg en lapp i pakken med ordrenummer " + ordreNr + ".",
     "Send til:\n" + adresse,
-    "Pakken må være sendt innen " + utløp.toLocaleDateString("nb-NO") + " — etter det frigjøres kortene til andre selgere.",
+    "Pakken må være sendt innen " + utløp.toLocaleDateString("nb-NO") + ".",
     "Summen er et anslag. Jeg går gjennom alle kortene ved mottak og sjekker antall og tilstand. Avviker noe fra det du oppga, justerer jeg linjen og skriver hva som ble endret.",
     // Etter overgangen (27. oktober 2026) er oppgjøret kreditt på kontoen,
     // ikke en rabattkode.
