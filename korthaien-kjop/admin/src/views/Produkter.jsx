@@ -32,14 +32,28 @@ export default function Produkter({ onFeil, onMelding }) {
   const [ny, setNy] = useState(TOM);
   const [redigerer, setRedigerer] = useState(null);
   const [jobber, setJobber] = useState(false);
-  // Rabatt på komplette sett mot å kjøpe kortene enkeltvis. Huskes.
-  const [rabattKr, setRabattKr] = useState(() => {
-    try { return localStorage.getItem("komplettsett.rabatt") || "200"; } catch { return "200"; }
-  });
+  // Automatisk pris på komplette sett: enkeltvis minus rabatten, avrundet
+  // til …49/…99. Lagres som innstilling; null = fast pris på hvert sett.
+  const [autoPct, setAutoPct] = useState(null);
+  const [autoFelt, setAutoFelt] = useState("10");
   useEffect(() => {
-    try { localStorage.setItem("komplettsett.rabatt", rabattKr); } catch {}
-  }, [rabattKr]);
-  const forslagØre = (p) => Math.max(0, Math.round((p.enkeltvis_ore - tilØre(rabattKr)) / 100) * 100);
+    api.innstillinger().then((s) => {
+      setAutoPct(s.komplettsett_rabatt_pct ?? null);
+      if (s.komplettsett_rabatt_pct != null) setAutoFelt(String(s.komplettsett_rabatt_pct));
+    }).catch(onFeil);
+  }, []);
+  async function lagreAuto(pct) {
+    setJobber(true);
+    try {
+      await api.lagreInnstillinger({ komplettsett_rabatt_pct: pct });
+      setAutoPct(pct);
+      await last();
+      onMelding?.(pct == null ? "Komplette sett har fast pris igjen." : `Komplette sett koster nå enkeltvis minus ${pct} %.`);
+    } catch (e) {
+      onFeil(e);
+    }
+    setJobber(false);
+  }
 
   async function last() {
     try {
@@ -225,14 +239,22 @@ export default function Produkter({ onFeil, onMelding }) {
               <h3>{t.navn}</h3>
               <span className="dempet">{mine.length} produkter</span>
               {t.id === "komplettsett" && (
-                <label className="dempet" style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
-                  Rabatt mot enkeltvis
+                <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+                  <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input
+                      type="checkbox" disabled={jobber} checked={autoPct != null}
+                      onChange={(e) => lagreAuto(e.target.checked ? Number(autoFelt) || 0 : null)}
+                    />
+                    Automatisk pris: enkeltvis minus
+                  </label>
                   <input
-                    type="text" inputMode="numeric" value={rabattKr} style={{ width: 70 }}
-                    onChange={(e) => setRabattKr(e.target.value.replace(/[^\d]/g, ""))}
+                    type="text" inputMode="numeric" value={autoFelt} style={{ width: 46 }}
+                    onChange={(e) => setAutoFelt(e.target.value.replace(/[^\d]/g, ""))}
+                    onBlur={() => autoPct != null && Number(autoFelt) !== autoPct && lagreAuto(Number(autoFelt) || 0)}
                   />
-                  kr
-                </label>
+                  %
+                  <span className="dempet" title="Avrundet til nærmeste pris som slutter på 49 eller 99">(…49/…99)</span>
+                </div>
               )}
             </header>
 
@@ -349,26 +371,19 @@ export default function Produkter({ onFeil, onMelding }) {
                         <td className="dempet">{p.set_code || "—"}</td>
                         <td className="h tall">
                           {kroner(p.pris_ore)}
+                          {p.auto_pris && <span className="merkelapp m-ok" style={{ marginLeft: 4, fontSize: 10.5 }}>auto</span>}
                           {p.enkeltvis_ore > 0 && (
                             <div style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.45, marginTop: 2 }}>
                               <div className="dempet" title="Summen av din NM-pris for hvert kort i hovedsettet">
                                 enkeltvis {kroner(p.enkeltvis_ore)}
                               </div>
                               {p.enkeltvis_uten_pris > 0 && (
-                                <div style={{ color: "var(--feil)" }} title="Disse kortene har ingen pris, så summen er for lav">
-                                  {p.enkeltvis_uten_pris} kort uten pris
+                                <div style={{ color: "var(--feil)" }} title="Summen er for lav, så den faste prisen brukes">
+                                  {p.enkeltvis_uten_pris} kort uten pris{autoPct != null ? " — fast pris brukes" : ""}
                                 </div>
                               )}
-                              {forslagØre(p) !== p.pris_ore && (
-                                <button
-                                  className="knapp liten"
-                                  style={{ marginTop: 3, fontSize: 11.5 }}
-                                  disabled={jobber}
-                                  title={`Enkeltvis minus ${rabattKr} kr, rundet til hele kroner`}
-                                  onClick={() => lagre({ ...p, pris_kr: tilKr(forslagØre(p)) })}
-                                >
-                                  Sett {kroner(forslagØre(p))}
-                                </button>
+                              {p.auto_pris && (
+                                <div className="dempet">fast pris {kroner(p.fast_pris_ore)}</div>
                               )}
                             </div>
                           )}
@@ -379,7 +394,7 @@ export default function Produkter({ onFeil, onMelding }) {
                           <button
                             className="knapp handling"
                             style={{ marginLeft: 0 }}
-                            onClick={() => setRedigerer({ ...p, pris_kr: tilKr(p.pris_ore) })}
+                            onClick={() => setRedigerer({ ...p, pris_kr: tilKr(p.fast_pris_ore ?? p.pris_ore) })}
                           >
                             Endre
                           </button>

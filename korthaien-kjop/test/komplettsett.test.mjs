@@ -59,3 +59,45 @@ test("samme tall som grunnsettet i Lagerrapport, også når et kort i hovedsette
   assert.equal(v.sum_ore, g.salg_ore);
   assert.equal(v.uten_pris, g.uten_pris);
 });
+
+test("avrunding til nærmeste …49/…99", async () => {
+  const { avrund4999 } = await import("../src/produkter.ts");
+  assert.equal(avrund4999(342100), 339900);
+  assert.equal(avrund4999(343000), 344900);
+  assert.equal(avrund4999(344900), 344900);
+  assert.equal(avrund4999(347500), 349900);
+});
+
+test("automatisk pris: enkeltvis minus 10 %, samme i admin og kurv; fast pris står hvis et kort mangler pris", async () => {
+  const { hentProdukter, leggTilProdukt, endreProdukt, hentProdukt, avrund4999 } = await import("../src/produkter.ts");
+  const { settSetting } = await import("../src/db.ts");
+  const { prisKurv } = await import("../src/salg.ts");
+  const id = await leggTilProdukt({ type: "komplettsett", navn: "Test komplett", pris_ore: 100000, antall: 2, set_code: "tst", antall_kort: 3 });
+
+  // Av: fast pris.
+  let p = (await hentProdukter({ ider: [id] }))[0];
+  assert.equal(p.pris_ore, 100000);
+  assert.ok(!p.auto_pris);
+
+  await settSetting("komplettsett_rabatt_pct", 10);
+  p = (await hentProdukter({ ider: [id] }))[0];
+  assert.equal(p.auto_pris, true);
+  assert.equal(p.pris_ore, avrund4999(p.enkeltvis_ore * 0.9));
+  assert.equal(p.fast_pris_ore, 100000);
+
+  // Kurven får samme pris som butikken.
+  const kurv = await prisKurv([{ card_id: `p:${id}`, finish: "nonfoil", condition: "NM", antall: 1 }]);
+  assert.equal(kurv[0].enhet_ore, p.pris_ore);
+
+  // Å endre noe annet på produktet lagrer ikke den automatiske prisen som fast.
+  await endreProdukt(id, { antall: 3 });
+  assert.equal((await hentProdukt(id)).fast_pris_ore, 100000);
+
+  // Et kort uten pris: den faste prisen brukes.
+  await db().execute(`DELETE FROM card_sale_prices WHERE card_id = 'c'`);
+  p = (await hentProdukter({ ider: [id] }))[0];
+  assert.ok(p.enkeltvis_uten_pris > 0);
+  assert.ok(!p.auto_pris);
+  assert.equal(p.pris_ore, 100000);
+  await settSetting("komplettsett_rabatt_pct", null);
+});

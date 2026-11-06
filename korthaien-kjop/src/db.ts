@@ -518,6 +518,9 @@ export type Settings = {
   lagerkilde: "mystore" | "bok";
   // Etter overgangen: konto kreves for å handle og for å sende inn kort.
   krev_konto: boolean;
+  // Komplette sett prises automatisk: enkeltvis minus denne prosenten,
+  // avrundet til nærmeste …49/…99. null = fast pris på hvert produkt.
+  komplettsett_rabatt_pct: number | null;
 };
 
 const STANDARD: Settings = {
@@ -551,6 +554,7 @@ const STANDARD: Settings = {
   stengt: null,
   lagerkilde: "mystore",
   krev_konto: false,
+  komplettsett_rabatt_pct: null,
 };
 
 export async function hentSettings(): Promise<Settings> {

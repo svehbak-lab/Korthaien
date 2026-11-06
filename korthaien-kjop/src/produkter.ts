@@ -39,6 +39,12 @@ export type Produkt = {
   antall_kort: number | null;
   sortering: number;
   aktiv: number;
+  // Komplette sett: hva kortene koster enkeltvis, og om prisen er regnet ut
+  // av det (automatisk pris) eller den faste prisen på produktet.
+  enkeltvis_ore?: number;
+  enkeltvis_uten_pris?: number;
+  auto_pris?: boolean;
+  fast_pris_ore?: number;
 };
 
 const rad = (x: any): Produkt => ({
@@ -65,10 +71,15 @@ export function erType(s: unknown): s is Produkttype {
 // Butikken ber om `barePåLager`, admin ber ikke. Det er samme regel som
 // kortene følger: kunden ser det som finnes, du ser alt du har lagt inn.
 export async function hentProdukter(
-  opts: { type?: Produkttype; set_code?: string; barePåLager?: boolean; bareAktive?: boolean } = {}
+  opts: { type?: Produkttype; set_code?: string; barePåLager?: boolean; bareAktive?: boolean; ider?: number[] } = {}
 ): Promise<Produkt[]> {
   const hvor: string[] = [];
   const args: any[] = [];
+  if (opts.ider) {
+    if (!opts.ider.length) return [];
+    hvor.push(`p.id IN (${opts.ider.map(() => "?").join(",")})`);
+    args.push(...opts.ider);
+  }
   if (opts.type) {
     hvor.push("p.type = ?");
     args.push(opts.type);
@@ -90,7 +101,7 @@ export async function hentProdukter(
   });
   const koder = [...new Set((r.rows as any[]).filter((x) => x.set_code && !x.printed_size && !x.grunnsett_til).map((x) => String(x.set_code)))];
   const utregnet = await settStørrelser(koder);
-  return (r.rows as any[]).map((x) =>
+  return medAutopris((r.rows as any[]).map((x) =>
     rad({
       ...x,
       set_antall:
@@ -102,7 +113,41 @@ export async function hentProdukter(
         utregnet.get(String(x.set_code)) ||
         (Number(x.card_count) || null),
     })
-  );
+  ));
+}
+
+// Nærmeste pris som ender på 49 eller 99 kroner: 3421 → 3399, 3430 → 3449.
+export function avrund4999(øre: number): number {
+  const kr = øre / 100;
+  return Math.max(49, Math.round((kr + 1) / 50) * 50 - 1) * 100;
+}
+
+// Komplette sett: enkeltvis-verdien legges på, og med automatisk pris
+// (komplettsett_rabatt_pct) blir prisen enkeltvis minus rabatten, avrundet
+// til …49/…99. Da følger settet kortprisene uten at noen må se over det.
+//
+// Mangler et kort pris, er summen for lav. Da står den faste prisen, så et
+// sett aldri selges billig fordi Scryfall mangler en pris.
+//
+// Alle som leser produkter, går hit — butikken, handlekurven, kassen og
+// admin — så prisen er den samme overalt.
+async function medAutopris(liste: Produkt[]): Promise<Produkt[]> {
+  const sett = liste.filter((p) => p.type === "komplettsett" && p.set_code && p.set_antall);
+  if (!sett.length) return liste;
+  const { hentSettings } = await import("./db.js");
+  const pct = (await hentSettings()).komplettsett_rabatt_pct;
+  const verdi = await enkeltvisVerdi(sett.map((p) => ({ set_code: p.set_code!, foil: p.foil, antall: p.set_antall! })));
+  return liste.map((p) => {
+    if (p.type !== "komplettsett" || !p.set_code) return p;
+    const v = verdi.get(`${p.set_code}:${p.foil ? "foil" : "nonfoil"}`);
+    if (!v) return p;
+    const ut: Produkt = { ...p, enkeltvis_ore: v.sum_ore, enkeltvis_uten_pris: v.uten_pris, fast_pris_ore: p.pris_ore };
+    if (pct != null && pct >= 0 && v.sum_ore > 0 && v.uten_pris === 0) {
+      ut.pris_ore = avrund4999(v.sum_ore * (1 - pct / 100));
+      ut.auto_pris = true;
+    }
+    return ut;
+  });
 }
 
 // Hvor mange kort selve settet har, uten showcase, borderless og andre
@@ -199,8 +244,7 @@ export async function enkeltvisVerdi(
 }
 
 export async function hentProdukt(id: number): Promise<Produkt | null> {
-  const r = await db().execute({ sql: "SELECT * FROM produkter WHERE id = ?", args: [id] });
-  return r.rows.length ? rad(r.rows[0]) : null;
+  return (await hentProdukter({ ider: [id], bareAktive: false }))[0] ?? null;
 }
 
 // Hvor mange av hver type som finnes på lager. Menyen i butikken skal ikke
@@ -276,7 +320,8 @@ export async function endreProdukt(id: number, p: Partial<NyttProdukt & { aktiv:
       p.type ?? nå.type,
       navn,
       p.beskrivelse === undefined ? nå.beskrivelse : tomTilNull(p.beskrivelse),
-      p.pris_ore === undefined ? nå.pris_ore : heltall(p.pris_ore),
+      // Den faste prisen, ikke den automatiske: den regnes ut ved lesing.
+      p.pris_ore === undefined ? (nå.fast_pris_ore ?? nå.pris_ore) : heltall(p.pris_ore),
       p.antall === undefined ? nå.antall : Math.max(0, heltall(p.antall)),
       p.bilde_url === undefined ? nå.bilde_url : tomTilNull(p.bilde_url),
       p.set_code === undefined ? nå.set_code : tomTilNull(p.set_code)?.toLowerCase() ?? null,

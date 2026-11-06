@@ -20,7 +20,7 @@ import {
 import { hentFrakt, leggTilFrakt, endreFrakt, slåAvFrakt } from "./frakt.js";
 import {
   hentProdukter, hentProdukt, leggTilProdukt, endreProdukt, slåAvProdukt,
-  antallPerType, erType, enkeltvisVerdi,
+  antallPerType, erType,
 } from "./produkter.js";
 import { settinfo } from "./settinfo.js";
 import { HOLDER_KVOTE, frigiKvote } from "./quota.js";
@@ -1912,25 +1912,15 @@ app.get("/api/admin/butikk/sett/:kode", krevAdmin, fang(async (req: any, res: an
 // kortene har.
 app.get("/api/admin/produkter", krevAdmin, fang(async (req: any, res: any) => {
   const type = String(req.query.type || "");
+  // Komplette sett får enkeltvis-verdien og (med automatisk pris) prisen
+  // regnet ut i hentProdukter.
   const produkter = await hentProdukter({
     type: erType(type) ? type : undefined,
     set_code: String(req.query.sett || "") || undefined,
     barePåLager: String(req.query.bareLager || "") === "1",
     bareAktive: String(req.query.alle || "") !== "1",
   });
-  // Komplette sett: hva kortene ville kostet enkeltvis, så prisen på settet
-  // kan settes med en rabatt mot det.
-  const sett = produkter
-    .filter((p) => p.type === "komplettsett" && p.set_code && p.set_antall)
-    .map((p) => ({ set_code: p.set_code!, foil: p.foil, antall: p.set_antall! }));
-  const verdi = await enkeltvisVerdi(sett);
-  res.json({
-    produkter: produkter.map((p) => {
-      const v = p.set_code ? verdi.get(`${p.set_code}:${p.foil ? "foil" : "nonfoil"}`) : undefined;
-      return v ? { ...p, enkeltvis_ore: v.sum_ore, enkeltvis_uten_pris: v.uten_pris } : p;
-    }),
-    antall: await antallPerType(),
-  });
+  res.json({ produkter, antall: await antallPerType() });
 }));
 
 app.get("/api/admin/produkter/:id", krevAdmin, fang(async (req: any, res: any) => {
@@ -2041,7 +2031,14 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
     "salg_trapp", "salg_faktor", "salg_avrunding", "default_conditions",
     "default_ladder", "order_expiry_days", "ship_to", "tema", "forside_sett",
     "firmanavn", "org_nr", "retur_frakt", "toppbanner", "tix_kreditt_ore", "overgang_dato", "vis_sealed", "stengt", "krev_konto",
+    "komplettsett_rabatt_pct",
   ];
+  if (req.body && "komplettsett_rabatt_pct" in req.body) {
+    const v = req.body.komplettsett_rabatt_pct;
+    const n = v === null || v === "" ? null : Number(v);
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 90)) throw new HttpFeil(400, "Rabatten må være mellom 0 og 90 %.");
+    req.body.komplettsett_rabatt_pct = n;
+  }
   if (req.body && "stengt" in req.body) {
     const b = req.body.stengt;
     req.body.stengt = b

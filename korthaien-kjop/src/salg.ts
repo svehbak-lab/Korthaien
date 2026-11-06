@@ -203,12 +203,10 @@ export async function prisKurv(inn: any, utenOrdre?: number): Promise<PrisetLinj
   // Sealed og komplette sett: én pris, ingen tilstand.
   const pider = ider.filter(erProdukt).map((x) => Number(x.slice(2)));
   if (pider.length) {
-    const pr = await db().execute({
-      sql: `SELECT p.id, p.navn, p.type, p.pris_ore, p.set_code, p.bilde_url, p.foil, p.aktiv
-              FROM produkter p WHERE p.id IN (${pider.map(() => "?").join(",")})`,
-      args: pider,
-    });
-    for (const p of pr.rows as any[]) {
+    // Via hentProdukter, så et komplett sett med automatisk pris koster det
+    // samme i kurven og kassen som i butikken.
+    const { hentProdukter } = await import("./produkter.js");
+    for (const p of (await hentProdukter({ ider: pider, bareAktive: false })) as any[]) {
       if (!Number(p.aktiv)) continue;
       kort.set(`p:${p.id}`, {
         id: `p:${p.id}`, name: String(p.navn), set_code: String(p.set_code || ""),
