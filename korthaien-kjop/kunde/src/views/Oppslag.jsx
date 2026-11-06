@@ -65,13 +65,17 @@ export default function Oppslag({ onFeil, onTilbake }) {
 const STATUS = {
   pending: ["Venter på kortene", "Send pakken innen fristen."],
   received: ["Mottatt og under kontroll", "Kortene er kommet fram. Jeg går gjennom dem nå."],
-  stocked: ["Ferdig behandlet", "Kortene er lagerført."],
+  stocked: ["Ferdig behandlet", "Kortene er gjennomgått og godkjent."],
   cancelled: ["Kansellert", "Denne ordren er avsluttet."],
   expired: ["Utløpt", "Fristen gikk ut før pakken kom fram. Legg inn et nytt salg om du fortsatt vil selge."],
 };
 
 function Vis({ ordre }) {
-  const [tittel, forklaring] = STATUS[ordre.status] || ["Ukjent status", ""];
+  // Oppgjøret kan komme før kortene er satt på plass i hylla. For kunden er
+  // det oppgjøret som teller, så en oppgjort ordre er ferdig.
+  const [tittel, forklaring] = ordre.credit_sent && ordre.status === "received"
+    ? STATUS.stocked
+    : STATUS[ordre.status] || ["Ukjent status", ""];
 
   return (
     <>
@@ -81,7 +85,17 @@ function Vis({ ordre }) {
         </h2>
         <p className="dempet" style={{ marginTop: 0 }}>{forklaring}</p>
 
-        {ordre.credit_sent ? (
+        {ordre.credit_sent && !ordre.med_kode ? (
+          <div className="varsel info">
+            <b>Kreditten står på kontoen din</b>
+            <div>
+              Oppgjøret ble lagt inn som kreditt
+              {ordre.credit_sent_at ? ` ${dato(ordre.credit_sent_at)}` : ""}. Logg inn på{" "}
+              <a href="https://korthaien.no">korthaien.no</a> med samme e-postadresse for å se
+              saldoen. Kreditten trekkes automatisk i kassen og utløper ikke.
+            </div>
+          </div>
+        ) : ordre.credit_sent ? (
           <div className="varsel info">
             <b>Rabattkoden er sendt</b>
             <div>
@@ -94,7 +108,8 @@ function Vis({ ordre }) {
           </div>
         ) : (
           <p className="dempet">
-            Rabattkoden kommer på e-post når kortene er mottatt og godkjent.
+            Når kortene er mottatt og godkjent, havner oppgjøret som kreditt på kontoen din på
+            korthaien.no, og du får beskjed på e-post.
           </p>
         )}
 

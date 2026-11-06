@@ -268,7 +268,9 @@ app.get("/api/orders/:orderNo", grense(REGLER.søk), fang(async (req: any, res: 
   // sterkt nok til å beskytte et beløp. Koden sendes bare på e-post, til
   // adressen kunden selv oppga. Her sier vi bare at den er sendt.
   const { email, phone, admin_note, credit_note, discount_code, ...trygt } = o as any;
-  res.json({ ...trygt, credit_sent: !!(o as any).credit_sent_at });
+  // med_kode: gamle ordrer ble gjort opp med rabattkode (koden selv vises
+  // aldri her). Etter overgangen er oppgjøret kreditt på kontoen.
+  res.json({ ...trygt, credit_sent: !!(o as any).credit_sent_at, med_kode: !!discount_code });
 }));
 
 // ── admin ────────────────────────────────────────────────────────────────────
