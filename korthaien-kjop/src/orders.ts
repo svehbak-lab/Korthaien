@@ -200,7 +200,9 @@ export function instruksjoner(ordreNr: string, adresse: string, utløp: Date) {
     "Send til:\n" + adresse,
     "Pakken må være sendt innen " + utløp.toLocaleDateString("nb-NO") + " — etter det frigjøres kortene til andre selgere.",
     "Summen er et anslag. Jeg går gjennom alle kortene ved mottak og sjekker antall og tilstand. Avviker noe fra det du oppga, justerer jeg linjen og skriver hva som ble endret.",
-    "Oppgjøret er butikkreditt på korthaien.no. Når kortene er godkjent, får du en rabattkode på e-post som du bruker i kassen.",
+    // Etter overgangen (27. oktober 2026) er oppgjøret kreditt på kontoen,
+    // ikke en rabattkode.
+    "Oppgjøret er butikkreditt på kontoen din på korthaien.no. Når kortene er godkjent, står kreditten på kontoen, og du får beskjed på e-post. Den trekkes automatisk i kassen og utløper ikke.",
   ];
 }
 
