@@ -21,7 +21,154 @@ function legg(sum, rad) {
   return sum;
 }
 
+// To faner: beholdningen (det du har) og salg per sett (det som selger).
 export default function Lagerrapport({ onFeil }) {
+  const [fane, setFane] = useState("beholdning");
+  return (
+    <>
+      <div className="faner" role="tablist" style={{ marginBottom: 14 }}>
+        <button role="tab" aria-selected={fane === "beholdning"} onClick={() => setFane("beholdning")}>Beholdning</button>
+        <button role="tab" aria-selected={fane === "salg"} onClick={() => setFane("salg")}>Salg per sett</button>
+      </div>
+      {fane === "beholdning" ? <Beholdning onFeil={onFeil} /> : <SalgPerSett onFeil={onFeil} />}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SALG PER SETT
+// ─────────────────────────────────────────────────────────────────────────────
+// Hvilke sett som selger, for en periode. Fra salgsordrene i den egne
+// butikken — salg i Mystore før overgangen er ikke med.
+const PERIODER = [
+  ["7d", "Siste 7 dager"],
+  ["30d", "Siste 30 dager"],
+  ["iar", "I år"],
+  ["ifjor", "I fjor"],
+  ["totalt", "Totalt"],
+];
+
+function SalgPerSett({ onFeil }) {
+  const [periode, setPeriode] = useState(() => {
+    try { return localStorage.getItem("salgpersett.periode") || "iar"; } catch { return "iar"; }
+  });
+  const [data, setData] = useState(null);
+  const [sort, setSort] = useState({ felt: "omsetning", opp: false });
+
+  useEffect(() => {
+    try { localStorage.setItem("salgpersett.periode", periode); } catch {}
+    setData(null);
+    api.salgPerSett(periode).then(setData).catch(onFeil);
+  }, [periode]);
+
+  const sorterPå = (felt) =>
+    setSort((x) => (x.felt === felt ? { felt, opp: !x.opp } : { felt, opp: felt === "navn" }));
+  const rader = useMemo(() => {
+    if (!data) return [];
+    const v = {
+      navn: (s) => s.set_name.toLowerCase(),
+      kort: (s) => s.kort,
+      ordrer: (s) => s.ordrer,
+      omsetning: (s) => s.omsetning_ore,
+      snitt: (s) => (s.kort ? s.omsetning_ore / s.kort : 0),
+    }[sort.felt];
+    return [...data.sett].sort((a, b) => {
+      const x = v(a), y = v(b);
+      const r = typeof x === "string" ? x.localeCompare(y, "nb") : x - y;
+      return sort.opp ? r : -r;
+    });
+  }, [data, sort]);
+
+  const Th = ({ felt, children, høyre }) => (
+    <th className={høyre ? "h" : undefined} style={{ cursor: "pointer", whiteSpace: "nowrap" }} onClick={() => sorterPå(felt)}>
+      {children}{sort.felt === felt ? (sort.opp ? " ▲" : " ▼") : ""}
+    </th>
+  );
+  const størst = data?.sett.reduce((m, s) => Math.max(m, s.omsetning_ore), 0) || 1;
+
+  return (
+    <>
+      <div className="panel" style={{ marginBottom: 16, padding: "16px 18px" }}>
+        <div className="rad-flex" style={{ gap: 32, flexWrap: "wrap", alignItems: "center" }}>
+          <div>
+            <div className="dempet" style={{ fontSize: 12 }}>Solgte kort</div>
+            <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>{data ? data.kort.toLocaleString("nb-NO") : "…"}</div>
+          </div>
+          <div>
+            <div className="dempet" style={{ fontSize: 12 }}>Omsetning, kort</div>
+            <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>{data ? kroner(data.omsetning_ore) : "…"}</div>
+          </div>
+          <div>
+            <div className="dempet" style={{ fontSize: 12 }}>Ordrer</div>
+            <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>{data ? data.ordrer : "…"}</div>
+          </div>
+          {data?.produkter.antall > 0 && (
+            <div>
+              <div className="dempet" style={{ fontSize: 12 }}>Sealed og komplette sett</div>
+              <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>{kroner(data.produkter.omsetning_ore)}</div>
+              <div className="dempet" style={{ fontSize: 11 }}>{data.produkter.antall} stk, ikke med i tabellen</div>
+            </div>
+          )}
+          <label style={{ marginLeft: "auto" }}>
+            Periode{" "}
+            <select value={periode} onChange={(e) => setPeriode(e.target.value)}>
+              {PERIODER.map(([id, navn]) => <option key={id} value={id}>{navn}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="dempet" style={{ fontSize: 12, marginTop: 10 }}>
+          Betalte ordrer i butikken, etter rettelser, uten kansellerte. Omsetningen er kortprisen uansett betalingsmåte
+          (kort, Vipps, kreditt eller gavekort). Salg i Mystore før 27. oktober 2026 er ikke med.
+        </div>
+      </div>
+
+      <div className="panel">
+        {!data ? (
+          <div className="krop dempet">Henter…</div>
+        ) : !data.sett.length ? (
+          <div className="tom"><b>Ingen salg i perioden</b></div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <Th felt="navn">Sett</Th>
+                <Th felt="kort" høyre>Kort</Th>
+                <th className="h">Foil</th>
+                <Th felt="ordrer" høyre>Ordrer</Th>
+                <Th felt="snitt" høyre>Snitt per kort</Th>
+                <Th felt="omsetning" høyre>Omsetning</Th>
+                <th style={{ width: "22%" }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rader.map((s) => (
+                <tr key={s.set_code}>
+                  <td>
+                    {s.set_name} <span className="dempet" style={{ fontSize: 12 }}>{s.set_code.toUpperCase()}</span>
+                  </td>
+                  <td className="h tall">{s.kort}</td>
+                  <td className="h tall dempet">{s.foil || ""}</td>
+                  <td className="h tall">{s.ordrer}</td>
+                  <td className="h tall">{kroner(s.kort ? Math.round(s.omsetning_ore / s.kort) : 0)}</td>
+                  <td className="h tall"><b>{kroner(s.omsetning_ore)}</b></td>
+                  <td>
+                    <div title={`${Math.round((s.omsetning_ore / (data.omsetning_ore || 1)) * 100)} % av omsetningen`}
+                      style={{ height: 8, borderRadius: 4, background: "var(--sjo)", width: `${Math.max(2, (s.omsetning_ore / størst) * 100)}%` }} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BEHOLDNING
+// ─────────────────────────────────────────────────────────────────────────────
+function Beholdning({ onFeil }) {
   const [data, setData] = useState(null);
   const [laster, setLaster] = useState(true);
   const [vanlig, setVanlig] = useState(true);

@@ -523,3 +523,89 @@ export async function lagerhistorikk(): Promise<{ rader: Lagermåling[] }> {
     })),
   };
 }
+
+// ── salg per sett ───────────────────────────────────────────────────────────
+// Hvilke sett som selger, for en periode. Telles fra salgsordrene i den egne
+// butikken: betalte ordrer, ikke kansellerte, med linjene slik de står etter
+// eventuelle rettelser. Datoen er når ordren ble betalt (norsk tid).
+//
+// Salg i Mystore før overgangen (27. oktober 2026) finnes ikke her.
+// Sealed og komplette sett er ikke kort i et sett og står for seg.
+export type Periode = "7d" | "30d" | "iar" | "ifjor" | "totalt";
+
+function periodeGrenser(p: Periode, nå = new Date()): { fra: string | null; til: string | null } {
+  const dag = 86_400_000;
+  const år = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Oslo", year: "numeric" }).format(nå));
+  // Årsskiftet i norsk tid, som ISO i UTC (vintertid: UTC+1).
+  const nyttår = (y: number) => new Date(Date.UTC(y, 0, 1) - 3_600_000).toISOString();
+  switch (p) {
+    case "7d": return { fra: new Date(nå.getTime() - 7 * dag).toISOString(), til: null };
+    case "30d": return { fra: new Date(nå.getTime() - 30 * dag).toISOString(), til: null };
+    case "iar": return { fra: nyttår(år), til: null };
+    case "ifjor": return { fra: nyttår(år - 1), til: nyttår(år) };
+    default: return { fra: null, til: null };
+  }
+}
+
+export async function salgPerSett(periode: Periode = "totalt") {
+  const { fra, til } = periodeGrenser(periode);
+  const hvor = [
+    "o.betalt_at IS NOT NULL",
+    "o.status NOT IN ('apen', 'utlopt', 'kansellert')",
+    "l.antall > 0",
+  ];
+  const args: any[] = [];
+  if (fra) { hvor.push("o.betalt_at >= ?"); args.push(fra); }
+  if (til) { hvor.push("o.betalt_at < ?"); args.push(til); }
+
+  const r = await db().execute({
+    sql: `SELECT l.set_code, MAX(l.set_name) AS set_name,
+                 COALESCE(MAX(s.visningsnavn), MAX(s.name)) AS katalognavn, MAX(s.released_at) AS utgitt,
+                 COUNT(DISTINCT o.id) AS ordrer,
+                 SUM(l.antall) AS kort,
+                 SUM(CASE WHEN l.finish = 'foil' THEN l.antall ELSE 0 END) AS foil,
+                 SUM(l.antall * l.enhet_ore) AS omsetning_ore,
+                 MAX(l.antall * l.enhet_ore) AS dyreste_linje_ore
+            FROM salgsordre_linjer l
+            JOIN salgsordrer o ON o.id = l.ordre_id
+            LEFT JOIN sets s ON s.code = l.set_code
+           WHERE ${hvor.join(" AND ")} AND l.produkt_id IS NULL
+           GROUP BY l.set_code
+           ORDER BY omsetning_ore DESC`,
+    args,
+  });
+  const p = await db().execute({
+    sql: `SELECT COUNT(DISTINCT o.id) AS ordrer, COALESCE(SUM(l.antall), 0) AS antall,
+                 COALESCE(SUM(l.antall * l.enhet_ore), 0) AS omsetning_ore
+            FROM salgsordre_linjer l JOIN salgsordrer o ON o.id = l.ordre_id
+           WHERE ${hvor.join(" AND ")} AND l.produkt_id IS NOT NULL`,
+    args,
+  });
+  const o = await db().execute({
+    sql: `SELECT COUNT(DISTINCT o.id) AS n FROM salgsordre_linjer l JOIN salgsordrer o ON o.id = l.ordre_id
+           WHERE ${hvor.join(" AND ")}`,
+    args,
+  });
+  const sett = (r.rows as any[]).map((x) => ({
+    set_code: String(x.set_code),
+    set_name: String(x.katalognavn || x.set_name || x.set_code),
+    utgitt: x.utgitt ? String(x.utgitt) : null,
+    ordrer: Number(x.ordrer),
+    kort: Number(x.kort),
+    foil: Number(x.foil),
+    omsetning_ore: Number(x.omsetning_ore),
+  }));
+  const kort = sett.reduce((n, s) => n + s.kort, 0);
+  const omsetning = sett.reduce((n, s) => n + s.omsetning_ore, 0);
+  const pr: any = p.rows[0] || {};
+  return {
+    periode,
+    fra,
+    til,
+    ordrer: Number(o.rows[0]?.n || 0),
+    kort,
+    omsetning_ore: omsetning,
+    produkter: { ordrer: Number(pr.ordrer || 0), antall: Number(pr.antall || 0), omsetning_ore: Number(pr.omsetning_ore || 0) },
+    sett,
+  };
+}

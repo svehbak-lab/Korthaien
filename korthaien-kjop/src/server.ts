@@ -45,7 +45,7 @@ import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER, hentIp, kortkvoteBrukt, brukKortkvote } from "./ratelimit.js";
 import { katalogMedKø, glemKatalog } from "./katalogkø.js";
 import { stengSkrapere } from "./skrapere.js";
-import { ordreStatistikk, lagerrapport, lagerhistorikk, lagreLagermåling } from "./statistikk.js";
+import { ordreStatistikk, lagerrapport, salgPerSett, lagerhistorikk, lagreLagermåling } from "./statistikk.js";
 import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./rapporter.js";
 import {
   COOKIE as KUNDE_COOKIE, KontoFeil, registrer, loggInn, nySesjon, avsluttSesjon, settKundeCookie,
@@ -694,6 +694,11 @@ app.post("/api/admin/kupp/oppsett", krevAdmin, fang(async (req: any, res: any) =
 
 app.get("/api/admin/lagerhistorikk", krevAdmin, fang(async (_req: any, res: any) => {
   res.json(await lagerhistorikk());
+}));
+
+app.get("/api/admin/salg-per-sett", krevAdmin, fang(async (req: any, res: any) => {
+  const p = String(req.query.periode || "totalt");
+  res.json(await salgPerSett((["7d", "30d", "iar", "ifjor", "totalt"].includes(p) ? p : "totalt") as any));
 }));
 
 app.get("/api/admin/lagerrapport", krevAdmin, fang(async (_req: any, res: any) => {
