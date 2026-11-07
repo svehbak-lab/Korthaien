@@ -158,6 +158,9 @@ export type BulkResultat = {
   // Tilstanden kunden skrev på linjen, hvis vi kjente den igjen. Frontend
   // forhåndsvelger den — men bare der settet faktisk tar imot den.
   condHint: Condition | null;
+  // Valgene er i en annen finish enn linjen sa (løst søk uten sett). De er
+  // forslag kunden må velge aktivt — de legges aldri inn med «Legg til alle».
+  annenFinish?: boolean;
   valg: Tilbud[];
 };
 
@@ -242,15 +245,36 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
     }
 
     let valg = await byggTilbud(kandidater, regler, s);
-    // Respekter foil-markeringen fra linjen, men bare når den finnes.
-    const medFinish = valg.filter((v) => (l.foil ? v.finish === "foil" : v.finish === "nonfoil"));
-    if (medFinish.length) valg = medFinish;
+
+    // Finish er et krav, ikke et forslag. Uten foil-markering har kunden den
+    // vanlige utgaven. Tidligere falt vi tilbake på alle valgene når den
+    // ønskede finishen ikke ble kjøpt — og siden den vanlige commonen ofte er
+    // under minsteprisen mens foilen ikke er det, ble linjen «løst» som foil.
+    // Kunden la den i kurven og sendte vanlige kort på en foil-ordre.
+    //
+    // Unntaket er trykk som bare finnes i én finish: et foil-only-trykk er
+    // foil uansett hva linjen sier.
+    const ønsket = l.foil ? "foil" : "nonfoil";
+    const perKort = new Map(kandidater.map((k) => [k.card_id, k]));
+    const finnesIØnsket = (id: string) => {
+      const k = perKort.get(id);
+      return !k || (ønsket === "foil" ? k.has_foil : k.has_nonfoil);
+    };
+    const medFinish = valg.filter((v) => v.finish === ønsket || !finnesIØnsket(v.card_id));
+
+    // Med sett på linjen vet vi hvilket trykk det er, og da er finishen
+    // bestemt: ingen treff i riktig finish betyr «kjøpes ikke». Uten sett er
+    // det et løst søk, og da er det greit å vise den andre finishen som
+    // forslag — men aldri løse linjen automatisk med den.
+    let feilFinish = false;
+    if (medFinish.length || settHint) valg = medFinish;
+    else feilFinish = valg.length > 0;
 
     if (!valg.length) {
       ut.push({
         ...grunn,
         status: "ikke_ønsket",
-        melding: "Jeg kjøper ikke dette kortet nå — enten er kvoten full eller settet er ikke aktivt.",
+        melding: "Kjøpes ikke for øyeblikket — kvoten er full, settet er ikke aktivt, eller prisen er under minstegrensen.",
         valg: [],
       });
       continue;
@@ -259,8 +283,14 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
     // Ett mulig trykk: løst. Flere: kunden må peke ut riktig utgave selv.
     // Dette er hele poenget med steget — å gjette her ville gitt meg feil
     // kort i posten og kunden feil pris.
-    const løst = valg.length === 1;
-    let melding: string | undefined = løst ? undefined : `${valg.length} utgaver — velg den du faktisk har`;
+    const løst = valg.length === 1 && !feilFinish;
+    let melding: string | undefined = feilFinish
+      ? l.foil
+        ? "Foil-utgaven kjøpes ikke nå. Dette er vanlige utgaver — velg bare hvis det er det du har."
+        : "Den vanlige utgaven kjøpes ikke nå. Dette er foil — velg bare hvis kortet ditt faktisk er foil."
+      : løst
+        ? undefined
+        : `${valg.length} utgaver — velg den du faktisk har`;
 
     // Skrev kunden en tilstand jeg ikke tar imot for dette settet, må det sies
     // med én gang. Ellers oppdager hen det først i kassen.
@@ -269,7 +299,7 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
       melding = `Jeg tar ikke imot ${l.condHint} fra dette settet — bare ${tilbudt}.`;
     }
 
-    ut.push({ ...grunn, status: løst ? "løst" : "velg", melding, valg });
+    ut.push({ ...grunn, status: løst ? "løst" : "velg", melding, valg, ...(feilFinish ? { annenFinish: true } : {}) });
   }
   return ut;
 }

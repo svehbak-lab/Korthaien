@@ -159,10 +159,10 @@ function Resultat({ resultat, totalt, kurv, onLegg, valg, onValg }) {
 
       {fane === "ikke" && (
         <p className="ingress" style={{ marginBottom: 14 }}>
-          Disse ble ikke lagt til. Står det at kortet ikke ble funnet, er det som
-          regel stavemåten — prøv det engelske navnet, eller søk det opp i den andre
-          fanen. Står det at jeg ikke kjøper kortet, er enten kvoten full eller
-          settet ikke aktivt akkurat nå.
+          Disse ble ikke lagt til — enten ble kortet ikke funnet, eller det kjøpes
+          ikke for øyeblikket. Ikke funnet er som regel stavemåten: prøv det engelske
+          navnet, eller søk det opp i den andre fanen. Kjøpes ikke betyr at kvoten er
+          full, settet ikke er aktivt, eller at prisen er under minstegrensen.
         </p>
       )}
 
@@ -211,14 +211,16 @@ function Linje({ rad, kurv, onLegg, valgt, onValg }) {
           <span className="navn">
             {rad.qty}× {rad.navn}
           </span>
-          {flere ? (
+          {rad.annenFinish ? (
+            <span className="merkelapp m-velg">{rad.valg[0]?.finish === "foil" ? "Bare foil" : "Bare vanlig"}</span>
+          ) : flere ? (
             <span className="merkelapp m-velg">{rad.valg.length} utgaver</span>
           ) : (
             <span className="merkelapp m-ok">Én utgave</span>
           )}
         </div>
 
-        {rad.melding && !flere && <div className="sett">{rad.melding}</div>}
+        {rad.melding && (!flere || rad.annenFinish) && <div className="sett">{rad.melding}</div>}
 
         {/* Med titalls utgaver av samme kort er en nedtrekksmeny raskere å
             komme gjennom enn et rutenett. Bildet av den valgte står ved siden
@@ -226,10 +228,10 @@ function Linje({ rad, kurv, onLegg, valgt, onValg }) {
             har liggende. */}
         {flere && (
           <>
-            <p className="dempet" style={{ margin: 0 }}>
+            {!rad.annenFinish && <p className="dempet" style={{ margin: 0 }}>
               {rad.navn} finnes i flere utgaver, og de er ikke verdt det samme.
               Velg den du faktisk har — se på kunsten, ikke bare settnavnet.
-            </p>
+            </p>}
             <select
               className="utgavevalg"
               value={valgt}
@@ -313,8 +315,13 @@ function Utgave({ tilbud, qty, kurv, onLegg, condHint }) {
 // som har ett mulig trykk — der det finnes flere utgaver, ville dette vært å
 // gjette på kundens vegne, og det er nettopp det hele velge-steget finnes for.
 function LeggAlle({ resultat, valg, onLegg, onLagtInn }) {
-  const funnet = resultat.filter((r) => r.status === "løst" || r.status === "velg");
-  const uvalgte = resultat.filter((r) => r.status === "velg" && valg[r.linje] === undefined);
+  // Forslag i en annen finish enn kunden skrev tas bare med når kunden selv
+  // har pekt på et i nedtrekksmenyen. Ellers ville «Legg til alle» lagt
+  // foil i kurven for vanlige kort.
+  const funnet = resultat.filter(
+    (r) => (r.status === "løst" || r.status === "velg") && (!r.annenFinish || valg[r.linje] !== undefined)
+  );
+  const uvalgte = funnet.filter((r) => r.status === "velg" && valg[r.linje] === undefined);
   if (!funnet.length) return null;
 
   const antall = funnet.reduce((n, r) => n + r.qty, 0);
