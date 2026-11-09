@@ -1521,3 +1521,13 @@ label.kreditt-boks { cursor: pointer; }
   font-size: 13.5px; margin-bottom: 10px; padding-bottom: 10px;
   border-bottom: 1px solid var(--strek);
 }
+
+/* ── iPhone: ingen innzooming i felt ──────────────────────────────────────
+   Safari på iPhone zoomer inn når man trykker i et felt med skrift under
+   16 px — og zoomer ikke ut igjen etterpå. Etter et søk sto siden derfor
+   forstørret og kuttet til høyre, så det så ut som den var for bred.
+   16 px er grensen. !important fordi mange felt har egen størrelse lenger
+   opp, noen også i style-attributtet. */
+@media (max-width: 860px), (pointer: coarse) {
+  .butikk input, .butikk select, .butikk textarea { font-size: 16px !important; }
+}
