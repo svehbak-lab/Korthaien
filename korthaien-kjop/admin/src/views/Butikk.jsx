@@ -509,6 +509,20 @@ function ButikkSider({ onFeil }) {
     );
   }
 
+  // Visningsknappene står til høyre i fanerekka på bred skjerm. På mobil
+  // flyttes de ned til sorteringen: i fanerekka trengte de mer plass enn det
+  // var, og Safari på iPhone lot overflyten gjøre hele siden bredere enn
+  // skjermen (Chrome holdt den inne i raden).
+  const visningsvalg = (klasse) => (
+    <div className={`b-visningsvalg ${klasse}`}>
+      {/* Rekkefølgen er tetthet: tettest til venstre, mest plass per kort
+          til høyre. */}
+      <VisningsIkon aktiv={visning === "tekst"} tittel="Tekstvisning" onClick={() => setVisning("tekst")} form="strek" />
+      <VisningsIkon aktiv={visning === "detalj"} tittel="Detaljvisning" onClick={() => setVisning("detalj")} form="detalj" />
+      <VisningsIkon aktiv={visning === "galleri"} tittel="Galleri" onClick={() => setVisning("galleri")} form="rutenett" />
+    </div>
+  );
+
   return skall(
     <>
       {/* På mobil står filtrene over treffene, sammenfoldet bak en knapp —
@@ -659,30 +673,7 @@ function ButikkSider({ onFeil }) {
                       </button>
                     )}
 
-                    {KORTFANER.some((x) => x.id === fane) && (
-                    <div style={{ marginLeft: "auto", display: "flex", gap: 2, paddingBottom: 8 }}>
-                      {/* Rekkefølgen er tetthet: tettest til venstre, mest
-                          plass per kort til høyre. */}
-                      <VisningsIkon
-                        aktiv={visning === "tekst"}
-                        tittel="Tekstvisning"
-                        onClick={() => setVisning("tekst")}
-                        form="strek"
-                      />
-                      <VisningsIkon
-                        aktiv={visning === "detalj"}
-                        tittel="Detaljvisning"
-                        onClick={() => setVisning("detalj")}
-                        form="detalj"
-                      />
-                      <VisningsIkon
-                        aktiv={visning === "galleri"}
-                        tittel="Galleri"
-                        onClick={() => setVisning("galleri")}
-                        form="rutenett"
-                      />
-                    </div>
-                    )}
+                    {KORTFANER.some((x) => x.id === fane) && visningsvalg("b-vis-bred")}
                   </div>
 
                   {KORTFANER.some((x) => x.id === fane) && (
@@ -707,6 +698,7 @@ function ButikkSider({ onFeil }) {
                           {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
                       </label>
+                      {visningsvalg("b-vis-smal")}
                     </div>
                   </div>
                   )}
