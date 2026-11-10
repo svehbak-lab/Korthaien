@@ -58,3 +58,13 @@ test("produktnavn gir samme variantnavn som importen", () => {
   assert.equal(variantFraNavn("Kellan, Daring Traveler (Extended Art)"), "extended");
   assert.equal(variantFraNavn("Timeless Dragon"), "vanlig");
 });
+
+test("MH2-retro med etched som én av finishene er retro, ikke etched", () => {
+  // Brainstone #426: ett trykk, finishes nonfoil/foil/etched, frame 1997.
+  assert.equal(
+    variantFraScryfall({ frame: "1997", released_at: "2021-06-18", finishes: ["nonfoil", "foil", "etched"] }),
+    "retro"
+  );
+  // Vanlig ramme med etched blant finishene er bare vanlig.
+  assert.equal(variantFraScryfall({ frame: "2015", finishes: ["foil", "etched"] }), "vanlig");
+});

@@ -24,7 +24,15 @@ export function variantFraScryfall(k: {
   released_at?: string;
 }): Variant {
   const rammer = new Set(k.frame_effects || []);
-  if (rammer.has("etched") || (k.finishes || []).includes("etched")) return "etched";
+  // Etched er en egen variant bare når trykket *er* etched: Scryfall setter
+  // rammeeffekten, eller etched er eneste finish (egne samlernumre, som i
+  // Commander Legends). Har trykket også vanlig og/eller foil, er etched bare
+  // én av finishene, og kortet er det rammen sier. MH2-retrokortene (#381–441)
+  // er ett trykk med nonfoil, foil og etched — de ble merket «Etched» selv om
+  // de fleste eksemplarene er vanlige retrokort.
+  const finisher = k.finishes || [];
+  const bareEtched = finisher.length > 0 && finisher.every((f) => f === "etched");
+  if (rammer.has("etched") || bareEtched) return "etched";
   if (k.border_color === "borderless") return "borderless";
   if (rammer.has("showcase")) return "showcase";
   if (rammer.has("extendedart")) return "extended";
