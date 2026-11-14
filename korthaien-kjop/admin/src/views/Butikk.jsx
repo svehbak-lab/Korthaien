@@ -1195,7 +1195,7 @@ function Tekstrad({ kort, onÅpne, onSett }) {
             {kort.type_line || kort.rarity}
           </div>
           <div className="dempet" style={{ fontSize: 12 }}>
-            Collector #: {kort.collector_number}
+            #{kort.collector_number}
             {kort.mana_cost ? <> · <MedSymboler tekst={kort.mana_cost} størrelse={12} /></> : null}
           </div>
           {kort.valgt.finish === "foil" && <FoilMerke variant={kort.variant} />}
@@ -1261,7 +1261,7 @@ function Detaljrad({ kort, onÅpne, onSett }) {
             <button className="lenke" onClick={onSett}>{kort.set_name}</button>
           </div>
           <div className="dempet" style={{ fontSize: 13 }}>
-            Collector #: {kort.collector_number}
+            #{kort.collector_number}
           </div>
           {kort.valgt.finish === "foil" && <FoilMerke variant={kort.variant} />}
 
@@ -1343,7 +1343,7 @@ function Galleriflis({ kort, onÅpne, onSett }) {
           <button className="lenke" onClick={onÅpne}>{kort.name}</button>
         </div>
         <div className="dempet b-gnr">
-          Collector #: {kort.collector_number}
+          #{kort.collector_number}
           {kort.valgt.finish === "foil" && <FoilMerke variant={kort.variant} påLinja />}
         </div>
 
