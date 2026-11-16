@@ -21,7 +21,8 @@ function legg(sum, rad) {
   return sum;
 }
 
-// To faner: beholdningen (det du har) og salg per sett (det som selger).
+// Tre faner: beholdningen (det du har), salg per sett (det som selger) og
+// komplette sett (hvor nær du er et helt sett).
 export default function Lagerrapport({ onFeil }) {
   const [fane, setFane] = useState("beholdning");
   return (
@@ -29,8 +30,152 @@ export default function Lagerrapport({ onFeil }) {
       <div className="faner" role="tablist" style={{ marginBottom: 14 }}>
         <button role="tab" aria-selected={fane === "beholdning"} onClick={() => setFane("beholdning")}>Beholdning</button>
         <button role="tab" aria-selected={fane === "salg"} onClick={() => setFane("salg")}>Salg per sett</button>
+        <button role="tab" aria-selected={fane === "komplette"} onClick={() => setFane("komplette")}>Komplette sett</button>
       </div>
-      {fane === "beholdning" ? <Beholdning onFeil={onFeil} /> : <SalgPerSett onFeil={onFeil} />}
+      {fane === "beholdning" ? <Beholdning onFeil={onFeil} />
+        : fane === "salg" ? <SalgPerSett onFeil={onFeil} />
+        : <KompletteSett onFeil={onFeil} />}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KOMPLETTE SETT
+// ─────────────────────────────────────────────────────────────────────────────
+// Hvor nær du er et helt hovedsett (nummer 1 til settets størrelse), for hvert
+// sett du har noe fra. Klikk på et sett for å se kortene som mangler.
+function KompletteSett({ onFeil }) {
+  const [data, setData] = useState(null);
+  const [søk, setSøk] = useState("");
+  const [åpen, setÅpen] = useState(null);
+
+  useEffect(() => {
+    api.kompletteSett().then(setData).catch((e) => { setData({ sett: [] }); onFeil(e); });
+  }, []);
+
+  const rader = useMemo(() => {
+    if (!data) return [];
+    const q = søk.trim().toLowerCase();
+    if (!q) return data.sett;
+    return data.sett.filter((s) => s.set_name.toLowerCase().includes(q) || s.set_code.toLowerCase() === q);
+  }, [data, søk]);
+
+  if (!data) return <div className="panel"><div className="tom">Regner ut sett …</div></div>;
+
+  const fulle = data.sett.filter((s) => s.komplette > 0);
+
+  return (
+    <>
+      <div className="panel" style={{ marginBottom: 16, padding: "16px 18px" }}>
+        <div className="rad-flex" style={{ gap: 32, flexWrap: "wrap", alignItems: "center" }}>
+          <div>
+            <div className="dempet" style={{ fontSize: 12 }}>Komplette sett</div>
+            <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>
+              {fulle.reduce((n, s) => n + s.komplette, 0).toLocaleString("nb-NO")}
+            </div>
+            <div className="dempet" style={{ fontSize: 11 }}>fra {fulle.length} ulike sett</div>
+          </div>
+          <div>
+            <div className="dempet" style={{ fontSize: 12 }}>Over 90 %</div>
+            <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>
+              {data.sett.filter((s) => s.prosent >= 90 && s.komplette === 0).length}
+            </div>
+            <div className="dempet" style={{ fontSize: 11 }}>sett, ikke komplette</div>
+          </div>
+          <input
+            type="search" placeholder="Søk etter sett" value={søk}
+            onChange={(e) => setSøk(e.target.value)} style={{ marginLeft: "auto", minWidth: 200 }}
+          />
+        </div>
+        <div className="dempet" style={{ fontSize: 12, marginTop: 10 }}>
+          Hovedsettet: nummer 1 til settets størrelse, uten tokens og varianter med høyere nummer. Et kort teller når
+          du har minst ett eksemplar, uansett finish og tilstand. Størrelsen er «Grunnsett til» fra Beholdning hvis du
+          har satt den, ellers Scryfalls trykte størrelse.
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Sett</th>
+            <th className="h">Har</th>
+            <th className="h">Mangler</th>
+            <th style={{ width: "30%" }}>Fullført</th>
+            <th className="h">Komplette</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rader.map((s) => (
+            <KomplettRad
+              key={s.set_code} sett={s} åpen={åpen === s.set_code} onFeil={onFeil}
+              onKlikk={() => setÅpen((x) => (x === s.set_code ? null : s.set_code))}
+            />
+          ))}
+        </tbody>
+      </table>
+
+      {!rader.length && (
+        <div className="panel"><div className="tom"><b>Ingenting å vise</b>{søk ? "Ingen sett passer søket." : "Ingen kort på lager."}</div></div>
+      )}
+    </>
+  );
+}
+
+function KomplettRad({ sett, åpen, onKlikk, onFeil }) {
+  const [mangler, setMangler] = useState(null);
+
+  useEffect(() => {
+    if (!åpen || mangler) return;
+    api.manglerISett(sett.set_code).then((r) => setMangler(r.kort || [])).catch((e) => { setMangler([]); onFeil(e); });
+  }, [åpen]);
+
+  const komplett = sett.mangler === 0;
+  return (
+    <>
+      <tr aria-expanded={åpen} onClick={onKlikk} style={{ cursor: "pointer", fontWeight: 600 }}>
+        <td>
+          <span className="dempet" style={{ display: "inline-block", width: 18 }}>{komplett ? "" : åpen ? "−" : "+"}</span>
+          {sett.set_name}
+          <span className="kode dempet"> {sett.set_code.toUpperCase()}</span>
+        </td>
+        <td className="h tall">{sett.har} / {sett.størrelse}</td>
+        <td className="h tall">{sett.mangler || ""}</td>
+        <td>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, height: 8, borderRadius: 4, background: "var(--strek)", overflow: "hidden" }}>
+              <div style={{ width: `${sett.prosent}%`, height: "100%", background: komplett ? "var(--ok)" : "var(--aksent)" }} />
+            </div>
+            <span className="tall" style={{ minWidth: 48, textAlign: "right" }}>{sett.prosent.toLocaleString("nb-NO")} %</span>
+          </div>
+        </td>
+        <td className="h tall">{sett.komplette || ""}</td>
+      </tr>
+      {åpen && !komplett && (
+        <tr>
+          <td colSpan={5} style={{ paddingLeft: 36 }}>
+            {!mangler ? (
+              <span className="dempet">Henter …</span>
+            ) : !mangler.length ? (
+              <span className="dempet">Ingen kort mangler.</span>
+            ) : (
+              <table style={{ margin: "4px 0 8px" }}>
+                <thead>
+                  <tr><th style={{ width: 70 }}>#</th><th>Kort</th><th>Raritet</th></tr>
+                </thead>
+                <tbody>
+                  {mangler.map((k) => (
+                    <tr key={k.nummer} className={k.name ? undefined : "dempet"}>
+                      <td className="tall">{k.nummer}</td>
+                      <td>{k.name || "Ikke i katalogen"}</td>
+                      <td className="dempet">{k.rarity ? RARITET_NAVN[k.rarity] || k.rarity : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </td>
+        </tr>
+      )}
     </>
   );
 }
