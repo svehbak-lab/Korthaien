@@ -259,6 +259,15 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
+              -- Navn, nummer og sett oppdateres også. Forhåndsviste kort
+              -- legges inn før settet slippes, og Scryfall retter dem ofte
+              -- etterpå. Uten dette ble den første versjonen stående for
+              -- alltid — Tenured Tethermage (FRA #154) var ikke søkbar.
+              oracle_id = excluded.oracle_id, name = excluded.name,
+              name_norm = excluded.name_norm, front_norm = excluded.front_norm,
+              back_norm = excluded.back_norm, set_code = excluded.set_code,
+              collector_number = excluded.collector_number,
+              released_at = excluded.released_at,
               usd = excluded.usd, usd_foil = excluded.usd_foil,
               image_uri = excluded.image_uri, rarity = excluded.rarity,
               variant = excluded.variant,
