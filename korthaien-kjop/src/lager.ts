@@ -85,8 +85,10 @@ export const lagerkilde = (): "bok" | "mystore" =>
 // Én rad per bevegelse: card_id, finish, condition, antall, created_at.
 // created_at er når kortet kom inn — det «Nylig inn» sorterer på.
 export function butikklagerSql(): string {
+  // Saldoen, ikke bevegelsene: samme summer, men én rad per kort i stedet for
+  // én per bevegelse (se lagersaldo.ts). created_at er siste gang noe kom inn.
   if (lagerkilde() === "bok") {
-    return `SELECT card_id, finish, condition, antall, created_at FROM lager_bevegelser`;
+    return `SELECT card_id, finish, condition, antall, sist_inn AS created_at FROM lager_saldo`;
   }
   return `SELECT card_id, finish, 'NM' AS condition, qty AS antall, inn_at AS created_at
             FROM mystore_stock WHERE qty > 0

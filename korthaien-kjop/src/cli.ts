@@ -145,6 +145,13 @@ try {
   switch (kommando) {
     case "import":
       await importerScryfall();
+      try {
+        const { kontrollerLagersaldo } = await import("./lagersaldo.js");
+        const avvik = await kontrollerLagersaldo();
+        if (avvik) console.log(`Lagersaldo: ${avvik} avvik mot lagerboken — bygget på nytt.`);
+      } catch (e: any) {
+        console.error("Kontroll av lagersaldo feilet:", e?.message);
+      }
       // Dagens punkt i lagerkurven. Ble før tatt av Mystore-synken, som ikke
       // kjører lenger. Nye priser først, så verdien er dagens.
       try {

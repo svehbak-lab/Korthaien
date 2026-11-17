@@ -47,6 +47,8 @@ export async function migrate(): Promise<void> {
   // Nye kolonner er tomme til de fylles. Uten dette ville dobbeltsidige kort
   // fortsatt bomme, og feilen ville vært usynlig — kolonnen finnes jo.
   await fyllForsidenavn();
+  const { sikreLagersaldo } = await import("./lagersaldo.js");
+  await sikreLagersaldo();
 }
 
 // Kolonner lagt til etter at noen allerede har en database i drift.

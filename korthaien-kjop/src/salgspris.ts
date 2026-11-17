@@ -324,6 +324,25 @@ export type ButikkFilter = {
   ider?: string[];
 };
 
+const TELLING_MS = 60_000;
+const tellingMinne = new Map<string, { til: number; svar: Promise<any> }>();
+async function husketTelling(q: { sql: string; args: any[] }) {
+  // Testene fører lager og teller rett etterpå; der skal ingenting huskes.
+  if (process.env.DATABASE_URL?.startsWith("file:/tmp")) return db().execute(q);
+  const nøkkel = q.sql + "\u0000" + JSON.stringify(q.args);
+  const nå = Date.now();
+  const før = tellingMinne.get(nøkkel);
+  if (før && før.til > nå) return før.svar;
+  if (tellingMinne.size > 500) {
+    for (const [k, v] of tellingMinne) if (v.til <= nå) tellingMinne.delete(k);
+    if (tellingMinne.size > 500) tellingMinne.clear();
+  }
+  const svar = db().execute(q);
+  tellingMinne.set(nøkkel, { til: nå + TELLING_MS, svar });
+  svar.catch(() => tellingMinne.delete(nøkkel));
+  return svar;
+}
+
 export async function butikkvisning(opts: ButikkFilter) {
   const opp = await hentSalgsOppsett();
   const { beholdning } = await import("./lager.js");
@@ -354,17 +373,25 @@ export async function butikkvisning(opts: ButikkFilter) {
       EXISTS (SELECT 1 FROM card_sale_prices sp WHERE sp.card_id = c.id AND sp.finish = '${f}' AND sp.nm_ore > 0)
       OR EXISTS (SELECT 1 FROM card_prices cp WHERE cp.card_id = c.id AND cp.finish = '${f}' AND cp.usd > 0)
       OR COALESCE(${f === "foil" ? "c.usd_foil" : "c.usd"}, 0) > 0)`;
+  // «c.id IN (lageret)» og ikke «EXISTS (...) for hvert kort»: med EXISTS
+  // leste databasen alle 111 000 kortene i katalogen og sjekket hvert av dem
+  // mot lageret, flere ganger per side. Med IN går den gjennom lageret og
+  // slår opp kortene derfra. Turso tar betalt per rad som leses, og det var
+  // forskjellen på 1–2 milliarder rader i døgnet og en brøkdel av det.
+  const lagerIder = (f?: string) =>
+    `(SELECT card_id FROM (${butikklagerSql()})${f ? ` WHERE finish = '${f}'` : ""}
+       GROUP BY card_id HAVING SUM(antall) > 0)`;
   const påLagerMedPris = (f: string) =>
-    `(EXISTS (SELECT 1 FROM (${butikklagerSql()}) b
-               WHERE b.card_id = c.id AND b.finish = '${f}'
-               GROUP BY b.card_id HAVING SUM(b.antall) > 0) AND ${harPris(f)})`;
+    `(c.id IN ${lagerIder(f)} AND ${harPris(f)})`;
   if (opts.baresalg) {
+    // Den første linjen er logisk overflødig (den neste krever det samme),
+    // men den gir databasen noe å gå ut fra. En OR mellom to IN klarer den
+    // ikke å bruke som inngang, og da leser den hele katalogen igjen.
+    hvor.push(`c.id IN ${lagerIder()}`);
     hvor.push(`(${påLagerMedPris("nonfoil")} OR ${påLagerMedPris("foil")})`);
   } else if (!opts.sett && !opts.q) {
     // Uten sett, uten søk og uten lagerfilter ville vi hentet hele katalogen.
-    hvor.push(`EXISTS (SELECT 1 FROM (${butikklagerSql()}) b
-                        WHERE b.card_id = c.id
-                        GROUP BY b.card_id HAVING SUM(b.antall) > 0)`);
+    hvor.push(`c.id IN ${lagerIder()}`);
   }
   // «token» i søket betyr «vis tokens»: Scryfall kaller tokenet «Treasure»,
   // ikke «Treasure Token». Ordet tas ut av navnesøket og blir et filter, så
@@ -501,10 +528,6 @@ export async function butikkvisning(opts: ButikkFilter) {
   // Med baresalg på avgrenses det på beholdning og ikke på hva kortet kan
   // trykkes som: et kort du bare har i vanlig utgave skal ikke stå i
   // foil-fanen fordi det finnes en foil-trykning et sted i verden.
-  const påLager = (f: string) =>
-    `EXISTS (SELECT 1 FROM (${butikklagerSql()}) b
-              WHERE b.card_id = c.id AND b.finish = '${f}'
-              GROUP BY b.card_id HAVING SUM(b.antall) > 0)`;
 
   const VISES = opts.baresalg
     ? { nonfoil: påLagerMedPris("nonfoil"), foil: påLagerMedPris("foil") }
@@ -520,7 +543,11 @@ export async function butikkvisning(opts: ButikkFilter) {
   // Alle tre telles her, hver etter sin egen regel og uten hverandres
   // avgrensning. Tidligere ble de talt inni hverandre: sto du på Foils,
   // viste den andre fanen hvor mange den hadde til felles med foilene.
-  const tellinger = await db().execute({
+  //
+  // Tallene er de samme på side 1 og side 30, så de huskes ett minutt. En
+  // bot som blar gjennom hele lageret, teller da ikke alt på nytt for hver
+  // side. Et minutt gammelt fanetall er ingen skade; siden selv er fersk.
+  const tellinger = await husketTelling({
     sql: `SELECT COUNT(*) AS n,
                  SUM(CASE WHEN ${VISES.nonfoil} THEN 1 ELSE 0 END) AS nonfoil,
                  SUM(CASE WHEN ${VISES.foil} THEN 1 ELSE 0 END)    AS foil
