@@ -387,8 +387,11 @@ function ButikkSider({ onFeil }) {
         onHjem={() => { setÅpentKort(null); setSkjerm("forside"); }}
         onSøk={(t) => {
           // Søket i toppen er det samme filteret som feltet i søyla. Ett sted
-          // å lete fra, ett sted det havner.
+          // å lete fra, ett sted det havner. Men det leter i hele butikken:
+          // den som søker der oppe, vil finne kortet uansett sett, ikke bare i
+          // settet de tilfeldigvis sto i.
           endre("q", t);
+          setSett(null);
           setÅpentKort(null);
           setSkjerm("liste");
         }}
@@ -550,6 +553,13 @@ function ButikkSider({ onFeil }) {
             <Fast navn="Sett">
               <select value={sett || ""} onChange={(e) => setSett(e.target.value || null)} style={{ width: "100%" }}>
                 <option value="">Alle sett</option>
+                {/* Lista har bare settene som er slått på. Står du i et annet
+                    (du kom dit via et kort, som Stardates), må det likevel ha
+                    et valg — ellers viser nettleseren «Alle sett» mens
+                    filteret fortsatt står på settet. */}
+                {sett && !alle.some((s) => s.code === sett) && (
+                  <option value={sett}>{settinfo?.navn || sett.toUpperCase()}</option>
+                )}
                 {alle.map((s) => (
                   <option key={s.code} value={s.code}>{s.name}</option>
                 ))}
