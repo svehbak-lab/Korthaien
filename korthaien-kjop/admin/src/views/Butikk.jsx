@@ -147,7 +147,7 @@ function ButikkSider({ onFeil }) {
   const [fane, setFane] = useState(() => lenke.fane || "alle");
   const finish = KORTFANER.some((x) => x.id === fane) ? fane : "alle";
   const [settinfo, setSettinfo] = useState(null);
-  const [sortering, setSortering] = useState("pris_ned");
+  const [sortering, setSortering] = useState("navn");
   const [perSide, setPerSide] = useState(25);
   const [side, setSide] = useState(() => Math.max(1, parseInt(lenke.p || "1", 10) || 1));
   // Trykker man på et settnavn, vil man se settet — ikke søket man kom fra.
