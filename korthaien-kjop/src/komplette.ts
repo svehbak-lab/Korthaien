@@ -11,8 +11,11 @@ import { settStørrelser } from "./produkter.js";
 // («Grunnsett til»), ellers den trykte størrelsen fra Scryfall, ellers den
 // lengste sammenhengende rekka av numre i katalogen.
 //
-// Et nummer regnes som dekket når du har minst ett eksemplar av det, i
-// hvilken som helst finish og tilstand. «7†» (Play Boost) teller for 7 — det
+// Vanlig og foil er hvert sitt sett: et nummer er dekket når du har minst
+// ett eksemplar av det i den finishen, i hvilken som helst tilstand. Numre
+// som ikke finnes i finishen (et foil-only kort i vanlig, eller omvendt),
+// teller ikke med i settets størrelse for den finishen. «alle» slår sammen:
+// et nummer er dekket av hvilken som helst finish. «7†» (Play Boost) teller for 7 — det
 // er samme kort. «Komplette» er hvor mange hele sett du kan sette sammen:
 // det minste antallet du har av noe nummer.
 
@@ -34,13 +37,22 @@ export type ManglendeKort = {
   rarity: string | null;
 };
 
-type Kort = { id: string; set_code: string; collector_number: string; name: string; rarity: string | null };
+type Kort = {
+  id: string; set_code: string; collector_number: string; name: string; rarity: string | null;
+  nonfoil: boolean; foil: boolean;
+};
+export type Finish = "nonfoil" | "foil" | "alle";
+export function tilFinish(x: unknown): Finish {
+  return x === "foil" ? "foil" : x === "alle" ? "alle" : "nonfoil";
+}
+const finnes = (k: Kort, f: Finish) => (f === "alle" ? true : f === "foil" ? k.foil : k.nonfoil);
+const finishSql = (f: Finish) => (f === "alle" ? "" : ` WHERE finish = '${f}'`);
 
 const BIT = 60;
 
-async function beholdningPerKort(): Promise<Map<string, number>> {
+async function beholdningPerKort(f: Finish): Promise<Map<string, number>> {
   const r = await db().execute(
-    `SELECT card_id, SUM(antall) AS n FROM (${butikklagerSql()}) GROUP BY card_id HAVING n > 0`
+    `SELECT card_id, SUM(antall) AS n FROM (${butikklagerSql()})${finishSql(f)} GROUP BY card_id HAVING n > 0`
   );
   return new Map((r.rows as any[]).map((x) => [String(x.card_id), Number(x.n)]));
 }
@@ -75,7 +87,7 @@ async function hovedsett(koder: string[], størrelse: Map<string, number>) {
   for (let i = 0; i < koder.length; i += BIT) {
     const del = koder.slice(i, i + BIT);
     const r = await db().execute({
-      sql: `SELECT id, set_code, collector_number, name, rarity FROM cards
+      sql: `SELECT id, set_code, collector_number, name, rarity, has_nonfoil, has_foil FROM cards
              WHERE set_code IN (${del.map(() => "?").join(",")})
                AND er_token = 0 AND er_serialized = 0`,
       args: del,
@@ -93,14 +105,18 @@ async function hovedsett(koder: string[], størrelse: Map<string, number>) {
       if (!s) ut.set(kode, (s = new Map()));
       let liste = s.get(n);
       if (!liste) s.set(n, (liste = []));
-      liste.push({ id: String(x.id), set_code: kode, collector_number: cn, name: String(x.name), rarity: x.rarity ? String(x.rarity) : null });
+      liste.push({
+        id: String(x.id), set_code: kode, collector_number: cn, name: String(x.name),
+        rarity: x.rarity ? String(x.rarity) : null,
+        nonfoil: !!Number(x.has_nonfoil), foil: !!Number(x.has_foil),
+      });
     }
   }
   return ut;
 }
 
-export async function komplettSett(): Promise<{ sett: SettFullføring[] }> {
-  const lager = await beholdningPerKort();
+export async function komplettSett(finish: Finish = "nonfoil"): Promise<{ sett: SettFullføring[] }> {
+  const lager = await beholdningPerKort(finish);
   if (!lager.size) return { sett: [] };
 
   // Hvilke sett du har noe fra.
@@ -135,21 +151,27 @@ export async function komplettSett(): Promise<{ sett: SettFullføring[] }> {
   for (const [kode, numre] of kort) {
     const til = størrelse.get(kode)!;
     let har = 0;
+    let størrelseF = 0;
     let komplette = Infinity;
     for (let n = 1; n <= til; n++) {
-      const antall = (numre.get(n) || []).reduce((s, k) => s + (lager.get(k.id) || 0), 0);
+      const liste = (numre.get(n) || []).filter((k) => finnes(k, finish));
+      // Numre katalogen ikke har kort for, teller med (hullet skal synes).
+      // Numre som finnes, men ikke i denne finishen, hører ikke til settet.
+      if (!liste.length && numre.get(n)?.length) continue;
+      størrelseF++;
+      const antall = liste.reduce((s, k) => s + (lager.get(k.id) || 0), 0);
       if (antall > 0) har++;
       komplette = Math.min(komplette, antall);
     }
-    if (!har) continue;
+    if (!har || !størrelseF) continue;
     sett.push({
       set_code: kode,
       set_name: navn.get(kode)?.set_name || kode,
       released_at: navn.get(kode)?.released_at || null,
-      størrelse: til,
+      størrelse: størrelseF,
       har,
-      mangler: til - har,
-      prosent: Math.floor((har / til) * 1000) / 10,
+      mangler: størrelseF - har,
+      prosent: Math.floor((har / størrelseF) * 1000) / 10,
       komplette: Number.isFinite(komplette) ? komplette : 0,
     });
   }
@@ -159,7 +181,7 @@ export async function komplettSett(): Promise<{ sett: SettFullføring[] }> {
 
 // Kortene du mangler i ett sett. Numre katalogen ikke har noe kort for,
 // tas med uten navn, så hullet synes.
-export async function manglerISett(kode: string): Promise<{ størrelse: number; kort: ManglendeKort[] }> {
+export async function manglerISett(kode: string, finish: Finish = "nonfoil"): Promise<{ størrelse: number; kort: ManglendeKort[] }> {
   const størrelse = await størrelser([kode]);
   const til = størrelse.get(kode) || 0;
   if (!til) return { størrelse: 0, kort: [] };
@@ -169,20 +191,23 @@ export async function manglerISett(kode: string): Promise<{ størrelse: number; 
   for (let i = 0; i < alleIder.length; i += 400) {
     const del = alleIder.slice(i, i + 400);
     const r = await db().execute({
-      sql: `SELECT card_id, SUM(antall) AS n FROM (${butikklagerSql()})
-             WHERE card_id IN (${del.map(() => "?").join(",")})
+      sql: `SELECT card_id, SUM(antall) AS n FROM (${butikklagerSql()})${finishSql(finish)}
+             ${finish === "alle" ? "WHERE" : "AND"} card_id IN (${del.map(() => "?").join(",")})
              GROUP BY card_id HAVING n > 0`,
       args: del,
     });
     for (const x of r.rows as any[]) lager.set(String(x.card_id), Number(x.n));
   }
   const kort: ManglendeKort[] = [];
+  let størrelseF = 0;
   for (let n = 1; n <= til; n++) {
-    const liste = numre.get(n) || [];
+    const liste = (numre.get(n) || []).filter((k) => finnes(k, finish));
+    if (!liste.length && numre.get(n)?.length) continue;
+    størrelseF++;
     if (liste.some((k) => (lager.get(k.id) || 0) > 0)) continue;
     // Korteste nummer er hovedutgaven: «7» foran «7†».
     const k = [...liste].sort((a, b) => a.collector_number.length - b.collector_number.length)[0];
     kort.push(k ? { id: k.id, nummer: k.collector_number, name: k.name, rarity: k.rarity } : { id: "", nummer: String(n), name: "", rarity: null });
   }
-  return { størrelse: til, kort };
+  return { størrelse: størrelseF, kort };
 }

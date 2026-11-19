@@ -45,7 +45,7 @@ import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER, hentIp, kortkvoteBrukt, brukKortkvote } from "./ratelimit.js";
 import { katalogMedKø, glemKatalog } from "./katalogkø.js";
 import { stengSkrapere } from "./skrapere.js";
-import { komplettSett, manglerISett } from "./komplette.js";
+import { komplettSett, manglerISett, tilFinish } from "./komplette.js";
 import { ordreStatistikk, lagerrapport, salgPerSett, lagerhistorikk, lagreLagermåling } from "./statistikk.js";
 import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./rapporter.js";
 import {
@@ -708,12 +708,12 @@ app.get("/api/admin/lagerrapport", krevAdmin, fang(async (_req: any, res: any) =
   res.json(await lagerrapport());
 }));
 
-app.get("/api/admin/komplette-sett", krevAdmin, fang(async (_req: any, res: any) => {
-  res.json(await komplettSett());
+app.get("/api/admin/komplette-sett", krevAdmin, fang(async (req: any, res: any) => {
+  res.json(await komplettSett(tilFinish(req.query.finish)));
 }));
 
 app.get("/api/admin/komplette-sett/:kode", krevAdmin, fang(async (req: any, res: any) => {
-  res.json(await manglerISett(String(req.params.kode).toLowerCase()));
+  res.json(await manglerISett(String(req.params.kode).toLowerCase(), tilFinish(req.query.finish)));
 }));
 
 // ── kundekonto ───────────────────────────────────────────────────────────────

@@ -48,10 +48,13 @@ function KompletteSett({ onFeil }) {
   const [data, setData] = useState(null);
   const [søk, setSøk] = useState("");
   const [åpen, setÅpen] = useState(null);
+  const [finish, setFinish] = useState("nonfoil");
 
   useEffect(() => {
-    api.kompletteSett().then(setData).catch((e) => { setData({ sett: [] }); onFeil(e); });
-  }, []);
+    setData(null);
+    setÅpen(null);
+    api.kompletteSett(finish).then(setData).catch((e) => { setData({ sett: [] }); onFeil(e); });
+  }, [finish]);
 
   const rader = useMemo(() => {
     if (!data) return [];
@@ -60,12 +63,21 @@ function KompletteSett({ onFeil }) {
     return data.sett.filter((s) => s.set_name.toLowerCase().includes(q) || s.set_code.toLowerCase() === q);
   }, [data, søk]);
 
-  if (!data) return <div className="panel"><div className="tom">Regner ut sett …</div></div>;
+  const velger = (
+    <div className="faner" role="tablist" style={{ marginBottom: 12 }}>
+      {[["nonfoil", "Vanlig"], ["foil", "Foil"], ["alle", "Begge"]].map(([id, navn]) => (
+        <button key={id} role="tab" aria-selected={finish === id} onClick={() => setFinish(id)}>{navn}</button>
+      ))}
+    </div>
+  );
+
+  if (!data) return <>{velger}<div className="panel"><div className="tom">Regner ut sett …</div></div></>;
 
   const fulle = data.sett.filter((s) => s.komplette > 0);
 
   return (
     <>
+      {velger}
       <div className="panel" style={{ marginBottom: 16, padding: "16px 18px" }}>
         <div className="rad-flex" style={{ gap: 32, flexWrap: "wrap", alignItems: "center" }}>
           <div>
@@ -89,7 +101,8 @@ function KompletteSett({ onFeil }) {
         </div>
         <div className="dempet" style={{ fontSize: 12, marginTop: 10 }}>
           Hovedsettet: nummer 1 til settets størrelse, uten tokens og varianter med høyere nummer. Et kort teller når
-          du har minst ett eksemplar, uansett finish og tilstand. Størrelsen er «Grunnsett til» fra Beholdning hvis du
+          du har minst ett eksemplar i valgt finish, uansett tilstand. Kort som ikke finnes i finishen (foil-only i
+          Vanlig, eller omvendt), regnes ikke med. «Begge» teller et kort i hvilken som helst finish. Størrelsen er «Grunnsett til» fra Beholdning hvis du
           har satt den, ellers Scryfalls trykte størrelse.
         </div>
       </div>
@@ -107,7 +120,7 @@ function KompletteSett({ onFeil }) {
         <tbody>
           {rader.map((s) => (
             <KomplettRad
-              key={s.set_code} sett={s} åpen={åpen === s.set_code} onFeil={onFeil}
+              key={s.set_code} sett={s} åpen={åpen === s.set_code} onFeil={onFeil} finish={finish}
               onKlikk={() => setÅpen((x) => (x === s.set_code ? null : s.set_code))}
             />
           ))}
@@ -121,12 +134,12 @@ function KompletteSett({ onFeil }) {
   );
 }
 
-function KomplettRad({ sett, åpen, onKlikk, onFeil }) {
+function KomplettRad({ sett, åpen, onKlikk, onFeil, finish }) {
   const [mangler, setMangler] = useState(null);
 
   useEffect(() => {
     if (!åpen || mangler) return;
-    api.manglerISett(sett.set_code).then((r) => setMangler(r.kort || [])).catch((e) => { setMangler([]); onFeil(e); });
+    api.manglerISett(sett.set_code, finish).then((r) => setMangler(r.kort || [])).catch((e) => { setMangler([]); onFeil(e); });
   }, [åpen]);
 
   const komplett = sett.mangler === 0;

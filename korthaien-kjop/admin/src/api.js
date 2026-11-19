@@ -175,8 +175,8 @@ export const api = {
   lagerSammendrag: () => kall("/api/admin/lager-sammendrag"),
   statistikk: () => kall("/api/admin/statistikk"),
   lagerrapport: () => kall("/api/admin/lagerrapport"),
-  kompletteSett: () => kall("/api/admin/komplette-sett"),
-  manglerISett: (kode) => kall(`/api/admin/komplette-sett/${encodeURIComponent(kode)}`),
+  kompletteSett: (finish) => kall(`/api/admin/komplette-sett?finish=${finish}`),
+  manglerISett: (kode, finish) => kall(`/api/admin/komplette-sett/${encodeURIComponent(kode)}?finish=${finish}`),
   salgPerSett: (periode) => kall(`/api/admin/salg-per-sett?periode=${encodeURIComponent(periode)}`),
   lagerhistorikk: () => kall("/api/admin/lagerhistorikk"),
   kupp: ({ minAvvik = 0, visBorte = false } = {}) =>

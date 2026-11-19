@@ -31,8 +31,8 @@ for (const [id, sett, nr, navn] of kort) {
 const inn = (card_id, antall, finish = "nonfoil") => ({ card_id, finish, condition: "NM", antall, grunn: "manuell" });
 await førBevegelser([inn("a1", 2), inn("a2p", 1, "foil"), inn("a5", 3), inn("h1", 2), inn("h2", 3)]);
 
-test("prosent, mangler og antall komplette sett", async () => {
-  const { sett } = await komplettSett();
+test("prosent, mangler og antall komplette sett (begge finisher)", async () => {
+  const { sett } = await komplettSett("alle");
   const hel = sett.find((s) => s.set_code === "hel");
   const tst = sett.find((s) => s.set_code === "tst");
   assert.deepEqual([hel.har, hel.størrelse, hel.prosent, hel.komplette], [2, 2, 100, 2]);
@@ -41,7 +41,23 @@ test("prosent, mangler og antall komplette sett", async () => {
   assert.equal(sett[0].set_code, "hel");
 });
 
+test("vanlig og foil telles hver for seg", async () => {
+  const vanlig = (await komplettSett("nonfoil")).sett.find((s) => s.set_code === "tst");
+  const foil = (await komplettSett("foil")).sett.find((s) => s.set_code === "tst");
+  // Vanlig: bare nr. 1. Foil: bare 2† (teller for 2).
+  assert.deepEqual([vanlig.har, vanlig.størrelse, vanlig.prosent], [1, 4, 25]);
+  assert.deepEqual([foil.har, foil.størrelse, foil.prosent], [1, 4, 25]);
+  assert.deepEqual((await manglerISett("tst", "foil")).kort.map((k) => k.nummer), ["1", "3", "4"]);
+});
+
+test("et nummer som ikke finnes i foil, hører ikke til foilsettet", async () => {
+  await db().execute("UPDATE cards SET has_foil = 0 WHERE id = 'a4'");
+  const foil = (await komplettSett("foil")).sett.find((s) => s.set_code === "tst");
+  assert.equal(foil.størrelse, 3);
+  await db().execute("UPDATE cards SET has_foil = 1 WHERE id = 'a4'");
+});
+
 test("manglende kort i ett sett", async () => {
-  const { kort } = await manglerISett("tst");
+  const { kort } = await manglerISett("tst", "alle");
   assert.deepEqual(kort.map((k) => [k.nummer, k.name]), [["3", "Gamma"], ["4", "Delta"]]);
 });
