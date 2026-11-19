@@ -29,7 +29,7 @@ import { aktivtBanner, lagreBilde, hentBilde } from "./toppbanner.js";
 import { kontoer, bevegelser, saldo, leggTil as leggTilKreditt, settSaldo } from "./kreditt.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
-  lagOrdre, hentOrdre, utløpGamleOrdrer, regnOmLinje, oppdaterTotal, oppdaterSalgsverdi,
+  lagOrdre, hentOrdre, utløpGamleOrdrer, forlengÅpneOrdrer, regnOmLinje, oppdaterTotal, oppdaterSalgsverdi,
   leggTilLinje,
   leggTilAnnet, fjernLinje, byttKort, endringslogg, instruksjoner, SORTERING,
   settRabattkode, markerKredittSendt, gjørOppSomKreditt, HttpFeil,
@@ -2086,10 +2086,16 @@ app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
         }
       : null;
   }
+  const førFrist = (await hentSettings()).order_expiry_days;
   for (const [k, v] of Object.entries(req.body || {})) {
     if (lov.includes(k as any)) await settSetting(k as keyof Settings, v);
   }
-  res.json(await hentSettings());
+  const etter = await hentSettings();
+  if (etter.order_expiry_days > førFrist) {
+    const n = await forlengÅpneOrdrer(etter.order_expiry_days);
+    if (n) console.log(`Fristen økt til ${etter.order_expiry_days} dager: ${n} åpne kjøpsordrer forlenget.`);
+  }
+  res.json(etter);
 }));
 
 app.post("/api/admin/jobs/:navn", krevAdmin, fang(async (req: any, res: any) => {

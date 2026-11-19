@@ -224,6 +224,20 @@ export async function utløpGamleOrdrer(): Promise<number> {
   return r.rowsAffected || 0;
 }
 
+// Fristen er en innstilling, men hver ordre får sin egen frist lagret når den
+// lages. Øker du fristen, skal ordrene som allerede venter på pakken få den
+// nye også — ellers utløper de etter den gamle mens du har bestemt at kundene
+// skal få lengre tid. En kortere frist rører ingen eksisterende ordre: å ta
+// tid fra noen som allerede har fått en dato, er ikke greit.
+export async function forlengÅpneOrdrer(dager: number): Promise<number> {
+  if (!Number.isFinite(dager) || dager <= 0) return 0;
+  const ny = `strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+${Math.round(dager)} days')`;
+  const r = await db().execute(
+    `UPDATE orders SET expires_at = ${ny} WHERE status = 'pending' AND expires_at < ${ny}`
+  );
+  return r.rowsAffected || 0;
+}
+
 export async function hentOrdre(orderNo: string) {
   const o = await db().execute({ sql: "SELECT * FROM orders WHERE order_no = ?", args: [orderNo] });
   if (!o.rows[0]) return null;
