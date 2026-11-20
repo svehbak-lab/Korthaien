@@ -241,7 +241,6 @@ export const api = {
     kall(`/api/admin/kunder?q=${encodeURIComponent(q || "")}&side=${side || 0}&sort=${sort}&opp=${opp ? 1 : 0}`),
   innstillinger: () => kall("/api/admin/settings"),
   overgang: () => kall("/api/admin/overgang"),
-  kjørOvergang: () => kall("/api/admin/overgang", { method: "POST", body: { bekreft: "OVERGANG" } }),
   lagreInnstillinger: (felt) => kall("/api/admin/settings", { method: "PUT", body: felt }),
   jobb: (navn) => kall(`/api/admin/jobs/${navn}`, { method: "POST" }),
 };

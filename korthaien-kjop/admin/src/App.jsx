@@ -6,7 +6,6 @@ import Sett from "./views/Sett.jsx";
 import Kort from "./views/Kort.jsx";
 import Hurtig from "./views/Hurtig.jsx";
 import Produkter from "./views/Produkter.jsx";
-import Kobling from "./views/Kobling.jsx";
 import Butikk from "./views/Butikk.jsx";
 import Lagerrapport from "./views/Lagerrapport.jsx";
 import Kupp from "./views/Kupp.jsx";
@@ -24,16 +23,10 @@ const SIDER = [
   // Sealed og komplette sett. Egen inngang fordi de legges inn for haand og
   // ikke av importen — og fordi de ikke er kort, og ikke skal se ut som det.
   { id: "produkter", navn: "Produkter" },
-  // Kobling er ute av menyen. Visningen og ruten staar igjen, saa den er en
-  // linje unna aa komme tilbake — men merk at tellingen av ukoblede
-  // produkter forsvinner med den. Varselet i Lagerrapport fanger fortsatt
-  // det som koster penger: produkter som har beholdning uten aa vaere koblet.
-  // Midlertidig: forhåndsvisning av butikken. Flyttes ut når salgssiden bygges.
-  { id: "butikk", navn: "Butikk" },
+  // Butikk er ute av menyen: butikken ligger på korthaien.no. Visningen står
+  // igjen, fordi lenker tilbake fra Stripe, Google og «glemt passord» lander
+  // her så lenge SHOP_URL peker på admin.
   { id: "lagerrapport", navn: "Lagerrapport" },
-  // Tilbake i menyen: Mystore-kategorier uten sett (for eksempel egne
-  // token-kategorier) må kunne kobles for hånd før overgangen.
-  { id: "kobling", navn: "Kobling" },
   { id: "kupp", navn: "Kupp" },
   // Het Innstillinger. Admin sier bedre hva det er: ett sted for alt du
   // styrer selv. Fanene gjoer at det kan vokse uten aa bli en lang liste.
@@ -52,7 +45,6 @@ export default function App() {
   const [feil, setFeil] = useState("");
   const [melding, setMelding] = useState("");
   const [antallOrdrer, setAntallOrdrer] = useState(null);
-  const [antallUkoblede, setAntallUkoblede] = useState(null);
   const [adminfane, setAdminfane] = useState("innkjop");
   // Admin bruker butikkens tema. Byttes det under Utseende, sier den fra med
   // en hendelse, så admin skifter med en gang.
@@ -104,7 +96,6 @@ export default function App() {
               {s.navn}
               {s.id === "salgsordrer" && antallSalg > 0 && <span className="antall">{antallSalg}</span>}
               {s.id === "ordrer" && antallOrdrer > 0 && <span className="antall">{antallOrdrer}</span>}
-              {s.id === "kobling" && antallUkoblede > 0 && <span className="antall">{antallUkoblede}</span>}
             </button>
           ))}
         </nav>
@@ -159,7 +150,6 @@ export default function App() {
             onByttSett={() => setSide("sett")}
           />
         )}
-        {side === "kobling" && <Kobling onFeil={håndterFeil} onAntall={setAntallUkoblede} />}
         {side === "butikk" && <Butikk onFeil={håndterFeil} />}
         {side === "lagerrapport" && <Lagerrapport onFeil={håndterFeil} />}
         {side === "kupp" && <Kupp onFeil={håndterFeil} />}
@@ -199,9 +189,8 @@ const ADMINFANER = [
   { id: "rapporter", navn: "Rapporter" },
   { id: "utseende", navn: "Utseende" },
   { id: "innlogging", navn: "Innlogging" },
-  // Byttet fra Mystore: landingssiden og lagerovergangen. Kan fjernes når
-  // overgangen er gjort og alt har gått en stund.
-  { id: "overgang", navn: "Overgang" },
+  // Stengt butikk (landingssiden) og krav om konto.
+  { id: "tilgang", navn: "Tilgang" },
 ];
 
 const FORKLARING = {
@@ -215,10 +204,6 @@ const FORKLARING = {
   kort: "Overstyr enkeltkort. Tomt felt betyr at kortet følger settregelen.",
   produkter:
     "Sealed og komplette sett — det du selger som ikke er et enkeltkort. Én pris per produkt, og de dukker opp i butikken så snart antallet er over null.",
-  // Kobling staar ikke i menyen lenger, men forklaringen blir staaende saa
-  // den foelger med hvis den settes inn igjen.
-  kobling:
-    "Produkter i Mystore som ikke lot seg koble til et kort. Beholdningen deres regnes som 0, og da kan kunder selge deg kort du har fra før.",
   innstillinger: "Alt du styrer selv. Velg en fane.",
 };
 

@@ -5,7 +5,7 @@ import Utseende from "./Utseende.jsx";
 import Rapporter from "./Rapporter.jsx";
 import Kunder from "./Kunder.jsx";
 import Rabattkoder from "./Rabattkoder.jsx";
-import Overgang from "./Overgang.jsx";
+import Tilgang from "./Tilgang.jsx";
 import QRCode from "qrcode";
 import { api, CONDITIONS, CONDITION_NAVN, kroner } from "../api.js";
 
@@ -25,7 +25,7 @@ export default function Innstillinger({ fane, onFeil, onMelding }) {
   if (fane === "rapporter") return <Rapporter onFeil={onFeil} />;
   if (fane === "kunder") return <Kunder onFeil={onFeil} onMelding={onMelding} />;
   if (fane === "rabattkoder") return <Rabattkoder onFeil={onFeil} onMelding={onMelding} />;
-  if (fane === "overgang") return <Overgang onFeil={onFeil} onMelding={onMelding} />;
+  if (fane === "tilgang") return <Tilgang onFeil={onFeil} onMelding={onMelding} />;
 
   if (!s) return <p className="dempet">Henter innstillinger…</p>;
 
@@ -211,19 +211,13 @@ export default function Innstillinger({ fane, onFeil, onMelding }) {
             <button className="knapp" onClick={() => kjør("import", "Prisimporten")}>
               Hent priser fra Scryfall
             </button>
-            <button className="knapp" onClick={() => kjør("mystore", "Lagersynken")}>
-              Synk beholdning fra Mystore
-            </button>
-            <button className="knapp" onClick={() => kjør("mystore-alle", "Den fulle lagersynken")}>
-              Full lagersynk (alle sett)
-            </button>
             <button className="knapp" onClick={() => kjør("expire", "Opprydningen")}>
               Rydd utløpte ordrer
             </button>
           </div>
           <p className="dempet" style={{ marginBottom: 0 }}>
-            Disse går automatisk hver natt. Kjør dem manuelt når du har endret noe og
-            ikke vil vente. Prisimporten tar noen minutter og går i bakgrunnen.
+            Prisimporten går automatisk hver natt, og utløpte ordrer ryddes når ordrelista åpnes.
+            Kjør dem manuelt når du ikke vil vente. Prisimporten tar noen minutter og går i bakgrunnen.
           </p>
         </div>
       </div>
