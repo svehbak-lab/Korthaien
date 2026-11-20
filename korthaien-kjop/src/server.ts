@@ -1410,9 +1410,6 @@ app.put("/api/admin/sets", krevAdmin, fang(async (req: any, res: any) => {
 app.get("/api/admin/cards", krevAdmin, fang(async (req: any, res: any) => {
   const set = String(req.query.set || "").toLowerCase();
   if (!set) throw new HttpFeil(400, "Mangler ?set=");
-  // product_id skiller «ingen på lager» fra «ikke koblet». Uten det ser de to
-  // helt like ut, og du kan ikke se om kortet i lista faktisk peker på et
-  // produkt hos deg.
   const r = await db().execute({
     sql: `SELECT c.id, c.name, c.collector_number, c.rarity, c.usd, c.usd_foil,
                  c.has_foil, c.has_nonfoil, c.image_uri, c.variant, c.set_code,
@@ -1422,17 +1419,11 @@ app.get("/api/admin/cards", krevAdmin, fang(async (req: any, res: any) => {
                  (SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='nonfoil') AS pris_nonfoil,
                  (SELECT usd FROM card_prices p WHERE p.card_id = c.id AND p.finish='foil')    AS pris_foil,
                  ${lagerkilde() === "bok"
-                   ? "(SELECT SUM(antall) FROM lager_bevegelser b WHERE b.card_id = c.id AND b.finish='nonfoil')"
+                   ? "(SELECT SUM(antall) FROM lager_saldo b WHERE b.card_id = c.id AND b.finish='nonfoil')"
                    : "(SELECT qty FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil')"} AS stock_nonfoil,
-                 (SELECT product_id   FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS prod_nonfoil,
-                 (SELECT product_name FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS pnavn_nonfoil,
-                 (SELECT category     FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='nonfoil') AS pkat_nonfoil,
                  ${lagerkilde() === "bok"
-                   ? "(SELECT SUM(antall) FROM lager_bevegelser b WHERE b.card_id = c.id AND b.finish='foil')"
+                   ? "(SELECT SUM(antall) FROM lager_saldo b WHERE b.card_id = c.id AND b.finish='foil')"
                    : "(SELECT qty FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')"} AS stock_foil,
-                 (SELECT product_id   FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS prod_foil,
-                 (SELECT product_name FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS pnavn_foil,
-                 (SELECT category     FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')    AS pkat_foil,
                  (SELECT COALESCE(SUM(l.qty),0) FROM order_lines l JOIN orders o ON o.id = l.order_id
                    WHERE l.card_id = c.id AND l.finish='nonfoil' AND ${HOLDER_KVOTE}) AS res_nonfoil,
                  (SELECT COALESCE(SUM(l.qty),0) FROM order_lines l JOIN orders o ON o.id = l.order_id

@@ -119,10 +119,6 @@ export const api = {
   masseSett: (felt) => kall("/api/admin/sets", { method: "PUT", body: felt }),
 
   kort: (sett) => kall(`/api/admin/cards?set=${encodeURIComponent(sett)}`),
-  ukobledeISett: (sett, q = "") =>
-    kall(`/api/admin/mystore/unmatched-for-set?set=${encodeURIComponent(sett)}&q=${encodeURIComponent(q)}`),
-  fjernKobling: (kortId, finish) =>
-    kall(`/api/admin/mystore/stock/${kortId}?finish=${finish}`, { method: "DELETE" }),
   masseØnsker: (felt) => kall("/api/admin/cards/wants", { method: "PUT", body: felt }),
   lagreØnske: (id, finish, wanted) =>
     kall(`/api/admin/cards/${id}/want`, { method: "PUT", body: { finish, wanted } }),
@@ -197,7 +193,6 @@ export const api = {
     kall(`/api/admin/cards/${id}/pris`, { method: "PUT", body: { finish, usd } }),
   nullstillPris: (id, finish) =>
     kall(`/api/admin/cards/${id}/pris?finish=${finish}`, { method: "DELETE" }),
-  koble: (felt) => kall("/api/admin/mystore/link", { method: "POST", body: felt }),
   leggInnFraMystore: (felt) => kall("/api/admin/mystore/legg-inn", { method: "POST", body: felt }),
 
   frakt: () => kall("/api/admin/frakt"),

@@ -7,7 +7,6 @@ const KOLONNER = [
   { id: "rarity", navn: "Raritet", bredde: 76 },
   { id: "usd", navn: "USD", h: true, bredde: 70 },
   { id: "egne_conditions", navn: "Tar imot", bredde: 165 },
-  { id: "prod_nonfoil", navn: "Hos Korthaien", bredde: 190 },
   // Gruppeoverskrift gjør at navnene kan være korte. «Foil lager» og «Vil ha
   // foil» ble lange fordi de måtte bære gruppen sin i selve navnet.
   { id: "stock_nonfoil", navn: "Lager", gruppe: "Vanlige", h: true, bredde: 62 },
@@ -160,8 +159,6 @@ export default function Kort({ sett, onFeil, onByttSett }) {
     }
   }
 
-  const antallKoblet = data.kort.filter((k) => k.prod_nonfoil || k.prod_foil).length;
-
   return (
     <>
       <div className="rad-flex" style={{ marginBottom: 10 }}>
@@ -175,7 +172,7 @@ export default function Kort({ sett, onFeil, onByttSett }) {
         />
         <button className="knapp" onClick={onByttSett}>Bytt sett</button>
         <span className="dempet" style={{ marginLeft: "auto" }}>
-          {data.kort.length} kort · {antallKoblet} koblet mot Korthaien
+          {data.kort.length} kort
           {!regel.enabled && " · settet er ikke slått på"}
         </span>
       </div>
@@ -498,13 +495,10 @@ function KortRad({ kort, regel, vis, finish, onFeil, onEndret, sett }) {
       <td>
         <Tilstander kort={kort} regel={regel} onFeil={onFeil} />
       </td>
-      <td>
-        <Kobling kort={kort} onFeil={onFeil} onEndret={onEndret} sett={sett} />
-      </td>
       {vis({ id: "stock_nonfoil", gruppe: "Vanlige" }) && (
         <td className="h tall">
           {Number(kort.has_nonfoil)
-            ? <Lager qty={kort.stock_nonfoil} koblet={!!kort.prod_nonfoil} />
+            ? <span>{Number(kort.stock_nonfoil || 0)}</span>
             : <span className="dempet">{"\u2014"}</span>}
         </td>
       )}
@@ -521,7 +515,7 @@ function KortRad({ kort, regel, vis, finish, onFeil, onEndret, sett }) {
       )}
       {vis({ id: "stock_foil", gruppe: "Foil" }) && (
         <td className="h tall">
-          {Number(kort.has_foil) ? <Lager qty={kort.stock_foil} koblet={!!kort.prod_foil} /> : <span className="dempet">{"\u2014"}</span>}
+          {Number(kort.has_foil) ? <span>{Number(kort.stock_foil || 0)}</span> : <span className="dempet">{"\u2014"}</span>}
         </td>
       )}
       {vis({ id: "want_foil", gruppe: "Foil" }) && (
@@ -535,16 +529,6 @@ function KortRad({ kort, regel, vis, finish, onFeil, onEndret, sett }) {
       )}
     </tr>
   );
-}
-
-// «0 på lager» og «ikke koblet» er to helt ulike ting: det første betyr at
-// kunden kan selge deg hele kvoten, det andre at tallet ikke er til å stole
-// på. Streken sier at kortet ikke finnes som produkt hos deg.
-function Lager({ qty, koblet }) {
-  if (!koblet) {
-    return <span className="dempet" title="Ingen produkt hos Korthaien er koblet til dette kortet">–</span>;
-  }
-  return <span title="Koblet mot Korthaien">{Number(qty || 0)}</span>;
 }
 
 function ØnskeFelt({ kortId, finish, verdi, onFeil }) {
@@ -591,150 +575,6 @@ function ØnskeFelt({ kortId, finish, verdi, onFeil }) {
   );
 }
 
-// Viser hvilket produkt hos deg kortet faktisk er koblet til. En kobling som
-// bare er en ID kan ikke kontrolleres — her ser du navnet og kategorien, og
-// kan sammenligne med kortet hos Scryfall.
-function Kobling({ kort, onFeil, onEndret, sett }) {
-  const [åpen, setÅpen] = useState(false);
-  const [treff, setTreff] = useState(null);
-  const [q, setQ] = useState(kort.name);
-
-  const koblet = kort.prod_nonfoil || kort.prod_foil;
-
-  async function søk(tekst) {
-    try {
-      setTreff(await api.ukobledeISett(sett, tekst));
-    } catch (e) {
-      onFeil(e);
-    }
-  }
-
-  async function koble(produktId, finish) {
-    try {
-      await api.koble({ product_id: produktId, card_id: kort.id, finish });
-      setÅpen(false);
-      onEndret();
-    } catch (e) {
-      onFeil(e);
-    }
-  }
-
-  async function fjern(finish) {
-    if (!confirm("Fjerne koblingen? Produktet dukker opp i Kobling ved neste synk.")) return;
-    try {
-      await api.fjernKobling(kort.id, finish);
-      onEndret();
-    } catch (e) {
-      onFeil(e);
-    }
-  }
-
-  if (!koblet && !åpen) {
-    return (
-      <button
-        className="knapp liten"
-        onClick={() => { setÅpen(true); søk(kort.name); }}
-        title="Finn produktet hos Korthaien og koble det til dette kortet"
-      >
-        Koble
-      </button>
-    );
-  }
-
-  return (
-    <div>
-      {kort.prod_nonfoil && (
-        <ProduktLinje
-          navn={kort.pnavn_nonfoil}
-          kategori={kort.pkat_nonfoil}
-          merke=""
-          onFjern={() => fjern("nonfoil")}
-        />
-      )}
-      {kort.prod_foil && (
-        <ProduktLinje
-          navn={kort.pnavn_foil}
-          kategori={kort.pkat_foil}
-          merke="foil"
-          onFjern={() => fjern("foil")}
-        />
-      )}
-
-      {åpen && (
-        <div style={{ marginTop: 6 }}>
-          <input
-            type="text"
-            value={q}
-            onChange={(e) => { setQ(e.target.value); søk(e.target.value); }}
-            placeholder="Søk blant ukoblede produkter"
-            style={{ width: "100%", marginBottom: 4 }}
-          />
-          {treff?.length === 0 && (
-            <span className="dempet" style={{ fontSize: 11 }}>
-              Ingen ukoblede produkter i dette settet passer søket.
-            </span>
-          )}
-          {(treff || []).slice(0, 8).map((p) => (
-            <div key={p.product_id} className="rad-flex" style={{ gap: 4, marginBottom: 3 }}>
-              <span style={{ fontSize: 12, flex: 1 }}>
-                {p.name} <span className="dempet">({p.stock})</span>
-              </span>
-              <button className="knapp liten" onClick={() => koble(p.product_id, "nonfoil")}>
-                Vanlig
-              </button>
-              {Number(kort.has_foil) > 0 && (
-                <button className="knapp liten" onClick={() => koble(p.product_id, "foil")}>
-                  Foil
-                </button>
-              )}
-            </div>
-          ))}
-          <button className="knapp liten" onClick={() => setÅpen(false)} style={{ marginTop: 4 }}>
-            Lukk
-          </button>
-        </div>
-      )}
-
-      {koblet && !åpen && (
-        <button
-          className="knapp handling"
-          style={{ marginLeft: 0, whiteSpace: "nowrap" }}
-          onClick={() => { setÅpen(true); søk(kort.name); }}
-        >
-          + Koble til
-        </button>
-      )}
-    </div>
-  );
-}
-
-function ProduktLinje({ navn, kategori, merke, onFjern }) {
-  return (
-    <div className="rad-flex" style={{ gap: 5, fontSize: 12 }}>
-      {/* Én linje med ellipse. Produktnavn og kategori er lange, og å la dem
-          bryte gjorde hver rad tre ganger høyere enn den trengte å være. */}
-      <span
-        style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-        title={`${navn || "(uten navn)"}${kategori ? ` · ${kategori}` : ""}`}
-      >
-        {navn || "(uten navn)"}
-        {merke && <span className="merkelapp m-vent" style={{ marginLeft: 4 }}>{merke}</span>}
-        {kategori && <span className="dempet"> · {kategori}</span>}
-      </span>
-      <button className="knapp blank" style={{ fontSize: 11 }} onClick={onFjern} title="Fjern koblingen">
-        ×
-      </button>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MANUELL PRISING
-// ─────────────────────────────────────────────────────────────────────────────
-// Ett redigerbart felt per kort — markedsprisen i dollar, hentet fra en butikk
-// som faktisk selger kortet. NM, EX, VG og G regnes ut mens du skriver, og
-// oppdateres først i basen når feltet forlates. Ingenting annet er fokuserbart
-// i tabellen, så Tab hopper rett fra kort til kort.
 function Prisliste({ kort, regel, settings, onFeil, onRegelEndret }) {
   const conditions = regel.conditions?.length ? regel.conditions : ["NM"];
   const ladder = regel.ladder || {};
