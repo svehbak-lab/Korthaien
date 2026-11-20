@@ -44,10 +44,8 @@ services:
       - key: ADMIN_URL
         value: https://admin.kortsalg.korthaien.no
       # Butikken. Stripe-lenkene og «glemt passord» sender kunden hit.
-      # Butikken bor i admin til den flyttes til korthaien.no; da endres
-      # bare denne.
       - key: SHOP_URL
-        value: https://admin.kortsalg.korthaien.no
+        value: https://korthaien.no
       # Hvor butikken leser beholdningen fra. «mystore» (standard) fram til
       # overgangen; settes til «bok» i samme operasjon som lagerboken tømmes
       # og får ny åpningspostering.

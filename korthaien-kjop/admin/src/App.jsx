@@ -6,7 +6,6 @@ import Sett from "./views/Sett.jsx";
 import Kort from "./views/Kort.jsx";
 import Hurtig from "./views/Hurtig.jsx";
 import Produkter from "./views/Produkter.jsx";
-import Butikk from "./views/Butikk.jsx";
 import Lagerrapport from "./views/Lagerrapport.jsx";
 import Kupp from "./views/Kupp.jsx";
 import Innstillinger from "./views/Innstillinger.jsx";
@@ -23,9 +22,6 @@ const SIDER = [
   // Sealed og komplette sett. Egen inngang fordi de legges inn for haand og
   // ikke av importen — og fordi de ikke er kort, og ikke skal se ut som det.
   { id: "produkter", navn: "Produkter" },
-  // Butikk er ute av menyen: butikken ligger på korthaien.no. Visningen står
-  // igjen, fordi lenker tilbake fra Stripe, Google og «glemt passord» lander
-  // her så lenge SHOP_URL peker på admin.
   { id: "lagerrapport", navn: "Lagerrapport" },
   { id: "kupp", navn: "Kupp" },
   // Het Innstillinger. Admin sier bedre hva det er: ett sted for alt du
@@ -35,11 +31,7 @@ const SIDER = [
 
 export default function App() {
   const [innlogget, setInnlogget] = useState(null);
-  // Lenker tilbake fra Stripe, Google og «glemt passord» skal lande i
-  // butikken, der kunden var — ikke på ordrelista i admin.
-  const [side, setSide] = useState(() =>
-    /[?&](kasse|nyttpassord|innlogging|bekreft|kort|side)=/.test(window.location.search) ? "butikk" : "salgsordrer"
-  );
+  const [side, setSide] = useState("salgsordrer");
   const [antallSalg, setAntallSalg] = useState(null);
   const [valgtSett, setValgtSett] = useState(null);
   const [feil, setFeil] = useState("");
@@ -113,18 +105,12 @@ export default function App() {
       </aside>
 
       <main className="hoved">
-        {/* Butikken har sin egen topp med logo og meny. En admin-overskrift
-            over den ser ut som om siden begynner to ganger. */}
-        {side !== "butikk" && (
-          <>
-            <h1 className="tittel">
-              {/* Enkeltkort står ikke i menyen (den nås fra Kjøpsliste), og
-                  har derfor ingen rad i SIDER. */}
-              {SIDER.find((s) => s.id === side)?.navn || (side === "kort" ? "Enkeltkort" : "")}
-            </h1>
-            <p className="undertittel">{FORKLARING[side]}</p>
-          </>
-        )}
+        <h1 className="tittel">
+          {/* Enkeltkort står ikke i menyen (den nås fra Kjøpsliste), og
+              har derfor ingen rad i SIDER. */}
+          {SIDER.find((s) => s.id === side)?.navn || (side === "kort" ? "Enkeltkort" : "")}
+        </h1>
+        <p className="undertittel">{FORKLARING[side]}</p>
 
         {feil && <div className="varsel feil">{feil}</div>}
         {melding && <div className="varsel ok">{melding}</div>}
@@ -150,7 +136,6 @@ export default function App() {
             onByttSett={() => setSide("sett")}
           />
         )}
-        {side === "butikk" && <Butikk onFeil={håndterFeil} />}
         {side === "lagerrapport" && <Lagerrapport onFeil={håndterFeil} />}
         {side === "kupp" && <Kupp onFeil={håndterFeil} />}
         {side === "innstillinger" && (
