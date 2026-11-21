@@ -47,6 +47,7 @@ export async function migrate(): Promise<void> {
   // Nye kolonner er tomme til de fylles. Uten dette ville dobbeltsidige kort
   // fortsatt bomme, og feilen ville vært usynlig — kolonnen finnes jo.
   await fyllForsidenavn();
+  await kortSettnavn();
   const { sikreLagersaldo } = await import("./lagersaldo.js");
   await sikreLagersaldo();
 }
@@ -426,6 +427,20 @@ async function leggTilNyeKolonner(): Promise<void> {
 
 // Fyller front_norm og back_norm for kort som mangler dem. Kjøres av
 // migreringen og av `npm run reindeks`, så du slipper en full import.
+// Universes Beyond-sett heter «Magic: The Gathering | Star Trek» hos
+// Scryfall (eller «Magic: The Gathering—FINAL FANTASY»). Da havner de under
+// M i alle lister, og navnet er langt overalt. Får de ikke et visningsnavn
+// fra deg, får de det her: navnet uten «Magic: The Gathering» foran.
+// Settet du har gitt et navn selv, røres ikke.
+export async function kortSettnavn(): Promise<number> {
+  const r = await db().execute(`
+    UPDATE sets SET visningsnavn = trim(ltrim(substr(name, 21), ' |—–-:'))
+     WHERE (visningsnavn IS NULL OR visningsnavn = '')
+       AND name LIKE 'Magic: The Gathering%'
+       AND length(trim(ltrim(substr(name, 21), ' |—–-:'))) > 0`);
+  return r.rowsAffected || 0;
+}
+
 export async function fyllForsidenavn(logg: (s: string) => void = () => {}): Promise<number> {
   const r = await db().execute(
     `SELECT id, name FROM cards

@@ -354,6 +354,9 @@ async function importerSettliste(logg: (s: string) => void): Promise<void> {
     "write"
   );
   logg(`${sett.length} sett importert.`);
+  const { kortSettnavn } = await import("./db.js");
+  const n = await kortSettnavn();
+  if (n) logg(`${n} sett fikk kortere navn (uten «Magic: The Gathering»).`);
 }
 
 function tall(v: unknown): number | null {
