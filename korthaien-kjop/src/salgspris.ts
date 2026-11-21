@@ -529,9 +529,12 @@ export async function butikkvisning(opts: ButikkFilter) {
   // trykkes som: et kort du bare har i vanlig utgave skal ikke stå i
   // foil-fanen fordi det finnes en foil-trykning et sted i verden.
 
+  // Et kort uten pris er ikke til salgs og tas ut av lista lenger ned. Da må
+  // det heller ikke telles: før sto det «Alle treff (54)» over en tom liste
+  // når Star Trek-tokenene ennå ikke hadde pris hos Scryfall.
   const VISES = opts.baresalg
     ? { nonfoil: påLagerMedPris("nonfoil"), foil: påLagerMedPris("foil") }
-    : { nonfoil: "c.has_nonfoil = 1", foil: "c.has_foil = 1" };
+    : { nonfoil: `(c.has_nonfoil = 1 AND ${harPris("nonfoil")})`, foil: `(c.has_foil = 1 AND ${harPris("foil")})` };
 
   const FINISH_KRAV =
     opts.finish === "foil" ? VISES.foil : opts.finish === "nonfoil" ? VISES.nonfoil : null;
