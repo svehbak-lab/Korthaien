@@ -567,7 +567,13 @@ export function Salgspriser({ onFeil, onMelding }) {
         usd_fra: Number(String(r.usd_fra).replace(",", ".")) || 0,
         usd_til:
           r.usd_til === "" || r.usd_til === null ? null : Number(String(r.usd_til).replace(",", ".")),
-        pris_ore: Math.round((Number(String(r.pris_kr).replace(",", ".")) || 0) * 100),
+        // Kronefeltet finnes bare på rader du har skrevet i. Rader som er lest
+        // inn og ikke rørt, har prisen i øre — uten dette ble den sendt som 0,
+        // og serveren forkastet intervallet ved neste lagring.
+        pris_ore:
+          r.pris_kr === undefined || r.pris_kr === null
+            ? Math.round(Number(r.pris_ore) || 0)
+            : Math.round((Number(String(r.pris_kr).replace(",", ".")) || 0) * 100),
         faktor:
           r.faktor === "" || r.faktor === null || r.faktor === undefined
             ? null
