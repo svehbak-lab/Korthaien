@@ -1149,6 +1149,7 @@ app.post("/api/admin/salg/ordrer/:nr/juster", krevAdmin, fang(async (req: any, r
     const r = await lagreVentendeRetting(String(req.params.nr), Array.isArray(b.linjer) ? b.linjer : [], {
       tilbakePåLager: b.tilbake_paa_lager === true,
       grunn: String(b.grunn || "").slice(0, 300),
+      fraktOre: b.frakt_ore == null || b.frakt_ore === "" ? null : Number(b.frakt_ore),
     });
     res.json({ ...r, ordre: await medBilderOgLager(r.ordre) });
     return;
@@ -1158,6 +1159,7 @@ app.post("/api/admin/salg/ordrer/:nr/juster", krevAdmin, fang(async (req: any, r
     grunn: String(b.grunn || "").slice(0, 300),
     bekreft: b.bekreft === true,
     beskjed: typeof b.beskjed === "string" ? b.beskjed : "",
+    fraktOre: b.frakt_ore == null || b.frakt_ore === "" ? null : Number(b.frakt_ore),
   });
   res.json(r.ordre ? { ...r, ordre: await medBilderOgLager(r.ordre) } : r);
 }));

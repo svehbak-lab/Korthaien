@@ -472,7 +472,7 @@ function angreskjema(o: any): string {
 const beskjedRen = (b: unknown) => String(b ?? "").trim().slice(0, 2000);
 // Rettelser som ikke er varslet ennå. Samles fra én eller flere rettelser.
 export type Rettelse = {
-  linjer: { card_name?: string; fra?: number; til?: number; tekst?: string }[];
+  linjer: { card_name?: string; fra?: number; til?: number; tekst?: string; frakt?: boolean }[];
   refusjon_ore: number;
   til_kort_ore: number;
   til_kreditt_ore: number;
@@ -487,10 +487,22 @@ function rettelseTekst(rettelser: Rettelse[] = [], betaltMed: string) {
     kreditt ? `${kr(kreditt)} tilbake som kreditt på kontoen din` : "",
     gavekort ? `${kr(gavekort)} tilbake på gavekortet` : "",
   ].filter(Boolean);
+  const alle = rettelser.flatMap((r) => r.linjer);
   return {
-    linjer: rettelser.flatMap((r) => r.linjer).map((l) => l.tekst ?? `${l.card_name}: ${l.fra} → ${l.til} stk.`),
+    intro: innledning(alle),
+    linjer: alle.map((l) => l.tekst ?? `${l.card_name}: ${l.fra} → ${l.til} stk.`),
     penger: `Du får ${kr(sum("refusjon_ore"))} tilbake: ${hvor.join(", ")}.${kort ? " Det kan ta noen dager før beløpet vises hos banken." : ""}`,
   };
+}
+
+// «Manglet noe» stemmer bare når et kort faktisk manglet. Er det bare
+// frakten som er rettet (to ordrer, porto betalt to ganger), sies det rett ut.
+function innledning(linjer: { frakt?: boolean }[]) {
+  const kort = linjer.some((l) => !l.frakt);
+  const frakt = linjer.some((l) => l.frakt);
+  if (kort && frakt) return "Jeg har rettet ordren din: noe av det du bestilte manglet, og frakten er justert:";
+  if (frakt) return "Jeg har justert frakten på ordren din:";
+  return "Beklager! Da jeg pakket ordren, manglet jeg noe av det du bestilte:";
 }
 
 // Den gule boksen øverst: beskjeden min og/eller rettelsene som ikke er
@@ -502,7 +514,7 @@ function boksHtml(beskjed: unknown, rettelser: Rettelse[] | undefined, betaltMed
   return `<div style="background:#fff6dc;border-left:4px solid #e0a800;border-radius:6px;padding:12px 14px;margin:0 0 18px;line-height:1.55">
       <div style="font-size:12px;color:#7a5b00;font-weight:600;margin-bottom:4px">${r ? "Endring i ordren" : "Beskjed fra Korthaien"}</div>
       ${t ? `<div style="white-space:pre-line;margin-bottom:${r ? 8 : 0}px">${trygg(t)}</div>` : ""}
-      ${r ? `<div>Beklager! Da jeg pakket ordren, manglet jeg noe av det du bestilte:</div>
+      ${r ? `<div>${trygg(r.intro)}</div>
         <ul style="margin:4px 0 8px;padding-left:18px">${r.linjer.map((x) => `<li>${trygg(x)}</li>`).join("")}</ul>
         <div>${trygg(r.penger)}</div>` : ""}
     </div>`;
@@ -514,7 +526,7 @@ function boksTekst(beskjed: unknown, rettelser: Rettelse[] | undefined, betaltMe
   return [
     r ? "ENDRING I ORDREN" : "BESKJED FRA KORTHAIEN",
     t,
-    r ? ["Beklager! Da jeg pakket ordren, manglet jeg noe av det du bestilte:", ...r.linjer.map((x) => `- ${x}`), r.penger].join("\n") : "",
+    r ? [r.intro, ...r.linjer.map((x) => `- ${x}`), r.penger].join("\n") : "",
   ].filter(Boolean).join("\n") + "\n\n";
 }
 const betaltMedFor = (o: any) => (o?.betalingsmate === "vipps" ? "Vipps" : "kort");
@@ -603,6 +615,7 @@ export async function sendJustering(
   ordreId: number,
   j: {
     linjer: { card_name: string; fra: number; til: number }[];
+    frakt?: { fra: number; til: number } | null;
     refusjon_ore: number;
     til_kort_ore: number;
     til_kreditt_ore: number;
@@ -614,7 +627,11 @@ export async function sendJustering(
   const r = await db().execute({ sql: "SELECT ordrenr, email, status FROM salgsordrer WHERE id = ?", args: [ordreId] });
   const o: any = r.rows[0];
   if (!o?.email) return { sendt: false, grunn: "fant ikke ordren" };
-  const linjer = j.linjer.map((l) => `${l.card_name}: ${l.fra} → ${l.til} stk.`);
+  const linjer = [
+    ...j.linjer.map((l) => `${l.card_name}: ${l.fra} → ${l.til} stk.`),
+    ...(j.frakt ? [`Frakt: ${kr(j.frakt.fra)} → ${kr(j.frakt.til)}`] : []),
+  ];
+  const intro = innledning([...j.linjer.map(() => ({})), ...(j.frakt ? [{ frakt: true }] : [])]);
   const hvor = [
     j.til_kort_ore ? `${kr(j.til_kort_ore)} tilbake til ${j.betalt_med === "Vipps" ? "Vipps" : "kortet du betalte med"}` : "",
     j.til_kreditt_ore ? `${kr(j.til_kreditt_ore)} tilbake som kreditt på kontoen din` : "",
@@ -627,14 +644,14 @@ export async function sendJustering(
     emne: `Endring i ordre ${o.ordrenr} — Korthaien`,
     html: RAMME(
       `${boksHtml(j.beskjed, [], j.betalt_med)}<h2 style="font-size:20px;margin:0 0 6px">Endring i ordren din</h2>
-       <p>Beklager! Da jeg pakket ordre <b>${trygg(o.ordrenr)}</b>, manglet jeg noe av det du bestilte:</p>
+       <p>Ordre <b>${trygg(o.ordrenr)}</b>. ${trygg(intro)}</p>
        <ul style="margin:0 0 14px;padding-left:18px">${linjer.map((x) => `<li>${trygg(x)}</li>`).join("")}</ul>
        <p>Du får <b>${kr(j.refusjon_ore)}</b> tilbake: ${trygg(hvor.join(", "))}.${tid}</p>
        ${o.status === "sendt" ? "" : "<p>Resten av ordren sendes som vanlig.</p>"}`,
       "Endring i ordren"
     ),
     tekst: beskjedTekst(j.beskjed) + [
-      `Beklager! Da jeg pakket ordre ${o.ordrenr}, manglet jeg noe av det du bestilte:`,
+      `Ordre ${o.ordrenr}. ${intro}`,
       ...linjer.map((x) => `- ${x}`),
       "",
       `Du får ${kr(j.refusjon_ore)} tilbake: ${hvor.join(", ")}.${tid}`,

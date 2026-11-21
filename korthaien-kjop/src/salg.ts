@@ -12,6 +12,9 @@ import { normaliserEpost, saldo as kredittSaldo } from "./kreditt.js";
 import { SORTERING } from "./orders.js";
 import { butikklagerSql } from "./lager.js";
 
+const kroner = (ore: number) =>
+  `${(ore / 100).toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr`;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SALG
 // ─────────────────────────────────────────────────────────────────────────────
@@ -991,7 +994,9 @@ export async function settStatus(
   // linjene samlet, med én refusjon. Feiler refusjonen, merkes ordren ikke
   // som sendt, og rettelsen står fortsatt og venter.
   if (inn.status === "sendt" && o.status !== "sendt" && o.ventende) {
-    await justerOrdre(ordrenr, o.ventende.linjer || [], { bekreft: true, grunn: o.ventende.grunn || "" });
+    await justerOrdre(ordrenr, o.ventende.linjer || [], {
+      bekreft: true, grunn: o.ventende.grunn || "", fraktOre: o.ventende.frakt_ore ?? null,
+    });
   }
   const felt: string[] = [];
   const args: any[] = [];
@@ -1169,7 +1174,7 @@ export async function kanseller(
 export async function lagreVentendeRetting(
   ordrenr: string,
   endringer: { id: number; antall: number }[],
-  valg: { tilbakePåLager?: boolean; grunn?: string } = {}
+  valg: { tilbakePåLager?: boolean; grunn?: string; fraktOre?: number | null } = {}
 ): Promise<any> {
   const o = await hentOrdre(ordrenr);
   if (!o) throw new SalgFeil(404, "Fant ikke ordren.");
@@ -1178,17 +1183,23 @@ export async function lagreVentendeRetting(
   }
   const før = new Map((o.linjer as any[]).map((l) => [Number(l.id), Number(l.antall)]));
   const endret = (endringer || []).filter((e) => før.has(Number(e.id)) && Number(e.antall) !== før.get(Number(e.id)));
-  if (!endret.length) {
+  const nyFrakt = valg.fraktOre == null ? null : Number(valg.fraktOre);
+  const fraktEndret = nyFrakt != null && nyFrakt !== Number(o.frakt_ore || 0);
+  if (!endret.length && !fraktEndret) {
     await db().execute({ sql: "UPDATE salgsordrer SET ventende_retting = NULL WHERE id = ?", args: [o.id] });
     return { forslag: null, ordre: await hentOrdre(ordrenr) };
   }
   // Samme kontroll og utregning som når rettelsen gjøres.
-  const { forslag } = await justerOrdre(ordrenr, endret);
+  const { forslag } = await justerOrdre(ordrenr, endret, { fraktOre: fraktEndret ? nyFrakt : null });
   const plan = {
     linjer: endret.map((e) => ({ id: Number(e.id), antall: Number(e.antall), tilbake: !!valg.tilbakePåLager })),
+    frakt_ore: fraktEndret ? nyFrakt : null,
     grunn: String(valg.grunn || "").trim().slice(0, 300),
     refusjon_ore: forslag.refusjon_ore,
-    tekst: forslag.linjer.map((l: any) => `${l.card_name} ${l.fra} → ${l.til}`).join(", "),
+    tekst: [
+      ...forslag.linjer.map((l: any) => `${l.card_name} ${l.fra} → ${l.til}`),
+      ...(forslag.frakt ? [`frakt ${kroner(forslag.frakt.fra)} → ${kroner(forslag.frakt.til)}`] : []),
+    ].join(", "),
     lagret_at: nå(),
   };
   await db().execute({
@@ -1201,7 +1212,11 @@ export async function lagreVentendeRetting(
 // Rettelse etter betaling: færre av et kort enn ordren sa, fordi beholdningen
 // var feil. Antallet settes ned (ned til 0 fjerner linjen), summen regnes på
 // nytt, og mellomlegget går tilbake til kunden samme vei som det kom:
-// kort/Vipps først, så kreditt, så gavekort. Frakten står.
+// kort/Vipps først, så kreditt, så gavekort.
+//
+// Frakten kan også settes ned eller fjernes (fraktOre), for eksempel når
+// kunden har lagt inn to ordrer og betalt porto to ganger. Den kan rettes
+// alene, uten at noen kortlinjer endres.
 //
 // Uten bekreft regnes det bare ut, så admin ser beløpet før noe skjer.
 //
@@ -1210,13 +1225,22 @@ export async function lagreVentendeRetting(
 export async function justerOrdre(
   ordrenr: string,
   endringer: { id: number; antall: number; tilbake?: boolean }[],
-  valg: { tilbakePåLager?: boolean; grunn?: string; bekreft?: boolean; beskjed?: string } = {}
+  valg: { tilbakePåLager?: boolean; grunn?: string; bekreft?: boolean; beskjed?: string; fraktOre?: number | null } = {}
 ): Promise<any> {
   const o = await hentOrdre(ordrenr);
   if (!o) throw new SalgFeil(404, "Fant ikke ordren.");
   if (!["betalt", "pakket", "sendt"].includes(String(o.status))) {
     throw new SalgFeil(400, "Bare betalte ordrer kan rettes.");
   }
+  const fraktFør = Number(o.frakt_ore) || 0;
+  let fraktEtter = fraktFør;
+  if (valg.fraktOre != null) {
+    const f = Number(valg.fraktOre);
+    if (!Number.isInteger(f) || f < 0) throw new SalgFeil(400, "Frakten må være et beløp, null eller mer.");
+    if (f > fraktFør) throw new SalgFeil(400, `Frakten kan bare settes ned. Kunden har betalt ${kroner(fraktFør)}.`);
+    fraktEtter = f;
+  }
+  const fraktEndret = fraktEtter !== fraktFør;
   const ny = new Map<number, number>();
   const tilLager = new Map<number, boolean>();
   for (const e of endringer || []) {
@@ -1232,7 +1256,7 @@ export async function justerOrdre(
     return { ...l, gammel, nytt };
   });
   const endret = linjer.filter((l) => l.nytt !== l.gammel);
-  if (!endret.length) throw new SalgFeil(400, "Ingen antall er endret.");
+  if (!endret.length && !fraktEndret) throw new SalgFeil(400, "Ingenting er endret.");
   const kortIgjen = linjer.reduce((n, l) => n + l.nytt, 0);
   if (!kortIgjen) throw new SalgFeil(400, "Da er det ingenting igjen i ordren. Kanseller den i stedet.");
 
@@ -1243,7 +1267,7 @@ export async function justerOrdre(
   const nyRabatt = gammelVarer ? Math.round((nyVarer * gammelRabatt) / gammelVarer) : 0;
   const nySealed = linjer.filter((l) => Number(l.mva) === 1).reduce((n, l) => n + Number(l.enhet_ore) * l.nytt, 0);
   const nyMvaVarer = nyVarer ? Math.round(nySealed * (1 - nyRabatt / nyVarer)) : 0;
-  const refusjon = gammelVarer - gammelRabatt - (nyVarer - nyRabatt);
+  const refusjon = gammelVarer - gammelRabatt - (nyVarer - nyRabatt) + (fraktFør - fraktEtter);
 
   const stripeFør = Number(o.stripe_ore) || 0;
   const kredittFør = Number(o.kreditt_ore) || 0;
@@ -1259,13 +1283,12 @@ export async function justerOrdre(
 
   // Pengedelen i rapporten, regnet på samme måte som ved betaling: frakt og
   // sealed regnes betalt med penger først.
-  const fraktOre = Number(o.frakt_ore) || 0;
-  const delt = (penger: number, mvaVarer: number) => {
-    const med = Math.min(fraktOre + mvaVarer, penger);
+  const delt = (penger: number, frakt: number, mvaVarer: number) => {
+    const med = Math.min(frakt + mvaVarer, penger);
     return { med, uten: penger - med };
   };
-  const før = delt(stripeFør, Number(o.mva_varer_ore) || 0);
-  const etter = delt(stripeFør - tilKort, nyMvaVarer);
+  const før = delt(stripeFør, fraktFør, Number(o.mva_varer_ore) || 0);
+  const etter = delt(stripeFør - tilKort, fraktEtter, nyMvaVarer);
   const betaltMed = o.betalingsmate === "vipps" ? "Vipps" : "kort";
 
   const forslag = {
@@ -1275,16 +1298,22 @@ export async function justerOrdre(
     til_gavekort_ore: tilGavekort,
     betalt_med: betaltMed,
     linjer: endret.map((l) => ({ id: l.id, card_name: l.card_name, fra: l.gammel, til: l.nytt })),
+    frakt: fraktEndret ? { fra: fraktFør, til: fraktEtter } : null,
   };
   if (!valg.bekreft) return { forslag };
   if (refusjon <= 0) throw new SalgFeil(400, "Det er ingenting å refundere.");
 
-  const beskrivelse = endret
-    .map((l) => `${l.card_name}${l.utgave ? ` (${l.utgave})` : ""} ${l.gammel} → ${l.nytt}`)
-    .join(", ");
+  const fraktTekst = fraktEndret ? `Frakt: ${kroner(fraktFør)} → ${kroner(fraktEtter)}` : "";
+  const beskrivelse = [
+    ...endret.map((l) => `${l.card_name}${l.utgave ? ` (${l.utgave})` : ""} ${l.gammel} → ${l.nytt}`),
+    ...(fraktTekst ? [fraktTekst.toLowerCase()] : []),
+  ].join(", ");
   // Samme rettelse to ganger (dobbeltklikk, nytt forsøk) gir samme nøkkel og
   // dermed ikke en refusjon til. En ny rettelse senere får en ny.
-  const fingeravtrykk = endret.map((l) => `${l.id}:${l.gammel}-${l.nytt}`).join(",");
+  const fingeravtrykk = [
+    ...endret.map((l) => `${l.id}:${l.gammel}-${l.nytt}`),
+    ...(fraktEndret ? [`f:${fraktFør}-${fraktEtter}`] : []),
+  ].join(",");
   let refusjonsId: string | null = null;
   if (tilKort > 0) {
     if (o.betalingsmate === "vipps") {
@@ -1323,14 +1352,14 @@ export async function justerOrdre(
     // endret ordren i mellomtiden, stopper vi før noe skrives.
     const u = await tx.execute({
       sql: `UPDATE salgsordrer
-               SET varer_ore = ?, rabatt_ore = ?, mva_varer_ore = ?, antall_kort = ?,
+               SET varer_ore = ?, rabatt_ore = ?, mva_varer_ore = ?, antall_kort = ?, frakt_ore = ?,
                    stripe_ore = stripe_ore - ?, kreditt_ore = kreditt_ore - ?, gavekort_ore = gavekort_ore - ?,
                    admin_notat = trim(COALESCE(admin_notat, '') || ' ' || ?),
                    ventende_retting = NULL
-             WHERE id = ? AND varer_ore = ? AND stripe_ore = ? AND kreditt_ore = ?
+             WHERE id = ? AND varer_ore = ? AND stripe_ore = ? AND kreditt_ore = ? AND frakt_ore = ?
                AND status IN ('betalt', 'pakket', 'sendt')`,
-      args: [nyVarer, nyRabatt, nyMvaVarer, kortIgjen, tilKort, tilKreditt, tilGavekort, notat,
-             o.id, gammelVarer, stripeFør, kredittFør],
+      args: [nyVarer, nyRabatt, nyMvaVarer, kortIgjen, fraktEtter, tilKort, tilKreditt, tilGavekort, notat,
+             o.id, gammelVarer, stripeFør, kredittFør, fraktFør],
     });
     if (!u.rowsAffected) throw new SalgFeil(409, "Ordren ble endret i mellomtiden. Last inn på nytt.");
     for (const l of endret) {
@@ -1371,7 +1400,10 @@ export async function justerOrdre(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [o.id, beskrivelse, refusjon, tilKort, tilKreditt, tilGavekort,
              før.uten - etter.uten, før.med - etter.med, refusjonsId,
-             JSON.stringify(endret.map((l) => ({ card_name: l.card_name + (l.utgave ? ` (${l.utgave})` : ""), fra: l.gammel, til: l.nytt }))),
+             JSON.stringify([
+               ...endret.map((l) => ({ card_name: l.card_name + (l.utgave ? ` (${l.utgave})` : ""), fra: l.gammel, til: l.nytt })),
+               ...(fraktTekst ? [{ tekst: fraktTekst, frakt: true }] : []),
+             ]),
              tid],
     });
     await tx.commit();

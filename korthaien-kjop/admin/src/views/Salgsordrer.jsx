@@ -203,20 +203,31 @@ export function Ordre({ nr, onLukk, onFeil, onMelding }) {
   const [rettGrunn, setRettGrunn] = useState("");
   const [rettBeskjed, setRettBeskjed] = useState("");
   const [sendtBeskjed, setSendtBeskjed] = useState("");
+  // Ny frakt i kroner, som tekst mens du skriver. Tom = frakten endres ikke.
+  const [rettFrakt, setRettFrakt] = useState("");
 
   const rettLinjer = retting
     ? Object.entries(retting).map(([id, v]) => ({ id: Number(id), antall: v === "" ? NaN : Number(v) }))
     : [];
-  const rettNøkkel = JSON.stringify(rettLinjer);
+  const fraktOre = (() => {
+    const t = String(rettFrakt).trim().replace(/\s/g, "").replace(",", ".");
+    if (t === "") return null;
+    const n = Number(t);
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : NaN;
+  })();
+  const fraktEndret = fraktOre != null && o && fraktOre !== Number(o.frakt_ore || 0);
+  const rettNøkkel = JSON.stringify([rettLinjer, fraktOre]);
   useEffect(() => {
     if (!retting) return;
     setForslag(null);
     setRettFeil("");
-    if (!rettLinjer.length || rettLinjer.some((l) => !Number.isInteger(l.antall))) return;
+    if (Number.isNaN(fraktOre)) { setRettFeil("Skriv frakten som et beløp i kroner, for eksempel 0 eller 49."); return; }
+    if (!rettLinjer.length && !fraktEndret) return;
+    if (rettLinjer.some((l) => !Number.isInteger(l.antall))) return;
     let avbrutt = false;
     const t = setTimeout(() => {
       api
-        .justerSalgsordre(nr, { linjer: rettLinjer })
+        .justerSalgsordre(nr, { linjer: rettLinjer, frakt_ore: fraktEndret ? fraktOre : null })
         .then((r) => !avbrutt && setForslag(r.forslag))
         .catch((e) => !avbrutt && setRettFeil(e.message || String(e)));
     }, 250);
@@ -232,6 +243,7 @@ export function Ordre({ nr, onLukk, onFeil, onMelding }) {
     setRetting(v ? Object.fromEntries(v.linjer.map((l) => [l.id, String(l.antall)])) : {});
     setTilbake(!!v?.linjer?.some((l) => l.tilbake));
     setRettGrunn(v?.grunn || "");
+    setRettFrakt(v?.frakt_ore != null ? String(v.frakt_ore / 100).replace(".", ",") : "");
     setPlukket(new Set());
   }
 
@@ -251,12 +263,16 @@ export function Ordre({ nr, onLukk, onFeil, onMelding }) {
     setJobber(true);
     if (rettVenter) {
       try {
-        const r = await api.justerSalgsordre(nr, { linjer: rettLinjer, vent: true, tilbake_paa_lager: tilbake, grunn: rettGrunn });
+        const r = await api.justerSalgsordre(nr, {
+          linjer: rettLinjer, vent: true, tilbake_paa_lager: tilbake, grunn: rettGrunn,
+          frakt_ore: fraktEndret ? fraktOre : null,
+        });
         setO(r.ordre);
         setRetting(null);
         setForslag(null);
         setTilbake(false);
         setRettGrunn("");
+        setRettFrakt("");
         onMelding(
           r.ordre.ventende
             ? `Rettelsen er lagret. ${kroner(r.ordre.ventende.refusjon_ore)} refunderes når du merker ordren som sendt.`
@@ -269,7 +285,10 @@ export function Ordre({ nr, onLukk, onFeil, onMelding }) {
       return;
     }
     try {
-      const r = await api.justerSalgsordre(nr, { linjer: rettLinjer, bekreft: true, tilbake_paa_lager: tilbake, grunn: rettGrunn, beskjed: rettBeskjed });
+      const r = await api.justerSalgsordre(nr, {
+        linjer: rettLinjer, bekreft: true, tilbake_paa_lager: tilbake, grunn: rettGrunn, beskjed: rettBeskjed,
+        frakt_ore: fraktEndret ? fraktOre : null,
+      });
       setO(r.ordre);
       setNotat(r.ordre.admin_notat || "");
       setRetting(null);
@@ -277,6 +296,7 @@ export function Ordre({ nr, onLukk, onFeil, onMelding }) {
       setTilbake(false);
       setRettGrunn("");
       setRettBeskjed("");
+      setRettFrakt("");
       onMelding(`Ordren er rettet. ${kroner(r.forslag.refusjon_ore)} er sendt tilbake, og kunden har fått e-post.`);
     } catch (e) {
       onFeil(e);
@@ -575,11 +595,11 @@ export function Ordre({ nr, onLukk, onFeil, onMelding }) {
                   <>
                     <span className="dempet" style={{ fontSize: 12.5 }}>
                       {rettVenter
-                        ? "Mangler du et kort? Sett ned antallet. Kunden får mellomlegget tilbake når du merker ordren som sendt."
-                        : "Mangler du et kort? Sett ned antallet, så får kunden mellomlegget tilbake."}
+                        ? "Mangler du et kort, eller har kunden betalt frakt to ganger? Kunden får mellomlegget tilbake når du merker ordren som sendt."
+                        : "Mangler du et kort, eller har kunden betalt frakt to ganger? Kunden får mellomlegget tilbake."}
                     </span>
                     <button className="knapp" disabled={jobber} onClick={startRetting}>
-                      Rett antall…
+                      Rett ordren…
                     </button>
                   </>
                   )
@@ -588,6 +608,13 @@ export function Ordre({ nr, onLukk, onFeil, onMelding }) {
                     <span className="dempet" style={{ fontSize: 12.5 }}>
                       Endre antallet i plukklisten. 0 fjerner kortet fra ordren.
                     </span>
+                    <label>
+                      Frakt (kunden betalte {kroner(o.frakt_ore)})
+                      <input
+                        inputMode="decimal" value={rettFrakt} onChange={(e) => setRettFrakt(e.target.value)}
+                        placeholder="Uendret — skriv 0 for å fjerne frakten"
+                      />
+                    </label>
                     {rettFeil && <div className="varsel feil" style={{ margin: 0 }}>{rettFeil}</div>}
                     {forslag && (
                       <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>
@@ -595,8 +622,9 @@ export function Ordre({ nr, onLukk, onFeil, onMelding }) {
                         {forslag.til_kort_ore > 0 && <div>· {kroner(forslag.til_kort_ore)} til {forslag.betalt_med === "Vipps" ? "Vipps" : "kortet"}</div>}
                         {forslag.til_kreditt_ore > 0 && <div>· {kroner(forslag.til_kreditt_ore)} som kreditt</div>}
                         {forslag.til_gavekort_ore > 0 && <div>· {kroner(forslag.til_gavekort_ore)} på gavekortet</div>}
+                        {forslag.frakt && <div className="dempet" style={{ fontSize: 12 }}>Frakt {kroner(forslag.frakt.fra)} → {kroner(forslag.frakt.til)}</div>}
                         <div className="dempet" style={{ fontSize: 12 }}>
-                          Frakten endres ikke.{" "}
+                          {forslag.frakt ? "" : "Frakten endres ikke. "}
                           {o.status === "sendt"
                             ? "Kunden får en e-post nå."
                             : "Ingenting refunderes nå. Det skjer samlet når du merker ordren som sendt, og står øverst i e-posten."}
@@ -613,7 +641,7 @@ export function Ordre({ nr, onLukk, onFeil, onMelding }) {
                     <label>Grunn (bare for deg)<input value={rettGrunn} onChange={(e) => setRettGrunn(e.target.value)} placeholder="F.eks. fant ikke kortet" /></label>
                     {o.status === "sendt" && <Beskjed verdi={rettBeskjed} sett={setRettBeskjed} />}
                     <div className="rad-flex">
-                      <button className="knapp" disabled={jobber} onClick={() => { setRetting(null); setForslag(null); setRettFeil(""); }}>
+                      <button className="knapp" disabled={jobber} onClick={() => { setRetting(null); setForslag(null); setRettFeil(""); setRettFrakt(""); }}>
                         Avbryt
                       </button>
                       <button className="knapp primar" disabled={jobber || !forslag || forslag.refusjon_ore <= 0} onClick={lagreRetting}>

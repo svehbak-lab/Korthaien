@@ -433,6 +433,52 @@ test("rettelse: antallet settes ned, mellomlegget går tilbake som kreditt, lage
   assert.equal(await kreditt.saldo(kari.email), saldo + 3500 + 1000 + 5500);
 });
 
+test("rettelse av frakt: porto kan fjernes alene, går tilbake, og kan ikke settes opp", async () => {
+  const id = await kort("aaa", "Dobbel Porto", "rare", 1000, 5);
+  const kari = await konto.loggInn("selger@eksempel.no", "passord123");
+  await kreditt.leggTil({ email: kari.email, ore: 50000, grunn: "manuell" });
+  const r = await salg.åpneKasse(
+    { ...adresse, email: "", bruk_kreditt: true, linjer: [{ card_id: id, finish: "nonfoil", condition: "NM", antall: 1 }] },
+    kari
+  );
+  const saldo = await kreditt.saldo(kari.email);
+  await assert.rejects(salg.justerOrdre(r.ordrenr, [], { fraktOre: 9900 }), /bare settes ned/);
+  await assert.rejects(salg.justerOrdre(r.ordrenr, []), /Ingenting er endret/);
+
+  const f = await salg.justerOrdre(r.ordrenr, [], { fraktOre: 0 });
+  assert.equal(f.forslag.refusjon_ore, 5500);
+  assert.deepEqual(f.forslag.frakt, { fra: 5500, til: 0 });
+
+  const ut = await salg.justerOrdre(r.ordrenr, [], { fraktOre: 0, bekreft: true });
+  assert.equal(Number(ut.ordre.frakt_ore), 0);
+  assert.equal(Number(ut.ordre.varer_ore), 1000);
+  assert.equal(Number(ut.ordre.kreditt_ore), 1000);
+  assert.equal(await kreditt.saldo(kari.email), saldo + 5500);
+  assert.match(String(ut.ordre.admin_notat), /frakt: 55,00 kr → 0,00 kr/);
+  // Samme rettelse en gang til: ingenting igjen å endre.
+  await assert.rejects(salg.justerOrdre(r.ordrenr, [], { fraktOre: 0, bekreft: true }), /Ingenting er endret/);
+});
+
+test("rettelse av frakt kan vente til sending, sammen med kortlinjer", async () => {
+  const a = await kort("aaa", "Venter Frakt", "rare", 1500, 5);
+  const kari = await konto.loggInn("selger@eksempel.no", "passord123");
+  await kreditt.leggTil({ email: kari.email, ore: 50000, grunn: "manuell" });
+  const r = await salg.åpneKasse(
+    { ...adresse, email: "", bruk_kreditt: true, linjer: [{ card_id: a, finish: "nonfoil", condition: "NM", antall: 2 }] },
+    kari
+  );
+  const linje = (await salg.hentOrdre(r.ordrenr)).linjer[0];
+  const saldo = await kreditt.saldo(kari.email);
+  const v = await salg.lagreVentendeRetting(r.ordrenr, [{ id: linje.id, antall: 1 }], { fraktOre: 2000 });
+  assert.equal(v.ordre.ventende.refusjon_ore, 1500 + 3500);
+  assert.equal(await kreditt.saldo(kari.email), saldo);
+  await salg.settStatus(r.ordrenr, { status: "sendt" });
+  const o = await salg.hentOrdre(r.ordrenr);
+  assert.equal(Number(o.frakt_ore), 2000);
+  assert.equal(Number(o.antall_kort), 1);
+  assert.equal(await kreditt.saldo(kari.email), saldo + 5000);
+});
+
 test("rettelse på kortbetalt ordre: pengedelen refunderes først, og rapporten får en tilbakeføring", async () => {
   const id = await kort("aaa", "Kortbetalt Rettelse", "rare", 3000, 4);
   const kari = await konto.loggInn("selger@eksempel.no", "passord123");
