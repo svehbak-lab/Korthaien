@@ -15,6 +15,10 @@ const {
 await migrate();
 process.on("exit", () => rmSync(DB, { force: true }));
 await settSetting("usd_nok", 10);
+// Testene under er skrevet for én flat trapp (85/70/55). Trinnene etter pris
+// testes for seg nederst.
+const FLAT = [{ fra_ore: 0, EX: 85, VG: 70, G: 55 }];
+await settSetting("salg_trinn", FLAT);
 
 // Slik Svein beskrev det: rare under 0,90 koster 10 kroner, 0,91–1,40 koster 15.
 const INTERVALLER = [
@@ -231,4 +235,31 @@ test("faste priser virker fortsatt", async () => {
   const opp = await hentSalgsOppsett();
   assert.equal(salgsprisØre({ usd: 0.5, rarity: "rare" }, "nonfoil", "NM", opp), 1000);
   assert.equal(salgsprisØre({ usd: 1.29, rarity: "rare" }, "nonfoil", "NM", opp), 1500);
+});
+
+test("trinn etter NM-pris: billige, mellomdyre og dyre kort får hver sin stige", async () => {
+  await settSetting("salg_trinn", [
+    { fra_ore: 0, EX: 80, VG: 70, G: 50 },
+    { fra_ore: 19500, EX: 85, VG: 70, G: 50 },
+    { fra_ore: 32500, EX: 85, VG: 75, G: 65 },
+    { fra_ore: 130000, EX: 90, VG: 80, G: 70 },
+  ]);
+  const opp = await hentSalgsOppsett();
+  const pris = (nm) => ["NM", "EX", "VG", "G"].map((c) => salgsprisØre({ rarity: "mythic" }, "nonfoil", c, opp, nm));
+  assert.deepEqual(pris(10000), [10000, 8000, 7000, 5000]);
+  assert.deepEqual(pris(20000), [20000, 17000, 14000, 10000]);
+  assert.deepEqual(pris(50000), [50000, 42500, 37500, 32500]);
+  assert.deepEqual(pris(150000), [150000, 135000, 120000, 105000]);
+  // Rett over en grense: aldri billigere enn rett under.
+  for (const c of [1, 2, 3]) assert.ok(pris(32500)[c] >= pris(32400)[c]);
+  // Foil følger samme stige.
+  assert.equal(salgsprisØre({ rarity: "mythic" }, "foil", "G", opp, 150000), 105000);
+  await settSetting("salg_trinn", FLAT);
+});
+
+test("trinnene sorteres, og første trinn starter alltid på 0", async () => {
+  const { rensTrinn } = await import("../src/salgspris.ts");
+  const t = rensTrinn([{ fra_ore: 50000, EX: 90, VG: 80, G: 70 }, { fra_ore: 100, EX: 80, VG: 70, G: 50 }]);
+  assert.deepEqual(t.map((x) => x.fra_ore), [0, 50000]);
+  assert.equal(rensTrinn([]), undefined);
 });

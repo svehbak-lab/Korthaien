@@ -12,6 +12,7 @@ const { oppdaterSalgsverdi } = await import("../src/orders.ts");
 const { settManuellSalg } = await import("../src/salgspris.ts");
 const { ordreStatistikk } = await import("../src/statistikk.ts");
 await migrate();
+await (await import("../src/db.ts")).settSetting("salg_trinn", [{ fra_ore: 0, EX: 85, VG: 70, G: 55 }]);
 process.on("exit", () => rmSync(DB, { force: true }));
 
 test("salgsverdien følger tilstand, mottatt antall og fjernede linjer", async () => {

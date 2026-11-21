@@ -465,6 +465,7 @@ export async function fyllForsidenavn(logg: (s: string) => void = () => {}): Pro
 
 // ── innstillinger ────────────────────────────────────────────────────────────
 export type Ladder = Record<string, number>;
+export type SalgTrinn = { fra_ore: number; EX: number; VG: number; G: number };
 
 export const CONDITIONS = ["NM", "EX", "VG", "G"] as const;
 export type Condition = (typeof CONDITIONS)[number];
@@ -489,6 +490,11 @@ export type Settings = {
   // Salgssiden. Egen trapp, fordi den tjener motsatt formål av kjøpstrappen:
   // den bestemmer hvor mye mindre du tar, ikke hvor mye mindre du betaler.
   salg_trapp: Record<string, number>;
+  // Salgstrappen i trinn etter NM-prisen i butikken (øre), som hos Card
+  // Kingdom: dyre kort i dårligere tilstand holder mer av verdien. Første
+  // trinn starter på 0. Avløser salg_trapp, som står igjen bare for å kunne
+  // leses av eldre kode.
+  salg_trinn: SalgTrinn[];
   // Brukes på kort som er dyrere enn alle intervallene. 1,0 er markedspris.
   salg_faktor: number;
   // Avrunding i øre. 100 gir hele kroner.
@@ -552,6 +558,14 @@ const STANDARD: Settings = {
   // 0.5 for å slippe å motta bulk du likevel ikke tjener på å håndtere.
   min_usd: { common: 0, uncommon: 0, rare: 0, mythic: 0 },
   salg_trapp: { NM: 100, EX: 85, VG: 70, G: 55 },
+  // Card Kingdoms trinn ($15, $25 og $100), regnet om med faktor 13.
+  // Samme stige for vanlige og foil.
+  salg_trinn: [
+    { fra_ore: 0, EX: 80, VG: 70, G: 50 },
+    { fra_ore: 19500, EX: 85, VG: 70, G: 50 },
+    { fra_ore: 32500, EX: 85, VG: 75, G: 65 },
+    { fra_ore: 130000, EX: 90, VG: 80, G: 70 },
+  ],
   salg_faktor: 1.0,
   salg_avrunding: 100,
   // NM er standard for alle sett, slik du beskrev.

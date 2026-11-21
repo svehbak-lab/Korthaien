@@ -255,28 +255,85 @@ function UsdFelt({ verdi, onEndret }) {
 
 // Egen trapp for salg. Den bestemmer hvor mye mindre du tar for et slitt
 // kort — ikke hvor mye mindre du betaler, som er kjøpstrappens jobb.
+const TRINN_STANDARD = [
+  { fra_ore: 0, EX: 80, VG: 70, G: 50 },
+  { fra_ore: 19500, EX: 85, VG: 70, G: 50 },
+  { fra_ore: 32500, EX: 85, VG: 75, G: 65 },
+  { fra_ore: 130000, EX: 90, VG: 80, G: 70 },
+];
+
 function SalgsTrapp({ s, endre }) {
-  const trapp = s.salg_trapp || { NM: 100, EX: 85, VG: 70, G: 55 };
+  const trinn = Array.isArray(s.salg_trinn) && s.salg_trinn.length ? s.salg_trinn : TRINN_STANDARD;
+  const sett = (i, felt, verdi) =>
+    endre("salg_trinn", trinn.map((t, j) => (j === i ? { ...t, [felt]: verdi } : t)));
+  const leggTil = () => {
+    const siste = trinn[trinn.length - 1];
+    endre("salg_trinn", [...trinn, { ...siste, fra_ore: siste.fra_ore + 100000 }]);
+  };
+  const fjern = (i) => endre("salg_trinn", trinn.filter((_, j) => j !== i));
   return (
     <div className="panel">
       <div className="krop">
         <h2 style={{ marginTop: 0 }}>Salgstrapp og avrunding</h2>
         <p className="dempet">
-          Near Mint er grunnprisen. De andre tilstandene regnes som en andel av
-          den. Trappen er egen for salg, slik at du kan justere marginen på slitte
-          kort uten å endre hva du betaler for dem.
+          Near Mint er grunnprisen. De andre tilstandene er en andel av den, og andelen
+          avhenger av hva kortet koster i NM — som hos Card Kingdom: dyre kort i dårligere
+          tilstand holder mer av verdien. Samme stige for vanlige og foil. Trappen er egen
+          for salg, så du kan justere marginen på slitte kort uten å endre hva du betaler.
         </p>
+        <table style={{ maxWidth: 560, marginBottom: 12 }}>
+          <thead>
+            <tr>
+              <th>NM-pris fra</th>
+              <th className="h">EX</th>
+              <th className="h">VG</th>
+              <th className="h">G</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {trinn.map((t, i) => (
+              <tr key={i}>
+                <td>
+                  {i === 0 ? (
+                    <span className="dempet">0 kr</span>
+                  ) : (
+                    <>
+                      <input
+                        type="number" min="1" value={Math.round(t.fra_ore / 100)}
+                        onChange={(e) => sett(i, "fra_ore", Math.max(1, parseInt(e.target.value) || 0) * 100)}
+                        style={{ width: 80, textAlign: "right" }}
+                      />
+                      <span className="dempet"> kr</span>
+                    </>
+                  )}
+                </td>
+                {["EX", "VG", "G"].map((c) => (
+                  <td key={c} className="h">
+                    <input
+                      type="number" min="0" max="100" value={t[c] ?? 0}
+                      onChange={(e) => sett(i, c, Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                      style={{ width: 56, textAlign: "right" }}
+                    />
+                    <span className="dempet"> %</span>
+                  </td>
+                ))}
+                <td>
+                  {i > 0 && (
+                    <button className="knapp" onClick={() => fjern(i)} title="Fjern trinnet">Fjern</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="rad-flex" style={{ marginBottom: 12 }}>
+          <button className="knapp" onClick={leggTil}>Legg til trinn</button>
+          <button className="knapp" onClick={() => endre("salg_trinn", TRINN_STANDARD)}>
+            Tilbake til Card Kingdom-stigen
+          </button>
+        </div>
         <div className="rad-flex">
-          {CONDITIONS.map((c) => (
-            <Felt key={c} navn={c}>
-              <input
-                type="number" min="0" max="100" value={trapp[c] ?? 0}
-                onChange={(e) => endre("salg_trapp", { ...trapp, [c]: parseInt(e.target.value) || 0 })}
-                style={{ width: 64, textAlign: "right" }}
-              />
-              <span className="dempet"> %</span>
-            </Felt>
-          ))}
           <Felt navn="Over intervallene">
             <span className="dempet">× </span>
             <input

@@ -2060,7 +2060,7 @@ app.get("/api/admin/settings", krevAdmin, fang(async (_req: any, res: any) => {
 app.put("/api/admin/settings", krevAdmin, fang(async (req: any, res: any) => {
   const lov: (keyof Settings)[] = [
     "usd_nok", "buy_pct", "min_buy_ore", "min_order_ore", "min_usd",
-    "salg_trapp", "salg_faktor", "salg_avrunding", "default_conditions",
+    "salg_trapp", "salg_trinn", "salg_faktor", "salg_avrunding", "default_conditions",
     "default_ladder", "order_expiry_days", "ship_to", "tema", "forside_sett",
     "firmanavn", "org_nr", "retur_frakt", "toppbanner", "tix_kreditt_ore", "overgang_dato", "vis_sealed", "stengt", "krev_konto",
     "komplettsett_rabatt_pct",

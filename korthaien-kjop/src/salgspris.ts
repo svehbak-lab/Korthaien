@@ -1,5 +1,5 @@
 import { butikklagerSql } from "./lager.js";
-import { db, hentSettings, type Condition, type Settings } from "./db.js";
+import { db, hentSettings, type Condition, type Settings, type SalgTrinn } from "./db.js";
 import { prisenFor, hentManuellePriser } from "./pricing.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,6 +174,7 @@ export async function settManuellSalg(
 export type SalgsOppsett = {
   intervaller: Intervall[];
   trapp: Record<string, number>;
+  trinn?: SalgTrinn[];
   faktor: number;
   avrunding: number;
   usd_nok: number;
@@ -184,10 +185,32 @@ export async function hentSalgsOppsett(s?: Settings): Promise<SalgsOppsett> {
   return {
     intervaller: await hentIntervaller(),
     trapp: (settings as any).salg_trapp || SALG_STANDARD.trapp,
+    trinn: rensTrinn((settings as any).salg_trinn),
     faktor: (settings as any).salg_faktor ?? SALG_STANDARD.faktor,
     avrunding: (settings as any).salg_avrunding ?? SALG_STANDARD.avrunding,
     usd_nok: settings.usd_nok,
   };
+}
+
+// Trinnene sortert, med et første trinn fra 0 kr. Tomt eller ødelagt gir
+// ingen trinn, og da gjelder den gamle enkle trappen.
+export function rensTrinn(x: unknown): SalgTrinn[] | undefined {
+  if (!Array.isArray(x) || !x.length) return undefined;
+  const pct = (v: unknown) => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+  const ut = x
+    .map((t: any) => ({ fra_ore: Math.max(0, Math.round(Number(t?.fra_ore) || 0)), EX: pct(t?.EX), VG: pct(t?.VG), G: pct(t?.G) }))
+    .sort((a, b) => a.fra_ore - b.fra_ore);
+  ut[0].fra_ore = 0;
+  return ut;
+}
+
+// Andelen for en tilstand: trinnet NM-prisen havner i. NM er alltid 100.
+export function andelFor(opp: SalgsOppsett, condition: Condition, nmØre: number): number | undefined {
+  if (condition === "NM") return 100;
+  if (!opp.trinn?.length) return opp.trapp[condition];
+  let t = opp.trinn[0];
+  for (const x of opp.trinn) if (nmØre >= x.fra_ore) t = x;
+  return (t as any)[condition];
 }
 
 // Mest spesifikke treff først: en regel for «rare» slår en regel for «alle».
@@ -238,7 +261,9 @@ export function salgsprisØre(
     }
   }
 
-  const pct = opp.trapp[condition];
+  // Trinnet velges av NM-prisen kortet faktisk har i butikken, også når den
+  // er satt for hånd. Da virker stigen likt for alle kort.
+  const pct = andelFor(opp, condition, grunn ?? 0);
   if (pct === undefined || pct === null) return 0;
   // Opprundingen gjelder ankerprisen for Near Mint. Tilstandene regnes av den
   // og rundes til nærmeste krone — ellers ville 85 % av 15 blitt 15 igjen, og
