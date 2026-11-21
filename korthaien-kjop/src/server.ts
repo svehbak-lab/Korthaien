@@ -964,7 +964,14 @@ app.get("/api/butikk/katalog", grense(REGLER.butikk), kundeValgfri, fang(async (
       perSide: tall(req.query.perSide) === undefined ? undefined : Math.min(100, tall(req.query.perSide)!),
       utenTokens: String(req.query.utenTokens || "") === "1",
   };
+  const start = Date.now();
   const svar: any = await katalogMedKø(filter, () => butikkvisning(filter));
+  // Trege oppslag logges, så det synes i Render hvilke filtre som er dyre.
+  const ms = Date.now() - start;
+  if (ms > 1500) {
+    const vist = Object.fromEntries(Object.entries(filter).filter(([, v]) => v !== undefined && v !== "" && v !== false));
+    console.log(`Tregt katalogoppslag: ${ms} ms`, JSON.stringify(vist));
+  }
   if (telles) brukKortkvote(ip, Array.isArray(svar?.kort) ? svar.kort.length : 0);
   res.json(svar);
 }));

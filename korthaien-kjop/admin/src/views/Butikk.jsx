@@ -315,6 +315,10 @@ function ButikkSider({ onFeil }) {
     return () => window.removeEventListener("popstate", vedPop);
   }, []);
 
+  // Nytt sett: tøm lista med en gang. Ellers står forrige visning — med
+  // tallene for hele lageret — og ser ut som svaret mens settet hentes.
+  useEffect(() => { setData(null); }, [sett]);
+
   // Hvert søk får et løpenummer. Svarene kan komme i feil rekkefølge — et
   // tregt søk på hele katalogen kan komme etter det raske søket på «egg» —
   // og da skal bare svaret på det siste søket vises.
