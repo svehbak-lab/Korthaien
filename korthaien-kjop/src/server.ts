@@ -1,7 +1,7 @@
 import { harVipps } from "./vipps.js";
 import { overgangsstatus, gjennomførOvergang } from "./overgang.js";
 import { erAdmin } from "./auth.js";
-import { lagerkilde, settBokSomLagerkilde } from "./lager.js";
+import { lagerkilde, settBokSomLagerkilde, butikklagerSql } from "./lager.js";
 import { leggTilØnske, fjernØnske, hentØnsker, varsleØnsker, ØnskeFeil } from "./onskeliste.js";
 import { bulkSøk } from "./bulksok.js";
 import { sjekkKode, KodeFeil, alleKoder, opprettKode, importerKoder, justerSaldo, endreKode, bevegelser as kodeBevegelser, lagKode } from "./rabattkoder.js";
@@ -989,14 +989,30 @@ app.get("/api/butikk/sett/:kode", grense(REGLER.butikk), fang(async (req: any, r
   res.json({ info });
 }));
 
+// Settene i butikken: de du har kort på lager fra, og de som er slått på i
+// kjøpslista. Før var det bare de siste — da manglet Star Trek i lista selv
+// om kortene lå i butikken, fordi settet ikke var åpnet for innkjøp. Om et
+// sett vises i butikken, har ingenting med innkjøpet å gjøre.
+//
+// Lista leses ved hver sidevisning, og lageret går gjennom alle kortene du
+// har. Den huskes derfor fem minutter.
+let settlisteMinne: { til: number; svar: Promise<any> } | null = null;
 app.get("/api/butikk/settliste", grense(REGLER.butikk), fang(async (_req: any, res: any) => {
-  const r = await db().execute(`
-    SELECT s.code, COALESCE(s.visningsnavn, s.name) AS name, s.released_at, s.card_count, s.parent_code,
-           r.enabled
-      FROM sets s JOIN set_rules r ON r.set_code = s.code
-     WHERE r.enabled = 1
-     ORDER BY name COLLATE NOCASE`);
-  res.json({ sett: r.rows });
+  const nå = Date.now();
+  if (!settlisteMinne || settlisteMinne.til <= nå || process.env.DATABASE_URL?.startsWith("file:/tmp")) {
+    const svar = db().execute(`
+      SELECT s.code, COALESCE(s.visningsnavn, s.name) AS name, s.released_at, s.card_count, s.parent_code,
+             1 AS enabled
+        FROM sets s
+       WHERE s.code IN (SELECT set_code FROM set_rules WHERE enabled = 1)
+          OR s.code IN (SELECT c.set_code FROM cards c
+                         WHERE c.id IN (SELECT card_id FROM (${butikklagerSql()})
+                                         GROUP BY card_id HAVING SUM(antall) > 0))
+       ORDER BY name COLLATE NOCASE`);
+    settlisteMinne = { til: nå + 5 * 60_000, svar };
+    svar.catch(() => { settlisteMinne = null; });
+  }
+  res.json({ sett: (await settlisteMinne.svar).rows });
 }));
 
 app.get("/api/butikk/produkter", grense(REGLER.butikk), fang(async (req: any, res: any) => {
