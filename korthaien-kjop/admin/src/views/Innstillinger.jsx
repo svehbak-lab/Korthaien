@@ -64,6 +64,14 @@ export default function Innstillinger({ fane, onFeil, onMelding }) {
       <>
         <Salgspriser onFeil={onFeil} onMelding={onMelding} />
         <SalgsTrapp s={s} endre={endre} />
+        {/* Trappen, faktoren og avrundingen er innstillinger, og lagres med
+            samme knapp som under Innkjøp. Før fantes knappen bare der, så
+            endringer gjort her ble aldri lagret. */}
+        <div className="rad-flex" style={{ marginBottom: 24 }}>
+          <button className="knapp primar" onClick={lagre} disabled={lagrer}>
+            {lagrer ? "Lagrer…" : "Lagre salgstrapp og avrunding"}
+          </button>
+        </div>
       </>
     );
   }
