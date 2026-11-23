@@ -35,6 +35,9 @@ async function kort(id, navn, nr, { nonfoil = 1, foil = 1 } = {}) {
 }
 await kort("elves", "Llanowar Elves", "190");
 await kort("bare-foil", "Shiny Promo", "300", { nonfoil: 0, foil: 1 });
+// Som Seventh Edition: «339» er den vanlige, «339★» foilen — to kort.
+await kort("fjell-vanlig", "Mountain", "339", { nonfoil: 1, foil: 0 });
+await kort("fjell-foil", "Mountain", "339★", { nonfoil: 0, foil: 1 });
 
 const én = async (t) => (await løsBulk(parseBulk(t)))[0];
 
@@ -62,5 +65,12 @@ test("foil-markert linje løses som foil", async () => {
 test("trykk som bare finnes i foil løses som foil uten markering", async () => {
   const r = await én("1 Shiny Promo (M10) 300");
   assert.equal(r.status, "løst");
+  assert.equal(r.valg[0].finish, "foil");
+});
+
+test("«339★ *F*» treffer foilkortet med stjerne, ikke det vanlige 339", async () => {
+  const r = await én("1 Mountain (M10) 339★ *F*");
+  assert.equal(r.status, "løst");
+  assert.equal(r.valg[0].card_id, "fjell-foil");
   assert.equal(r.valg[0].finish, "foil");
 });

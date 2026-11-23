@@ -192,7 +192,7 @@ function tolkLinje(rå: string, nr: number): BulkLinje {
 
   // Settkode eller settnavn i parentes/klamme: «(M10) 146», «[Magic 2010]».
   const iKlamme = s.match(
-    /[([]\s*([^\])]{1,40}?)\s*[)\]]\s*((?=[^\s]*\d)[0-9A-Za-z][0-9A-Za-z-]{0,9})?/
+    /[([]\s*([^\])]{1,40}?)\s*[)\]]\s*((?=[^\s]*\d)[0-9A-Za-z][0-9A-Za-z-]{0,9}[★†]?)?/
   );
   // «Bolt (4)» er et antall, ikke et sett. Vi lar det stå og plukkes opp av
   // antallsleddet under.
@@ -219,7 +219,9 @@ function tolkLinje(rå: string, nr: number): BulkLinje {
   s = trekkUtAntall(s, r);
 
   // Samlernummer bakerst: «#146», eller bare «146» etter navnet.
-  const nummer = s.match(/[\s#]+#?(\d{1,4}[a-z]?)\s*$/);
+  // Stjernen og korset er en del av nummeret: i Seventh Edition er «339★»
+  // foilutgaven og «339» den vanlige, to forskjellige kort.
+  const nummer = s.match(/[\s#]+#?(\d{1,4}[a-z]?[★†]?)\s*$/);
   if (nummer && !r.nummerHint) {
     r.nummerHint = nummer[1].toLowerCase();
     s = s.slice(0, nummer.index);
@@ -296,7 +298,7 @@ function fraFelt(felt: string[], r: BulkLinje): string {
   for (let i = 0; i < rest.length; i++) {
     if (i === navnIdx) continue;
     const f = rest[i];
-    if (/^\d{1,4}[a-z]?$/i.test(f) && !r.nummerHint) r.nummerHint = f.toLowerCase();
+    if (/^\d{1,4}[a-z]?[★†]?$/i.test(f) && !r.nummerHint) r.nummerHint = f.toLowerCase();
     else if (/^[A-Za-z0-9]{2,6}$/.test(f) && !r.settHint) r.settHint = f.toLowerCase();
     else if (f.length >= 3 && !r.settNavnHint) r.settNavnHint = f;
   }

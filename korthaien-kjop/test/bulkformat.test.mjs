@@ -131,3 +131,12 @@ test("× som gangetegn, og fordeling på tilstander i parentes", () => {
   assert.equal(parseBulk("1× Lightning Bolt (Magic 2010)")[0].settNavnHint, "Magic 2010");
   assert.equal(parseBulk("1× Lightning Bolt (Magic 2010)")[0].qty, 1);
 });
+
+test("stjerne og kors hører til samlernummeret, ikke navnet", () => {
+  const [a] = parseBulk("1 Mountain (7ED) 339★ *F*");
+  assert.equal(a.navn, "Mountain");
+  assert.equal(a.nummerHint, "339★");
+  assert.equal(a.foil, true);
+  const [b] = parseBulk("1 Island 7ED 335†");
+  assert.equal(b.nummerHint, "335†");
+});
