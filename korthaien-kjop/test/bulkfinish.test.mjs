@@ -38,6 +38,7 @@ await kort("bare-foil", "Shiny Promo", "300", { nonfoil: 0, foil: 1 });
 // Som Seventh Edition: «339» er den vanlige, «339★» foilen — to kort.
 await kort("fjell-vanlig", "Mountain", "339", { nonfoil: 1, foil: 0 });
 await kort("fjell-foil", "Mountain", "339★", { nonfoil: 0, foil: 1 });
+await kort("bare-vanlig", "Plain Card", "400", { nonfoil: 1, foil: 0 });
 
 const én = async (t) => (await løsBulk(parseBulk(t)))[0];
 
@@ -73,4 +74,16 @@ test("«339★ *F*» treffer foilkortet med stjerne, ikke det vanlige 339", asyn
   assert.equal(r.status, "løst");
   assert.equal(r.valg[0].card_id, "fjell-foil");
   assert.equal(r.valg[0].finish, "foil");
+});
+
+test("«339 *F*» uten stjerne finner foilkortet med samme nummer pluss stjerne", async () => {
+  const r = await én("1 Mountain (M10) 339 *F*");
+  assert.equal(r.status, "løst");
+  assert.equal(r.valg[0].card_id, "fjell-foil");
+  assert.match(r.melding, /eget nummer/);
+});
+
+test("foil på et trykk som ikke finnes i foil løses aldri av seg selv", async () => {
+  const r = await én("1 Plain Card (M10) 400 *F*");
+  assert.notEqual(r.status, "løst");
 });

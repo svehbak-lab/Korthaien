@@ -244,6 +244,31 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
       continue;
     }
 
+    // Kunden skrev foil, men trykket vi traff finnes ikke i foil. I eldre
+    // sett er foilen ofte et eget kort med eget nummer — Seventh Edition har
+    // «339» (vanlig) og «339★» (foil). Da leter vi etter en foilutgave med
+    // samme navn i samme sett, helst med samme nummer pluss stjerne eller kors.
+    let ingenFoil = false;
+    let byttetTilFoil = false;
+    if (l.foil && kandidater.every((k) => !k.has_foil)) {
+      const sett = settHint || (new Set(kandidater.map((k) => k.set_code)).size === 1 ? kandidater[0].set_code : null);
+      if (sett) {
+        const iSettet = (await finnKandidater(grunn.navn, sett, null)).filter((k) => k.set_code === sett && k.has_foil);
+        const grunnNr = (n: string | null) => String(n || "").toLowerCase().replace(/[★†]$/, "");
+        const ønsketNr = l.nummerHint ? grunnNr(l.nummerHint) : null;
+        const sammeNr = ønsketNr ? iSettet.filter((k) => grunnNr(k.collector_number) === ønsketNr) : [];
+        const foilKort = sammeNr.length ? sammeNr : ønsketNr ? [] : iSettet;
+        if (foilKort.length) {
+          kandidater = foilKort;
+          byttetTilFoil = true;
+        } else {
+          ingenFoil = true;
+        }
+      } else {
+        ingenFoil = true;
+      }
+    }
+
     let valg = await byggTilbud(kandidater, regler, s);
 
     // Finish er et krav, ikke et forslag. Uten foil-markering har kunden den
@@ -269,6 +294,9 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
     let feilFinish = false;
     if (medFinish.length || settHint) valg = medFinish;
     else feilFinish = valg.length > 0;
+    // Foil ble bedt om, men finnes ikke: vis den vanlige, men løs aldri
+    // linjen av seg selv. Kunden må bekrefte at det er den hen har.
+    if (ingenFoil && valg.length) feilFinish = true;
 
     if (!valg.length) {
       ut.push({
@@ -285,11 +313,15 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
     // kort i posten og kunden feil pris.
     const løst = valg.length === 1 && !feilFinish;
     let melding: string | undefined = feilFinish
-      ? l.foil
+      ? ingenFoil
+        ? "Dette trykket finnes ikke i foil. Dette er den vanlige utgaven — velg bare hvis det er det du har."
+        : l.foil
         ? "Foil-utgaven kjøpes ikke nå. Dette er vanlige utgaver — velg bare hvis det er det du har."
         : "Den vanlige utgaven kjøpes ikke nå. Dette er foil — velg bare hvis kortet ditt faktisk er foil."
       : løst
-        ? undefined
+        ? byttetTilFoil && kandidater[0]?.collector_number
+          ? `Foilen har eget nummer i dette settet (#${kandidater[0].collector_number}) — det er den som er valgt.`
+          : undefined
         : `${valg.length} utgaver — velg den du faktisk har`;
 
     // Skrev kunden en tilstand jeg ikke tar imot for dette settet, må det sies
