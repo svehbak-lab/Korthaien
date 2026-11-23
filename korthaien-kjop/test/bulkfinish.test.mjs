@@ -80,7 +80,7 @@ test("«339 *F*» uten stjerne finner foilkortet med samme nummer pluss stjerne"
   const r = await én("1 Mountain (M10) 339 *F*");
   assert.equal(r.status, "løst");
   assert.equal(r.valg[0].card_id, "fjell-foil");
-  assert.match(r.melding, /eget nummer/);
+  assert.equal(r.melding, undefined);
 });
 
 test("foil på et trykk som ikke finnes i foil løses aldri av seg selv", async () => {

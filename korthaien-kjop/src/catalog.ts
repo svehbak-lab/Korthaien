@@ -249,7 +249,6 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
     // «339» (vanlig) og «339★» (foil). Da leter vi etter en foilutgave med
     // samme navn i samme sett, helst med samme nummer pluss stjerne eller kors.
     let ingenFoil = false;
-    let byttetTilFoil = false;
     if (l.foil && kandidater.every((k) => !k.has_foil)) {
       const sett = settHint || (new Set(kandidater.map((k) => k.set_code)).size === 1 ? kandidater[0].set_code : null);
       if (sett) {
@@ -260,7 +259,6 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
         const foilKort = sammeNr.length ? sammeNr : ønsketNr ? [] : iSettet;
         if (foilKort.length) {
           kandidater = foilKort;
-          byttetTilFoil = true;
         } else {
           ingenFoil = true;
         }
@@ -319,9 +317,7 @@ export async function løsBulk(linjer: ReturnType<typeof import("./bulk.js").par
         ? "Foil-utgaven kjøpes ikke nå. Dette er vanlige utgaver — velg bare hvis det er det du har."
         : "Den vanlige utgaven kjøpes ikke nå. Dette er foil — velg bare hvis kortet ditt faktisk er foil."
       : løst
-        ? byttetTilFoil && kandidater[0]?.collector_number
-          ? `Foilen har eget nummer i dette settet (#${kandidater[0].collector_number}) — det er den som er valgt.`
-          : undefined
+        ? undefined
         : `${valg.length} utgaver — velg den du faktisk har`;
 
     // Skrev kunden en tilstand jeg ikke tar imot for dette settet, må det sies
