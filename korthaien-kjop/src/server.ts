@@ -29,7 +29,7 @@ import { aktivtBanner, lagreBilde, hentBilde } from "./toppbanner.js";
 import { kontoer, bevegelser, saldo, leggTil as leggTilKreditt, settSaldo } from "./kreditt.js";
 import { parseBulk, MAX_LINJER } from "./bulk.js";
 import {
-  lagOrdre, hentOrdre, utløpGamleOrdrer, forlengÅpneOrdrer, regnOmLinje, oppdaterTotal, oppdaterSalgsverdi,
+  lagOrdre, hentOrdre, utløpGamleOrdrer, forlengÅpneOrdrer, nyFristVedGjenåpning, regnOmLinje, oppdaterTotal, oppdaterSalgsverdi,
   leggTilLinje,
   leggTilAnnet, fjernLinje, byttKort, endringslogg, instruksjoner, SORTERING,
   settRabattkode, markerKredittSendt, gjørOppSomKreditt, HttpFeil,
@@ -404,6 +404,9 @@ app.patch("/api/admin/orders/:id", krevAdmin, fang(async (req: any, res: any) =>
       sql: "UPDATE orders SET status = ?, received_at = ? WHERE id = ?",
       args: [status, ["received", "stocked"].includes(status) ? new Date().toISOString() : null, id],
     });
+    if (status === "pending" && ["expired", "cancelled"].includes(String(før.rows[0]?.status))) {
+      await nyFristVedGjenåpning(id);
+    }
     // Kunden varsles som standard. «varsle: false» er for endringer hen ikke
     // trenger å vite om — en status du rettet fordi du klikket feil.
     // «stocked» varsles ikke herfra: den e-posten er oppgjøret, med koden.

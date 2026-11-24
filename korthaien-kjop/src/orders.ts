@@ -224,6 +224,19 @@ export async function utløpGamleOrdrer(): Promise<number> {
   return r.rowsAffected || 0;
 }
 
+// En utløpt eller kansellert ordre som åpnes på nytt, må få en frist fram i
+// tid. Ellers står den gamle datoen der, og ryddingen gjør ordren utløpt igjen
+// neste gang lista lastes. Ny frist regnes fra i dag med dagens innstilling.
+export async function nyFristVedGjenåpning(id: number): Promise<void> {
+  const { hentSettings } = await import("./db.js");
+  const s = await hentSettings();
+  const ny = new Date(Date.now() + s.order_expiry_days * 86400000).toISOString();
+  await db().execute({
+    sql: "UPDATE orders SET expires_at = ? WHERE id = ? AND (expires_at IS NULL OR expires_at < ?)",
+    args: [ny, id, ny],
+  });
+}
+
 // Fristen er en innstilling, men hver ordre får sin egen frist lagret når den
 // lages. Øker du fristen, skal ordrene som allerede venter på pakken få den
 // nye også — ellers utløper de etter den gamle mens du har bestemt at kundene

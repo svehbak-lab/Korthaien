@@ -26,3 +26,15 @@ test("økt frist forlenger åpne ordrer, ikke avsluttede, og korter aldri ned", 
   assert.equal(await frist("K-2"), "2026-11-21T10:00:00.000Z");
   assert.equal(await frist("K-3"), "2027-01-30T10:00:00.000Z");
 });
+
+test("gjenåpnet utløpt ordre får ny frist og utløper ikke igjen med en gang", async () => {
+  const { nyFristVedGjenåpning, utløpGamleOrdrer } = await import("../src/orders.ts");
+  await ny("K-9", "expired", "2026-01-01T10:00:00.000Z", "2026-03-01T10:00:00.000Z");
+  const id = Number((await db().execute("SELECT id FROM orders WHERE order_no = 'K-9'")).rows[0].id);
+  await db().execute({ sql: "UPDATE orders SET status = 'pending' WHERE id = ?", args: [id] });
+  await nyFristVedGjenåpning(id);
+  assert.ok(String(await frist("K-9")) > new Date().toISOString());
+  await utløpGamleOrdrer();
+  const st = (await db().execute({ sql: "SELECT status FROM orders WHERE id = ?", args: [id] })).rows[0].status;
+  assert.equal(st, "pending");
+});
