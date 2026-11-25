@@ -79,16 +79,18 @@ async function hentBeholdning(cardId: string, finish: string): Promise<number> {
 // ha pengene sine, innleggingen naar du rekker det. Bandt vi kvoten til
 // oppgjoeret, var kortene i mellomrommet verken i beholdningen eller
 // reservert, og da kunne de samme kortene loves bort paa nytt.
+// Linjene teller med det du faktisk tok imot (qty_received) når det er satt,
+// og fjernede linjer teller ikke — ellers holdt kort som aldri kom, kvoten.
 export const HOLDER_KVOTE =
   `(o.status IN ('pending','received')
     OR (o.status = 'stocked' AND o.kvote_frigitt_at IS NULL))`;
 
 async function hentReservert(cardId: string, finish: string): Promise<number> {
   const r = await db().execute({
-    sql: `SELECT COALESCE(SUM(l.qty), 0) AS n
+    sql: `SELECT COALESCE(SUM(COALESCE(l.qty_received, l.qty)), 0) AS n
             FROM order_lines l
             JOIN orders o ON o.id = l.order_id
-           WHERE l.card_id = ? AND l.finish = ? AND ${HOLDER_KVOTE}`,
+           WHERE l.card_id = ? AND l.finish = ? AND l.fjernet_at IS NULL AND ${HOLDER_KVOTE}`,
     args: [cardId, finish],
   });
   return Number(r.rows[0]?.n || 0);
@@ -112,9 +114,9 @@ export async function hentKvoterBulk(
       args: ids,
     }),
     db().execute({
-      sql: `SELECT l.card_id, l.finish, COALESCE(SUM(l.qty),0) AS n
+      sql: `SELECT l.card_id, l.finish, COALESCE(SUM(COALESCE(l.qty_received, l.qty)),0) AS n
               FROM order_lines l JOIN orders o ON o.id = l.order_id
-             WHERE ${HOLDER_KVOTE} AND l.card_id IN (${plassholdere})
+             WHERE ${HOLDER_KVOTE} AND l.fjernet_at IS NULL AND l.card_id IN (${plassholdere})
              GROUP BY l.card_id, l.finish`,
       args: ids,
     }),

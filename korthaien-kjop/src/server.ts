@@ -1452,10 +1452,10 @@ app.get("/api/admin/cards", krevAdmin, fang(async (req: any, res: any) => {
                  ${lagerkilde() === "bok"
                    ? "(SELECT SUM(antall) FROM lager_saldo b WHERE b.card_id = c.id AND b.finish='foil')"
                    : "(SELECT qty FROM mystore_stock m WHERE m.card_id = c.id AND m.finish='foil')"} AS stock_foil,
-                 (SELECT COALESCE(SUM(l.qty),0) FROM order_lines l JOIN orders o ON o.id = l.order_id
-                   WHERE l.card_id = c.id AND l.finish='nonfoil' AND ${HOLDER_KVOTE}) AS res_nonfoil,
-                 (SELECT COALESCE(SUM(l.qty),0) FROM order_lines l JOIN orders o ON o.id = l.order_id
-                   WHERE l.card_id = c.id AND l.finish='foil' AND ${HOLDER_KVOTE}) AS res_foil
+                 (SELECT COALESCE(SUM(COALESCE(l.qty_received, l.qty)),0) FROM order_lines l JOIN orders o ON o.id = l.order_id
+                   WHERE l.card_id = c.id AND l.finish='nonfoil' AND l.fjernet_at IS NULL AND ${HOLDER_KVOTE}) AS res_nonfoil,
+                 (SELECT COALESCE(SUM(COALESCE(l.qty_received, l.qty)),0) FROM order_lines l JOIN orders o ON o.id = l.order_id
+                   WHERE l.card_id = c.id AND l.finish='foil' AND l.fjernet_at IS NULL AND ${HOLDER_KVOTE}) AS res_foil
             FROM cards c WHERE c.set_code = ? AND c.er_serialized = 0
            ORDER BY CAST(c.collector_number AS INTEGER), c.name`,
     args: [set],
