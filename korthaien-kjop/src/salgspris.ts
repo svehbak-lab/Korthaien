@@ -497,7 +497,7 @@ export async function butikkvisning(opts: ButikkFilter) {
   }
 
   const perSide = Math.min(200, Math.max(1, opts.perSide ?? 25));
-  const side = Math.max(1, opts.side ?? 1);
+  const ønsketSide = Math.max(1, opts.side ?? 1);
   const foilFørst = opts.finish === "foil";
 
   // «Prisen som gjelder» i sorteringen: din egen først, så markedets.
@@ -601,6 +601,10 @@ export async function butikkvisning(opts: ButikkFilter) {
       : opts.finish === "nonfoil"
         ? antall.nonfoil
         : antall.alle;
+  // En side forbi slutten (en gammel lenke, et filter som ble strammere) gir
+  // siste side, ikke en tom liste med «1–5 av 5» over.
+  const sider = Math.max(1, Math.ceil(totalt / perSide));
+  const side = Math.min(ønsketSide, sider);
 
   const KOLONNER = `c.id, c.name, c.collector_number, c.rarity, c.variant,
                  c.usd, c.usd_foil, c.has_nonfoil, c.has_foil, c.er_token,
@@ -681,13 +685,12 @@ export async function butikkvisning(opts: ButikkFilter) {
     return true;
   });
 
-  const sider = Math.max(1, Math.ceil(totalt / perSide));
   return {
     oppsett: opp,
     kort: filtrert,
     totalt,
     antall,
-    side: Math.min(side, sider),
+    side,
     sider,
     perSide,
     utenPris: (r.rows as any[]).length - ut.length,

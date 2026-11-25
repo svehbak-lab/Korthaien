@@ -53,6 +53,38 @@ const TOMT = {
   baresalg: true, prisFra: "", prisTil: "",
 };
 
+// Filtrene, sorteringen og visningen står i adressen, så en oppdatering (F5)
+// lander i nøyaktig samme liste. Bare det som avviker fra standard skrives,
+// så vanlige lenker forblir korte.
+const SORTERINGER_STD = "navn";
+function filtreTilAdresse(p, f, { sortering, perSide, visning }) {
+  if (!f.baresalg) p.set("lager", "0");
+  if (f.rarity.length) p.set("r", f.rarity.join(","));
+  if (f.farge.length) p.set("c", f.farge.join(","));
+  if (f.fargeEksakt) p.set("ce", "1");
+  if (f.type.length) p.set("t", f.type.join(","));
+  if (f.prisFra !== "" && f.prisFra != null) p.set("pf", String(f.prisFra));
+  if (f.prisTil !== "" && f.prisTil != null) p.set("pt", String(f.prisTil));
+  if (sortering && sortering !== SORTERINGER_STD) p.set("sort", sortering);
+  if (perSide && perSide !== 25) p.set("vis", String(perSide));
+  if (visning && visning !== "detalj") p.set("visning", visning);
+}
+function filtreFraAdresse(p) {
+  const liste = (k) => (p.get(k) ? p.get(k).split(",").filter(Boolean) : []);
+  return {
+    ...TOMT,
+    q: p.get("q") || "",
+    baresalg: p.get("lager") !== "0",
+    rarity: liste("r"),
+    farge: liste("c"),
+    fargeEksakt: p.get("ce") === "1",
+    type: liste("t"),
+    prisFra: p.get("pf") || "",
+    prisTil: p.get("pt") || "",
+  };
+}
+const adresse = () => new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+
 // Kurven og kundekontoen deles av alle skjermene i butikken, så de ligger i
 // en kontekst rundt hele siden.
 export default function Butikk(props) {
@@ -139,7 +171,7 @@ function ButikkSider({ onFeil }) {
   // evig «Henter…».
   const [tregt, setTregt] = useState(false);
   const [forsøk, setForsøk] = useState(0);
-  const [visning, setVisning] = useState("detalj");
+  const [visning, setVisning] = useState(() => adresse().get("visning") || "detalj");
   const [visFiltre, setVisFiltre] = useState(false);
   // Fanene er én tilstand, ikke to. «Sealed» og «Om settet» er faner paa
   // linje med de andre for den som ser paa, men de er ikke finish — derfor
@@ -147,8 +179,8 @@ function ButikkSider({ onFeil }) {
   const [fane, setFane] = useState(() => lenke.fane || "alle");
   const finish = KORTFANER.some((x) => x.id === fane) ? fane : "alle";
   const [settinfo, setSettinfo] = useState(null);
-  const [sortering, setSortering] = useState("navn");
-  const [perSide, setPerSide] = useState(25);
+  const [sortering, setSortering] = useState(() => adresse().get("sort") || SORTERINGER_STD);
+  const [perSide, setPerSide] = useState(() => parseInt(adresse().get("vis") || "25", 10) || 25);
   const [side, setSide] = useState(() => Math.max(1, parseInt(lenke.p || "1", 10) || 1));
   // Trykker man på et settnavn, vil man se settet — ikke søket man kom fra.
   // Filtrene nullstilles (bare kort på lager, som ellers), og fanen går
@@ -162,7 +194,7 @@ function ButikkSider({ onFeil }) {
     window.scrollTo(0, 0);
   };
   // ?q= fra toppen på salgssiden: rett i lista med søket.
-  const [f, setF] = useState(() => (lenke.q ? { ...TOMT, q: lenke.q } : TOMT));
+  const [f, setF] = useState(() => filtreFraAdresse(adresse()));
   // ?kort=<id> fra e-posten om ønskelista åpner kortet direkte.
   const [åpentKort, setÅpentKort] = useState(() => lenke.kort || null);
   // Utførelsen raden man trykket på, så en foil-rad åpner kortet i foil.
@@ -261,8 +293,12 @@ function ButikkSider({ onFeil }) {
   // Ny avgrensning, ny side 1 — men ikke ved oppstart, der siden kan komme
   // fra adressen.
   const førsteGang = useRef(true);
+  // Tilbake/frem i nettleseren setter filtre og side på én gang; da skal ikke
+  // filterbyttet nullstille siden som nettopp ble hentet fra adressen.
+  const fraHistorikk = useRef(false);
   useEffect(() => {
     if (førsteGang.current) { førsteGang.current = false; return; }
+    if (fraHistorikk.current) { fraHistorikk.current = false; return; }
     setSide(1);
   }, [sett, finish, sortering, perSide, f]);
 
@@ -280,6 +316,7 @@ function ButikkSider({ onFeil }) {
       if (f.q) p.set("q", f.q);
       if (!sett && !f.q) p.set("side", "liste");
       if (fane !== "alle") p.set("fane", fane);
+      filtreTilAdresse(p, f, { sortering, perSide, visning });
       if (side > 1) p.set("p", String(side));
     } else if (BEVAR_SKJERM.includes(skjerm)) p.set("side", skjerm);
     else if (skjerm === "kasse") p.set("side", "kurv");
@@ -291,7 +328,7 @@ function ButikkSider({ onFeil }) {
     const gammel = new URLSearchParams(window.location.search);
     const nyttSted = gammel.get("kort") !== p.get("kort") || gammel.get("side") !== p.get("side") || gammel.get("sett") !== p.get("sett");
     (nyttSted ? window.history.pushState : window.history.replaceState).call(window.history, null, "", ny);
-  }, [skjerm, åpentKort, sett, f.q, fane, side]);
+  }, [skjerm, åpentKort, sett, f, fane, side, sortering, perSide, visning]);
 
   // Tilbake og frem i nettleseren.
   useEffect(() => {
@@ -299,13 +336,19 @@ function ButikkSider({ onFeil }) {
     const vedPop = () => {
       const p = new URLSearchParams(window.location.search);
       fraAdresse.current = true;
+      fraHistorikk.current = true;
+      setTimeout(() => { fraHistorikk.current = false; }, 0);
       const kort = p.get("kort");
       const sideNavn = p.get("side");
       setÅpentKort(kort || null);
       if (p.get("sett") || p.get("q") || sideNavn === "liste") {
         setSett(p.get("sett") || null);
-        setF((x) => ({ ...x, q: p.get("q") || "" }));
+        setF(filtreFraAdresse(p));
         setFane(p.get("fane") || "alle");
+        setSortering(p.get("sort") || SORTERINGER_STD);
+        setPerSide(parseInt(p.get("vis") || "25", 10) || 25);
+        setVisning(p.get("visning") || "detalj");
+        setSide(Math.max(1, parseInt(p.get("p") || "1", 10) || 1));
         setSkjerm("liste");
       } else if (!kort) {
         setSkjerm(BEVAR_SKJERM.includes(sideNavn) ? sideNavn : "forside");
@@ -333,7 +376,13 @@ function ButikkSider({ onFeil }) {
         sett: sett || "", finish, sortering, side, perSide, ...f,
         rarity: f.rarity.join(","), farge: f.farge.join(","), type: f.type.join(","),
       }, avbryt.signal)
-        .then((d) => { if (nr === søkNr.current) setData(d); })
+        .then((d) => {
+          if (nr !== søkNr.current) return;
+          setData(d);
+          // Siden var forbi slutten — serveren ga siste side. Da følger
+          // adressen og knappene etter.
+          if (d?.side && d.side !== side) setSide(d.side);
+        })
         .catch((e) => {
           if (nr !== søkNr.current || e.avbrutt) return;
           if (e.tidsavbrudd) setTregt(true);
