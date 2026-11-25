@@ -178,6 +178,8 @@ export type SalgsOppsett = {
   faktor: number;
   avrunding: number;
   usd_nok: number;
+  // Gulv for rare og mythic, i øre. 0 eller mangler = ingen.
+  minRare?: number;
 };
 
 export async function hentSalgsOppsett(s?: Settings): Promise<SalgsOppsett> {
@@ -189,6 +191,7 @@ export async function hentSalgsOppsett(s?: Settings): Promise<SalgsOppsett> {
     faktor: (settings as any).salg_faktor ?? SALG_STANDARD.faktor,
     avrunding: (settings as any).salg_avrunding ?? SALG_STANDARD.avrunding,
     usd_nok: settings.usd_nok,
+    minRare: Math.max(0, Math.round(Number((settings as any).salg_min_rare_ore ?? 1000) || 0)),
   };
 }
 
@@ -268,8 +271,15 @@ export function salgsprisØre(
   // Opprundingen gjelder ankerprisen for Near Mint. Tilstandene regnes av den
   // og rundes til nærmeste krone — ellers ville 85 % av 15 blitt 15 igjen, og
   // trappen ville forsvunnet for billige kort.
-  if (condition === "NM") return grunn;
-  return rund((grunn * pct) / 100, opp.avrunding);
+  const pris = condition === "NM" ? grunn : rund((grunn * pct) / 100, opp.avrunding);
+  // Rare og mythic selges aldri under gulvet, i noen tilstand. Har du satt
+  // en lavere NM-pris for hånd, er det den som er gulvet for det kortet.
+  const r = String(kort.rarity || "").toLowerCase();
+  if (opp.minRare && (r === "rare" || r === "mythic")) {
+    const gulv = manuellSalgØre && manuellSalgØre > 0 ? Math.min(opp.minRare, manuellSalgØre) : opp.minRare;
+    return Math.max(pris, gulv);
+  }
+  return pris;
 }
 
 // Alle tilstandene for ett kort, slik butikken viser dem.

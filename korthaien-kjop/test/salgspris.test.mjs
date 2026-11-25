@@ -19,6 +19,8 @@ await settSetting("usd_nok", 10);
 // testes for seg nederst.
 const FLAT = [{ fra_ore: 0, EX: 85, VG: 70, G: 55 }];
 await settSetting("salg_trinn", FLAT);
+// Minsteprisen for rare/mythic testes for seg nederst.
+await settSetting("salg_min_rare_ore", 0);
 
 // Slik Svein beskrev det: rare under 0,90 koster 10 kroner, 0,91–1,40 koster 15.
 const INTERVALLER = [
@@ -262,4 +264,23 @@ test("trinnene sorteres, og første trinn starter alltid på 0", async () => {
   const t = rensTrinn([{ fra_ore: 50000, EX: 90, VG: 80, G: 70 }, { fra_ore: 100, EX: 80, VG: 70, G: 50 }]);
   assert.deepEqual(t.map((x) => x.fra_ore), [0, 50000]);
   assert.equal(rensTrinn([]), undefined);
+});
+
+test("rare og mythic selges aldri under minsteprisen, i noen tilstand", async () => {
+  await settSetting("salg_min_rare_ore", 1000);
+  const opp = await hentSalgsOppsett();
+  // Rare til 10 kr NM: EX/VG/G ville blitt 9, 7, 6 kr med trappen.
+  for (const c of ["NM", "EX", "VG", "G"]) {
+    assert.equal(salgsprisØre({ rarity: "mythic" }, "nonfoil", c, opp, 1000), 1000);
+  }
+  // Commons og uncommons berøres ikke.
+  assert.equal(salgsprisØre({ rarity: "common" }, "nonfoil", "G", opp, 1000), 600);
+  // Dyrere kort følger trappen som før.
+  assert.equal(salgsprisØre({ rarity: "rare" }, "nonfoil", "EX", opp, 4000), 3400);
+  // En lavere NM-pris satt for hånd er gulvet for det kortet.
+  assert.equal(salgsprisØre({ rarity: "rare" }, "nonfoil", "G", opp, 500), 500);
+  // 0 slår gulvet av.
+  await settSetting("salg_min_rare_ore", 0);
+  const av = await hentSalgsOppsett();
+  assert.equal(salgsprisØre({ rarity: "rare" }, "nonfoil", "G", av, 1000), 600);
 });

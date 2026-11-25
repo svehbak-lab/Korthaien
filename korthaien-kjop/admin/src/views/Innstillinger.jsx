@@ -361,6 +361,15 @@ function SalgsTrapp({ s, endre }) {
               <option value={500}>Nærmeste 5 kr</option>
             </select>
           </Felt>
+          <Felt navn="Minstepris rare/mythic">
+            <input
+              type="text" inputMode="numeric"
+              value={Math.round((s.salg_min_rare_ore ?? 1000) / 100)}
+              onChange={(e) => endre("salg_min_rare_ore", Math.max(0, parseInt(e.target.value) || 0) * 100)}
+              style={{ width: 64, textAlign: "right" }}
+            />
+            <span className="dempet"> kr, alle tilstander (0 = av)</span>
+          </Felt>
         </div>
       </div>
     </div>
