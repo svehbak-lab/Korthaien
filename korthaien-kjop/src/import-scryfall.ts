@@ -268,7 +268,11 @@ export async function skrivBolk(bolk: Rå[]): Promise<void> {
               back_norm = excluded.back_norm, set_code = excluded.set_code,
               collector_number = excluded.collector_number,
               released_at = excluded.released_at,
-              usd = excluded.usd, usd_foil = excluded.usd_foil,
+              -- Scryfall mister iblant prisen på et kort en stund. Da står
+              -- den siste kjente prisen til en ny kommer, i stedet for at
+              -- kortet faller ut av butikken og kjøpslista.
+              usd = COALESCE(excluded.usd, cards.usd),
+              usd_foil = COALESCE(excluded.usd_foil, cards.usd_foil),
               image_uri = excluded.image_uri, rarity = excluded.rarity,
               variant = excluded.variant,
               has_nonfoil = excluded.has_nonfoil, has_foil = excluded.has_foil,

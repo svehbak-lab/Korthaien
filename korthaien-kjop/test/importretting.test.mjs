@@ -26,3 +26,15 @@ test("Scryfalls retting av navn og nummer slår gjennom ved neste import", async
   assert.match(String(r.name_norm), /tenuredtethermage/);
   assert.doesNotMatch(String(r.name_norm), /preview/);
 });
+
+test("mister Scryfall prisen, står siste kjente pris til en ny kommer", async () => {
+  await skrivBolk([kort({ id: "pris1", name: "Prisprøve", collector_number: "1", prices: { usd: "2.00", usd_foil: "5.00" } })]);
+  await skrivBolk([kort({ id: "pris1", name: "Prisprøve", collector_number: "1", prices: { usd: null, usd_foil: null } })]);
+  let r = (await db().execute("SELECT usd, usd_foil FROM cards WHERE id = 'pris1'")).rows[0];
+  assert.equal(Number(r.usd), 2);
+  assert.equal(Number(r.usd_foil), 5);
+  await skrivBolk([kort({ id: "pris1", name: "Prisprøve", collector_number: "1", prices: { usd: "3.10" } })]);
+  r = (await db().execute("SELECT usd, usd_foil FROM cards WHERE id = 'pris1'")).rows[0];
+  assert.equal(Number(r.usd), 3.1);
+  assert.equal(Number(r.usd_foil), 5);
+});
