@@ -21,6 +21,7 @@ const FLAT = [{ fra_ore: 0, EX: 85, VG: 70, G: 55 }];
 await settSetting("salg_trinn", FLAT);
 // Minsteprisen for rare/mythic testes for seg nederst.
 await settSetting("salg_min_rare_ore", 0);
+await settSetting("salg_min_common_ore", 0);
 
 // Slik Svein beskrev det: rare under 0,90 koster 10 kroner, 0,91–1,40 koster 15.
 const INTERVALLER = [
@@ -273,7 +274,7 @@ test("rare og mythic selges aldri under minsteprisen, i noen tilstand", async ()
   for (const c of ["NM", "EX", "VG", "G"]) {
     assert.equal(salgsprisØre({ rarity: "mythic" }, "nonfoil", c, opp, 1000), 1000);
   }
-  // Commons og uncommons berøres ikke.
+  // Commons og uncommons har sitt eget gulv (av her).
   assert.equal(salgsprisØre({ rarity: "common" }, "nonfoil", "G", opp, 1000), 600);
   // Dyrere kort følger trappen som før.
   assert.equal(salgsprisØre({ rarity: "rare" }, "nonfoil", "EX", opp, 4000), 3400);
@@ -283,4 +284,17 @@ test("rare og mythic selges aldri under minsteprisen, i noen tilstand", async ()
   await settSetting("salg_min_rare_ore", 0);
   const av = await hentSalgsOppsett();
   assert.equal(salgsprisØre({ rarity: "rare" }, "nonfoil", "G", av, 1000), 600);
+});
+
+test("common og uncommon selges aldri under sin minstepris", async () => {
+  await settSetting("salg_min_common_ore", 500);
+  const opp = await hentSalgsOppsett();
+  for (const r of ["common", "uncommon"]) {
+    for (const c of ["NM", "EX", "VG", "G"]) assert.equal(salgsprisØre({ rarity: r }, "nonfoil", c, opp, 500), 500);
+    // Over gulvet følger trappen.
+    assert.equal(salgsprisØre({ rarity: r }, "nonfoil", "G", opp, 2000), 1100);
+  }
+  // Lavere pris satt for hånd er gulvet for det kortet.
+  assert.equal(salgsprisØre({ rarity: "common" }, "nonfoil", "G", opp, 300), 300);
+  await settSetting("salg_min_common_ore", 0);
 });

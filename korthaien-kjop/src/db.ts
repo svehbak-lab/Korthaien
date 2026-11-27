@@ -502,6 +502,8 @@ export type Settings = {
   // Laveste salgspris (øre) for rare og mythic, i alle tilstander. Ellers
   // drar trappen et 10-kroners rarekort ned til 8, 7 og 5 kr.
   salg_min_rare_ore: number;
+  // Samme for common og uncommon.
+  salg_min_common_ore: number;
   default_conditions: Condition[];
   default_ladder: Ladder;
   order_expiry_days: number;
@@ -572,6 +574,7 @@ const STANDARD: Settings = {
   salg_faktor: 1.0,
   salg_avrunding: 100,
   salg_min_rare_ore: 1000,
+  salg_min_common_ore: 500,
   // NM er standard for alle sett, slik du beskrev.
   default_conditions: ["NM"],
   default_ladder: { NM: 100, EX: 85, VG: 70, G: 55 },

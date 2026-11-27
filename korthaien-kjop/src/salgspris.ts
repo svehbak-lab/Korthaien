@@ -180,6 +180,8 @@ export type SalgsOppsett = {
   usd_nok: number;
   // Gulv for rare og mythic, i øre. 0 eller mangler = ingen.
   minRare?: number;
+  // Gulv for common og uncommon, i øre.
+  minCommon?: number;
 };
 
 export async function hentSalgsOppsett(s?: Settings): Promise<SalgsOppsett> {
@@ -192,6 +194,7 @@ export async function hentSalgsOppsett(s?: Settings): Promise<SalgsOppsett> {
     avrunding: (settings as any).salg_avrunding ?? SALG_STANDARD.avrunding,
     usd_nok: settings.usd_nok,
     minRare: Math.max(0, Math.round(Number((settings as any).salg_min_rare_ore ?? 1000) || 0)),
+    minCommon: Math.max(0, Math.round(Number((settings as any).salg_min_common_ore ?? 500) || 0)),
   };
 }
 
@@ -274,9 +277,13 @@ export function salgsprisØre(
   const pris = condition === "NM" ? grunn : rund((grunn * pct) / 100, opp.avrunding);
   // Rare og mythic selges aldri under gulvet, i noen tilstand. Har du satt
   // en lavere NM-pris for hånd, er det den som er gulvet for det kortet.
+  // Det samme for common og uncommon, med sitt eget gulv.
   const r = String(kort.rarity || "").toLowerCase();
-  if (opp.minRare && (r === "rare" || r === "mythic")) {
-    const gulv = manuellSalgØre && manuellSalgØre > 0 ? Math.min(opp.minRare, manuellSalgØre) : opp.minRare;
+  const min = r === "rare" || r === "mythic" ? opp.minRare
+    : r === "common" || r === "uncommon" ? opp.minCommon
+    : 0;
+  if (min) {
+    const gulv = manuellSalgØre && manuellSalgØre > 0 ? Math.min(min, manuellSalgØre) : min;
     return Math.max(pris, gulv);
   }
   return pris;

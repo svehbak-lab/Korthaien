@@ -370,6 +370,15 @@ function SalgsTrapp({ s, endre }) {
             />
             <span className="dempet"> kr, alle tilstander (0 = av)</span>
           </Felt>
+          <Felt navn="Minstepris common/uncommon">
+            <input
+              type="text" inputMode="numeric"
+              value={Math.round((s.salg_min_common_ore ?? 500) / 100)}
+              onChange={(e) => endre("salg_min_common_ore", Math.max(0, parseInt(e.target.value) || 0) * 100)}
+              style={{ width: 64, textAlign: "right" }}
+            />
+            <span className="dempet"> kr, alle tilstander (0 = av)</span>
+          </Felt>
         </div>
       </div>
     </div>
