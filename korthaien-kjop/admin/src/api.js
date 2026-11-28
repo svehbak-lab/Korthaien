@@ -110,6 +110,8 @@ export const api = {
   ordrer: (arkiv) => kall(`/api/admin/orders?arkiv=${arkiv ? 1 : 0}`),
   endreOrdre: (id, felt) => kall(`/api/admin/orders/${id}`, { method: "PATCH", body: felt }),
   endreLinje: (id, felt) => kall(`/api/admin/lines/${id}`, { method: "PATCH", body: felt }),
+  settLagertilstand: (ordreId, linjer, condition) =>
+    kall(`/api/admin/orders/${ordreId}/lagertilstand`, { method: "POST", body: { linjer, condition } }),
   slettLinje: (id) => kall(`/api/admin/lines/${id}`, { method: "DELETE" }),
 
   sett: () => kall("/api/admin/sets"),

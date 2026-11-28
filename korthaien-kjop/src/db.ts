@@ -192,6 +192,12 @@ async function leggTilNyeKolonner(): Promise<void> {
   if (linjer2.size && !linjer2.has("fjernet_at")) {
     await db().execute("ALTER TABLE order_lines ADD COLUMN fjernet_at TEXT");
   }
+  // Tilstanden kortet legges på lager med, når den avviker fra det kunden
+  // fikk betalt for. Kunden merker gjerne alt EX for sikkerhets skyld; du
+  // betaler EX, men legger dem inn som NM. Tom = samme som condition.
+  if (linjer2.size && !linjer2.has("lager_condition")) {
+    await db().execute("ALTER TABLE order_lines ADD COLUMN lager_condition TEXT");
+  }
 
   const ordre = await kolonner("orders");
   if (ordre.size && !ordre.has("salgsverdi_ore")) {

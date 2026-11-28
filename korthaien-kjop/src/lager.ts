@@ -156,7 +156,7 @@ export async function bokførOrdre(orderId: number): Promise<{ ført: number; gr
   if (Number(fins.rows[0]?.n || 0) > 0) return { ført: 0, grunn: "allerede bokført" };
 
   const l = await db().execute({
-    sql: `SELECT card_id, finish, condition, qty, qty_received
+    sql: `SELECT card_id, finish, COALESCE(lager_condition, condition) AS condition, qty, qty_received
             FROM order_lines
              WHERE order_id = ? AND fjernet_at IS NULL AND kilde <> 'annet'`,
     args: [orderId],

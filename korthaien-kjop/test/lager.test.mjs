@@ -162,3 +162,17 @@ test("beholdning i bulk gir bare det som faktisk står på lager", async () => {
   assert.ok(k.has("lil:nonfoil:NM"));
   assert.ok(!k.has("finnes-ikke:nonfoil:NM"));
 });
+
+test("lagertilstand avgjør hva som legges på lager, uten å endre det kunden fikk betalt", async () => {
+  const førNM = await beholdningFor("lil", "nonfoil", "NM");
+  const førEX = await beholdningFor("lil", "nonfoil", "EX");
+  const o = await nyOrdre([{ card_id: "lil", finish: "nonfoil", condition: "EX", qty: 2 }]);
+  const pris = (await db().execute({ sql: "SELECT unit_ore FROM order_lines WHERE id = ?", args: [o.linjeIder[0]] })).rows[0].unit_ore;
+  await db().execute({ sql: "UPDATE order_lines SET lager_condition = 'NM' WHERE id = ?", args: [o.linjeIder[0]] });
+  await bokførOrdre(o.oid);
+  assert.equal(await beholdningFor("lil", "nonfoil", "NM"), førNM + 2);
+  assert.equal(await beholdningFor("lil", "nonfoil", "EX"), førEX);
+  const etter = (await db().execute({ sql: "SELECT condition, unit_ore FROM order_lines WHERE id = ?", args: [o.linjeIder[0]] })).rows[0];
+  assert.equal(etter.condition, "EX");
+  assert.equal(etter.unit_ore, pris);
+});

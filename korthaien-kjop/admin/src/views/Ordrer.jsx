@@ -171,7 +171,7 @@ function Ordre({ ordre, åpen, onVeksle, onLukk, onEndret, onFeil }) {
             </div>
           )}
 
-          <Linjer linjer={ordre.linjer} onEndret={onEndret} onFeil={onFeil} />
+          <Linjer ordre={ordre} linjer={ordre.linjer} onEndret={onEndret} onFeil={onFeil} />
 
           {["received", "pending"].includes(ordre.status) && (
             <NyLinje ordre={ordre} onEndret={onEndret} onFeil={onFeil} />
@@ -286,15 +286,57 @@ function Frigi({ ordre, onEndret, onFeil }) {
 
 // Kortene ligger sortert på sett og navn, i samme rekkefølge som kunden ble
 // bedt om å sortere bunken. Gå gjennom stabelen og lista i takt.
-function Linjer({ linjer, onEndret, onFeil }) {
+//
+// Etter at kunden har fått oppgjøret, men før kortene er lagt inn, kan du
+// sette tilstanden kortene legges på lager med — for alle valgte på én gang.
+// Det endrer ikke hva kunden fikk betalt.
+function Linjer({ ordre, linjer, onEndret, onFeil }) {
+  const lagerfase = ordre.status === "stocked" && !ordre.kvote_frigitt_at;
+  const valgbare = linjer.filter((l) => !l.fjernet_at && l.kilde !== "annet");
+  const [valgt, setValgt] = useState(() => new Set());
+  const [jobber, setJobber] = useState(false);
+  const alle = valgbare.length > 0 && valgbare.every((l) => valgt.has(l.id));
+  const veksle = (id) => setValgt((v) => { const n = new Set(v); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  async function settTilstand(ider, condition) {
+    if (!ider.length) return;
+    setJobber(true);
+    try {
+      await api.settLagertilstand(ordre.id, ider, condition);
+      onEndret();
+    } catch (e) {
+      onFeil(e);
+    } finally {
+      setJobber(false);
+    }
+  }
+
   return (
+    <>
+    {lagerfase && (
+      <div className="rad-flex" style={{ gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+        <span className="dempet">Legg valgte ({valgt.size}) på lager som:</span>
+        {CONDITIONS.map((c) => (
+          <button key={c} className="knapp liten" disabled={jobber || !valgt.size}
+            onClick={() => settTilstand([...valgt], c)}>{c}</button>
+        ))}
+        <button className="knapp liten" disabled={jobber || !valgt.size} title="Tilbake til tilstanden kunden fikk betalt for"
+          onClick={() => settTilstand([...valgt], null)}>Som betalt</button>
+      </div>
+    )}
     <table className="kontroll">
       <thead>
         <tr>
+          {lagerfase && (
+            <th style={{ width: 24 }}>
+              <input type="checkbox" checked={alle} title="Velg alle"
+                onChange={() => setValgt(alle ? new Set() : new Set(valgbare.map((l) => l.id)))} />
+            </th>
+          )}
+          <th className="h">Bestilt</th>
           <th>Kort</th>
           <th>Utgave</th>
-          <th>Cond.</th>
-          <th className="h">Bestilt</th>
+          <th>{lagerfase ? "Lager" : "Cond."}</th>
           <th className="h">Mottatt</th>
           <th className="h">Stk.pris</th>
           <th className="h">Sum</th>
@@ -303,10 +345,13 @@ function Linjer({ linjer, onEndret, onFeil }) {
       </thead>
       <tbody>
         {linjer.map((l) => (
-          <Linje key={l.id} linje={l} onEndret={onEndret} onFeil={onFeil} />
+          <Linje key={l.id} linje={l} onEndret={onEndret} onFeil={onFeil}
+            lagerfase={lagerfase} valgt={valgt.has(l.id)} onVelg={() => veksle(l.id)}
+            onLagertilstand={(c) => settTilstand([l.id], c)} />
         ))}
       </tbody>
     </table>
+    </>
   );
 }
 
@@ -399,7 +444,7 @@ function Utgave({ linje, onEndret, onFeil }) {
   );
 }
 
-function Linje({ linje, onEndret, onFeil }) {
+function Linje({ linje, onEndret, onFeil, lagerfase, valgt, onVelg, onLagertilstand }) {
   const [mottatt, setMottatt] = useState(linje.qty_received ?? linje.qty);
   const [cond, setCond] = useState(linje.condition);
   const [lagrer, setLagrer] = useState(false);
@@ -444,11 +489,13 @@ function Linje({ linje, onEndret, onFeil }) {
   if (linje.fjernet_at) {
     return (
       <tr style={{ opacity: 0.5 }}>
+        {lagerfase && <td></td>}
+        <td className="h">{linje.qty}</td>
         <td style={{ textDecoration: "line-through" }}>
           <div>{linje.card_name}</div>
           <div className="sett">{linje.set_name}</div>
         </td>
-        <td colSpan={4} className="dempet">Fjernet — kom ikke fram</td>
+        <td colSpan={3} className="dempet">Fjernet — kom ikke fram</td>
         <td className="h">
           <button
             className="knapp liten"
@@ -470,6 +517,12 @@ function Linje({ linje, onEndret, onFeil }) {
 
   return (
     <tr data-avvik={avvik ? "true" : "false"}>
+      {lagerfase && (
+        <td>
+          {linje.kilde !== "annet" && <input type="checkbox" checked={!!valgt} onChange={onVelg} />}
+        </td>
+      )}
+      <td className="h"><b>{linje.qty}</b></td>
       <td>
         <div>
           {linje.card_name}
@@ -483,13 +536,25 @@ function Linje({ linje, onEndret, onFeil }) {
         <Utgave linje={linje} onEndret={onEndret} onFeil={onFeil} />
       </td>
       <td>
-        <select value={cond} onChange={(e) => setCond(e.target.value)}>
-          {CONDITIONS.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+        {lagerfase && linje.kilde !== "annet" ? (
+          <>
+            <select value={linje.lager_condition || linje.condition} onChange={(e) => onLagertilstand(e.target.value)}>
+              {CONDITIONS.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            {linje.lager_condition && linje.lager_condition !== linje.condition && (
+              <div className="sett">betalt som {linje.condition}</div>
+            )}
+          </>
+        ) : (
+          <select value={cond} onChange={(e) => setCond(e.target.value)}>
+            {CONDITIONS.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        )}
       </td>
-      <td className="h">{linje.qty}</td>
       <td className="h">
         <input
           type="number"

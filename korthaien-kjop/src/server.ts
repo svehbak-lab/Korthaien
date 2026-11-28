@@ -440,6 +440,27 @@ app.patch("/api/admin/lines/:id", krevAdmin, fang(async (req: any, res: any) => 
   res.json({ ok: true, ...ut, total_ore: total });
 }));
 
+// Lagertilstand for linjer etter at kunden har fått oppgjøret, før kortene
+// legges inn. Endrer bare hva som havner på lager — prisen, kreditten og
+// kundens endringslogg står urørt. Tom tilstand = samme som kunden fikk betalt for.
+app.post("/api/admin/orders/:id/lagertilstand", krevAdmin, fang(async (req: any, res: any) => {
+  const id = Number(req.params.id);
+  const ider = (Array.isArray(req.body?.linjer) ? req.body.linjer : []).map(Number).filter(Number.isFinite);
+  const c = req.body?.condition == null || req.body.condition === "" ? null : String(req.body.condition);
+  if (c && !CONDITIONS.includes(c as any)) throw new HttpFeil(400, "Ukjent tilstand");
+  if (!ider.length) throw new HttpFeil(400, "Ingen kort valgt");
+  const o = await db().execute({ sql: "SELECT kvote_frigitt_at FROM orders WHERE id = ?", args: [id] });
+  if (!o.rows[0]) throw new HttpFeil(404, "Fant ikke ordren");
+  if (o.rows[0].kvote_frigitt_at) throw new HttpFeil(400, "Kortene er allerede lagt inn i beholdningen");
+  await db().execute({
+    sql: `UPDATE order_lines
+             SET lager_condition = CASE WHEN ? IS NULL OR ? = condition THEN NULL ELSE ? END
+           WHERE order_id = ? AND kilde <> 'annet' AND id IN (${ider.map(() => "?").join(",")})`,
+    args: [c, c, c, id, ...ider],
+  });
+  res.json({ ok: true });
+}));
+
 // Fjerning merker linjen i stedet for å slette den, slik at endringsloggen
 // fortsatt kan fortelle kunden at kortet ikke kom fram.
 app.delete("/api/admin/lines/:id", krevAdmin, fang(async (req: any, res: any) => {
