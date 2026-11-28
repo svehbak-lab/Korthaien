@@ -838,9 +838,11 @@ export async function kundeoversikt(q: string, side = 0, sort = "sist_inne", opp
   ]);
   // De siste 14 dagene, også dagene uten besøk.
   const perDag = new Map((besøk.rows as any[]).map((x) => [String(x.dato), Number(x.n)]));
+  const { besøkPerDag } = await import("./besok.js");
+  const besøkende = await besøkPerDag(osloDato(fra)).catch(() => new Map<string, number>());
   const dager = Array.from({ length: 14 }, (_, i) => {
     const d = osloDato(new Date(Date.now() - i * 86400000));
-    return { dato: d, innom: perDag.get(d) || 0 };
+    return { dato: d, innom: perDag.get(d) || 0, besokende: besøkende.get(d) ?? null };
   });
   const t: any = tall.rows[0];
   const n = (x: any) => Number(x || 0);

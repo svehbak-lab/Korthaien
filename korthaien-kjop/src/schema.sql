@@ -345,6 +345,17 @@ CREATE TABLE IF NOT EXISTS kunde_besok (
   PRIMARY KEY (dato, kunde_id)
 );
 
+-- Besøkende i butikken, med eller uten konto. Én rad per besøkende og norsk
+-- dato. «hash» er en kode av IP, nettleser og et hemmelig tall som byttes hver
+-- dag — ingen IP lagres, og etter midnatt kan ingen koble raden til noen.
+-- «treff» er antall kall den dagen; mange flere enn et menneske gjør = robot.
+CREATE TABLE IF NOT EXISTS besok (
+  dato   TEXT NOT NULL,
+  hash   TEXT NOT NULL,
+  treff  INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (dato, hash)
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS mystore_links (
   product_id  TEXT PRIMARY KEY,
   card_id     TEXT,

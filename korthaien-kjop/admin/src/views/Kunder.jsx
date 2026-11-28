@@ -136,23 +136,36 @@ export default function Kunder({ onFeil, onMelding }) {
 
       {data.besok && (
         <div className="panel">
-          <header><h3>Innloggede kunder innom</h3>
-            <span className="dempet" style={{ fontSize: 12.5 }}>Hver kunde telles én gang per dag. Telles fra 28. oktober.</span>
+          <header><h3>Besøkende og innloggede</h3>
+            <span className="dempet" style={{ fontSize: 12.5 }}>
+              Store tall: unike besøkende i butikken (uten roboter, telles fra 28. november).
+              Mørk del og «inn»: innloggede kunder (fra 28. oktober).
+            </span>
           </header>
           <div className="krop" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-end" }}>
             {(() => {
-              const maks = Math.max(1, ...data.besok.map((d) => d.innom));
-              return [...data.besok].reverse().map((d, i, alle) => (
-                <div key={d.dato} style={{ textAlign: "center", width: 46 }} title={`${d.dato}: ${d.innom}`}>
-                  <div className="tall" style={{ fontSize: 13, fontWeight: i === alle.length - 1 ? 700 : 500 }}>{d.innom}</div>
-                  <div style={{ height: 40, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-                    <div style={{ width: 22, height: Math.max(2, (d.innom / maks) * 40), background: i === alle.length - 1 ? "var(--aksent)" : "var(--strek-sterk)", borderRadius: 3 }} />
+              const maks = Math.max(1, ...data.besok.map((d) => Math.max(d.besokende || 0, d.innom)));
+              const H = 48;
+              return [...data.besok].reverse().map((d, i, alle) => {
+                const idag = i === alle.length - 1;
+                const b = d.besokende;
+                const total = Math.max(b || 0, d.innom);
+                return (
+                  <div key={d.dato} style={{ textAlign: "center", width: 48 }}
+                    title={`${d.dato}: ${b ?? "–"} besøkende, ${d.innom} innlogget`}>
+                    <div className="tall" style={{ fontSize: 13, fontWeight: idag ? 700 : 500 }}>{b ?? "–"}</div>
+                    <div className="dempet" style={{ fontSize: 10.5, lineHeight: 1.1 }}>{d.innom} inn</div>
+                    <div style={{ height: H, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+                      <div style={{ width: 22, height: Math.max(2, (total / maks) * H), background: "var(--strek-sterk)", borderRadius: 3, display: "flex", alignItems: "flex-end", overflow: "hidden" }}>
+                        <div style={{ width: "100%", height: total ? `${(d.innom / total) * 100}%` : 0, background: idag ? "var(--aksent)" : "var(--dempet)" }} />
+                      </div>
+                    </div>
+                    <div className="dempet" style={{ fontSize: 11 }}>
+                      {idag ? "i dag" : new Date(d.dato + "T12:00:00").toLocaleDateString("nb-NO", { weekday: "short", day: "numeric" })}
+                    </div>
                   </div>
-                  <div className="dempet" style={{ fontSize: 11 }}>
-                    {i === alle.length - 1 ? "i dag" : new Date(d.dato + "T12:00:00").toLocaleDateString("nb-NO", { weekday: "short", day: "numeric" })}
-                  </div>
-                </div>
-              ));
+                );
+              });
             })()}
           </div>
         </div>

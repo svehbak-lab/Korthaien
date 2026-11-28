@@ -45,6 +45,7 @@ import { byggIndeks, foreslå } from "./settnavn.js";
 import { grense, REGLER, hentIp, kortkvoteBrukt, brukKortkvote } from "./ratelimit.js";
 import { katalogMedKø, glemKatalog } from "./katalogkø.js";
 import { stengSkrapere } from "./skrapere.js";
+import { tellBesøk, startBesøksskriver, ryddBesøk } from "./besok.js";
 import { komplettSett, manglerISett, tilFinish } from "./komplette.js";
 import { ordreStatistikk, lagerrapport, salgPerSett, lagerhistorikk, lagreLagermåling } from "./statistikk.js";
 import { salgsrapport, salgslistePdf, oppsummeringPdf, sjekkPeriode } from "./rapporter.js";
@@ -73,6 +74,8 @@ app.set("trust proxy", 1);
 const ENDRER_IKKE_LAGER = /^\/api\/(butikk\/kurv|konto\/|bulk|quote)/;
 // Kjente skrapere får en melding i stedet for butikkens katalog (skrapere.ts).
 app.use("/api/butikk", stengSkrapere);
+// Unike besøkende per dag, også dem uten konto (besok.ts).
+app.use("/api/butikk", tellBesøk);
 app.use((req, res, next) => {
   if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS" && !ENDRER_IKKE_LAGER.test(req.path)) {
     res.on("finish", () => glemKatalog());
@@ -2259,7 +2262,11 @@ migrate()
     // Rydder reservasjoner hver time, så kvoter ikke blir stående låst.
     // unref, slik at en test som importerer serveren ikke holdes i live av
     // en timer som aldri skal rekke å slå til.
-    ryddeTimer = setInterval(() => utløpGamleOrdrer().catch(console.error), 3600_000);
+    ryddeTimer = setInterval(() => {
+      utløpGamleOrdrer().catch(console.error);
+      ryddBesøk().catch(console.error);
+    }, 3600_000);
+    startBesøksskriver();
     ryddeTimer.unref?.();
     // Forlatte kasser frigis hvert minutt, så kortene kommer tilbake i
     // butikken kort tid etter at kvarteret er ute.
